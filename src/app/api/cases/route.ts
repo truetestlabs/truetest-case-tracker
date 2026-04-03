@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateCaseNumber } from "@/lib/case-utils";
+import type { TestStatus } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
       await prisma.testOrder.create({
         data: {
           caseId: newCase.id,
-          testStatus: "scheduled",
+          testStatus: "scheduled" as TestStatus,
           appointmentDate,
           testDescription: catalogItem?.testName ?? "Pending — added at intake",
           specimenType: catalogItem?.specimenType ?? null,
