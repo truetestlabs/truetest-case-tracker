@@ -114,29 +114,34 @@ export async function POST(request: NextRequest) {
 
     // If appointment date/time provided, create a scheduled test order
     if (body.apptDate && body.apptTime) {
-      const [y, mo, d] = body.apptDate.split("-").map(Number);
-      const [h, min] = body.apptTime.split(":").map(Number);
-      const appointmentDate = new Date(y, mo - 1, d, h, min, 0);
+      try {
+        const [y, mo, d] = body.apptDate.split("-").map(Number);
+        const [h, min] = body.apptTime.split(":").map(Number);
+        const appointmentDate = new Date(y, mo - 1, d, h, min, 0);
 
-      // Look up test catalog item if provided
-      let catalogItem = null;
-      if (body.testCatalogId) {
-        catalogItem = await prisma.testCatalog.findUnique({
-          where: { id: body.testCatalogId },
+        // Look up test catalog item if provided
+        let catalogItem = null;
+        if (body.testCatalogId) {
+          catalogItem = await prisma.testCatalog.findUnique({
+            where: { id: body.testCatalogId },
+          });
+        }
+
+        await prisma.testOrder.create({
+          data: {
+            caseId: newCase.id,
+            testStatus: "scheduled" as TestStatus,
+            appointmentDate,
+            testDescription: catalogItem?.testName ?? "Pending — added at intake",
+            specimenType: (catalogItem?.specimenType ?? "urine") as import("@prisma/client").$Enums.SpecimenType,
+            lab: (catalogItem?.lab ?? "usdtl") as import("@prisma/client").$Enums.Lab,
+            ...(catalogItem ? { testCatalogId: catalogItem.id } : {}),
+          },
         });
+      } catch (testOrderError) {
+        // Log but don't fail — case was already created successfully
+        console.error("Failed to create test order during intake:", testOrderError);
       }
-
-      await prisma.testOrder.create({
-        data: {
-          caseId: newCase.id,
-          testStatus: "scheduled" as TestStatus,
-          appointmentDate,
-          testDescription: catalogItem?.testName ?? "Pending — added at intake",
-          specimenType: (catalogItem?.specimenType ?? "urine") as import("@prisma/client").$Enums.SpecimenType,
-          lab: (catalogItem?.lab ?? "usdtl") as import("@prisma/client").$Enums.Lab,
-          ...(catalogItem ? { testCatalogId: catalogItem.id } : {}),
-        },
-      });
     }
 
     // Log the creation
