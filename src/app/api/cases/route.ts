@@ -111,6 +111,23 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // If appointment date/time provided, create a scheduled test order
+    if (body.apptDate && body.apptTime) {
+      const [y, mo, d] = body.apptDate.split("-").map(Number);
+      const [h, min] = body.apptTime.split(":").map(Number);
+      const appointmentDate = new Date(y, mo - 1, d, h, min, 0);
+
+      await prisma.testOrder.create({
+        data: {
+          caseId: newCase.id,
+          testStatus: "scheduled",
+          appointmentDate,
+          testDescription: "Pending — added at intake",
+          createdBy: "admin",
+        },
+      });
+    }
+
     // Log the creation
     await prisma.statusLog.create({
       data: {

@@ -118,10 +118,8 @@ export default function QuickIntakePage() {
             lastName: form.lastName.trim(),
             phone: form.phone.trim() || null,
           },
-          notes:
-            form.apptDate && form.apptTime
-              ? `Appointment scheduled: ${form.apptDate} at ${form.apptTime}`
-              : null,
+          apptDate: form.apptDate || null,
+          apptTime: form.apptTime || null,
         }),
       });
       if (!res.ok) {
