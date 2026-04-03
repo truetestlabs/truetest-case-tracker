@@ -1,0 +1,133 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { generateCaseNumber } from "@/lib/case-utils";
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const status = searchParams.get("status");
+  const type = searchParams.get("type");
+  const q = searchParams.get("q");
+  const monitored = searchParams.get("monitored");
+
+  const where: Record<string, unknown> = {};
+  if (status === "active") {
+    where.caseStatus = { not: "closed" };
+  } else if (status) {
+    where.caseStatus = status;
+  }
+  if (type) where.caseType = type;
+  if (monitored === "true") where.isMonitored = true;
+  if (q) {
+    where.OR = [
+      { caseNumber: { contains: q, mode: "insensitive" } },
+      { courtCaseNumber: { contains: q, mode: "insensitive" } },
+      { donor: { firstName: { contains: q, mode: "insensitive" } } },
+      { donor: { lastName: { contains: q, mode: "insensitive" } } },
+    ];
+  }
+
+  const cases = await prisma.case.findMany({
+    where,
+    orderBy: { updatedAt: "desc" },
+    include: {
+      donor: true,
+      caseContacts: { include: { contact: true } },
+      testOrders: { take: 1, orderBy: { updatedAt: "desc" }, select: { testStatus: true, appointmentDate: true, schedulingType: true, testDescription: true, collectionSite: true, collectionSiteType: true, paymentReceived: true, paymentMethod: true } },
+      _count: { select: { testOrders: true, documents: true } },
+    },
+  });
+
+  return NextResponse.json(cases);
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+
+    // Generate next case number
+    const currentYear = new Date().getFullYear();
+    const lastCase = await prisma.case.findFirst({
+      where: { caseNumber: { startsWith: `TTL-FL-${currentYear}` } },
+      orderBy: { caseNumber: "desc" },
+    });
+
+    let sequence = 1;
+    if (lastCase) {
+      const lastNum = parseInt(lastCase.caseNumber.split("-").pop() || "0");
+      sequence = lastNum + 1;
+    }
+
+    const caseNumber = generateCaseNumber(sequence);
+
+    // Create or find donor contact
+    let donorId: string | null = null;
+    if (body.donor?.firstName && body.donor?.lastName) {
+      const donor = await prisma.contact.create({
+        data: {
+          contactType: "donor",
+          firstName: body.donor.firstName,
+          lastName: body.donor.lastName,
+          email: body.donor.email || null,
+          phone: body.donor.phone || null,
+          preferredContact: body.donor.phone ? "text" : "email",
+          represents: "na",
+        },
+      });
+      donorId = donor.id;
+    }
+
+    // Create the case
+    const newCase = await prisma.case.create({
+      data: {
+        caseNumber,
+        caseType: body.caseType,
+        caseStatus: "active",
+        courtCaseNumber: body.courtCaseNumber || null,
+        county: body.county || null,
+        judgeName: body.judgeName || null,
+        hasCourtOrder: body.hasCourtOrder || false,
+        isMonitored: body.isMonitored || false,
+        paymentResponsibility: body.paymentResponsibility || null,
+        notes: body.notes || null,
+        donorId,
+        createdBy: "admin", // TODO: replace with actual user
+      },
+      include: { donor: true },
+    });
+
+    // Add donor as a case contact
+    if (donorId) {
+      await prisma.caseContact.create({
+        data: {
+          caseId: newCase.id,
+          contactId: donorId,
+          roleInCase: "donor",
+          receivesResults: false,
+          receivesStatus: true,
+          receivesInvoices: false,
+          canOrderTests: false,
+          isPrimaryContact: false,
+        },
+      });
+    }
+
+    // Log the creation
+    await prisma.statusLog.create({
+      data: {
+        caseId: newCase.id,
+        oldStatus: "none",
+        newStatus: newCase.caseStatus,
+        changedBy: "admin",
+        note: "Case created via intake form",
+      },
+    });
+
+    return NextResponse.json(newCase, { status: 201 });
+  } catch (error) {
+    console.error("Error creating case:", error);
+    return NextResponse.json(
+      { error: "Failed to create case" },
+      { status: 500 }
+    );
+  }
+}

@@ -1,0 +1,397 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum CaseType {
+  court_ordered
+  voluntary
+  by_agreement
+}
+
+enum CaseStatus {
+  intake
+  order_received
+  active
+  on_hold
+  closed
+}
+
+enum PaymentStatus {
+  unpaid
+  partial
+  paid
+  invoiced
+}
+
+enum ContactType {
+  donor
+  attorney
+  gal
+  judge
+  court_clerk
+  mro
+  staff
+  other
+}
+
+enum ContactPreference {
+  email
+  phone
+  text
+}
+
+enum Represents {
+  petitioner
+  respondent
+  child
+  neutral
+  na
+}
+
+enum CaseRole {
+  donor
+  petitioner_attorney
+  respondent_attorney
+  gal
+  judge
+  referring_party
+  court_clerk
+  other
+}
+
+enum SpecimenType {
+  urine
+  hair
+  nail
+  blood
+  breath
+  sweat_patch
+  oral_fluid
+  unknown_substance
+  semen
+}
+
+enum Lab {
+  usdtl
+  crl_quest
+  quest
+  expertox
+  nms
+  medipro
+  truetest_inhouse
+}
+
+enum TestStatus {
+  order_created
+  awaiting_payment
+  payment_received
+  order_released
+  awaiting_collection
+  specimen_collected
+  specimen_held
+  sent_to_lab
+  at_mro
+  results_received
+  awaiting_payment_for_release
+  results_released
+  closed
+  cancelled
+  no_show
+}
+
+enum CollectionType {
+  observed
+  unobserved
+  na
+}
+
+enum SchedulingType {
+  needs_appointment
+  scheduled
+  random
+  walk_in
+}
+
+enum DocumentType {
+  court_order
+  chain_of_custody
+  result_report
+  invoice
+  agreement
+  correspondence
+  other
+}
+
+enum ComplianceStatus {
+  compliant
+  non_compliant
+  pending
+}
+
+enum ReviewStatus {
+  pending_review
+  reviewed
+  flagged
+}
+
+// ============================================================
+// MODELS
+// ============================================================
+
+model Case {
+  id                    String        @id @default(cuid())
+  caseNumber            String        @unique // TTL-FL-2026-0001
+  caseType              CaseType
+  caseStatus            CaseStatus    @default(intake)
+  courtCaseNumber       String?       // from the court order
+  county                String?
+  jurisdiction          String?
+  judgeName             String?
+  hasCourtOrder         Boolean       @default(false)
+  isMonitored           Boolean       @default(false) // repeated testing over time w/ random scheduling
+  paymentStatus         PaymentStatus @default(unpaid)
+  paymentResponsibility String?       // who pays
+  notes                 String?
+
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  createdBy             String?       // staff member name
+
+  // Relations
+  donorId               String?
+  donor                 Contact?      @relation("CaseDonor", fields: [donorId], references: [id])
+  caseContacts          CaseContact[]
+  testOrders            TestOrder[]
+  documents             Document[]
+  courtOrders           CourtOrder[]
+  statusLogs            StatusLog[]
+  messages              Message[]
+
+  @@index([caseStatus])
+  @@index([caseType])
+  @@index([donorId])
+  @@index([courtCaseNumber])
+}
+
+model Contact {
+  id                String            @id @default(cuid())
+  contactType       ContactType
+  firstName         String
+  lastName          String
+  firmName          String?
+  email             String?
+  phone             String?
+  preferredContact  ContactPreference @default(email)
+  represents        Represents        @default(na)
+  barNumber         String?
+  notes             String?
+
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  donorCases        Case[]            @relation("CaseDonor")
+  caseContacts      CaseContact[]
+  sentMessages      Message[]         @relation("MessageSender")
+
+  @@index([contactType])
+  @@index([lastName, firstName])
+  @@index([email])
+}
+
+model CaseContact {
+  id               String   @id @default(cuid())
+  caseId           String
+  contactId        String
+  roleInCase       CaseRole
+  receivesResults  Boolean  @default(false)
+  receivesStatus   Boolean  @default(false)
+  receivesInvoices Boolean  @default(false)
+  canOrderTests    Boolean  @default(false)
+  isPrimaryContact Boolean  @default(false)
+
+  case             Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  contact          Contact  @relation(fields: [contactId], references: [id])
+
+  @@unique([caseId, contactId, roleInCase])
+  @@index([caseId])
+  @@index([contactId])
+}
+
+model TestCatalog {
+  id               String       @id @default(cuid())
+  category         String       // "Urine", "Hair/Nail", "Blood", etc.
+  testName         String
+  panelSize        String?      // "5 panel", "10 panel", etc.
+  specimenType     SpecimenType
+  lab              Lab
+  labTestCode      String?      // CRL P705, Quest 35639N, etc.
+  clientPrice      Decimal      @db.Decimal(10, 2)
+  labCost          Decimal      @db.Decimal(10, 2) // INTERNAL ONLY
+  description      String?
+  specialHandling  String?      // e.g., "psilocin cold chain requirements"
+  isAddOn          Boolean      @default(false)
+  active           Boolean      @default(true)
+
+  testOrders       TestOrder[]
+
+  @@index([category])
+  @@index([specimenType])
+  @@index([lab])
+}
+
+model TestOrder {
+  id                   String         @id @default(cuid())
+  caseId               String
+  testCatalogId        String?
+  testDescription      String         // human-readable test name
+  specimenType         SpecimenType
+  lab                  Lab
+  testStatus           TestStatus     @default(order_created)
+  collectionType       CollectionType @default(unobserved)
+  schedulingType       SchedulingType @default(scheduled)
+
+  // Collection site tracking
+  collectionSite       String?        // "Quest PSC - Chicago Loop", "TrueTest Labs - EGV", etc.
+  collectionSiteType   String?        // "quest_psc", "truetest", "partner", "mobile"
+  orderReleasedDate    DateTime?      // when order was released after payment
+
+  // Payment tracking
+  squarePaymentId      String?        // Square payment/invoice ID
+  squarePaymentLink    String?        // payment link sent to donor
+  paymentMethod        String?        // "square_link", "cash", "check", "credit_card", "attorney_pays"
+  paymentDate          DateTime?
+
+  appointmentDate      DateTime?
+  collectionDate       DateTime?
+  collectedBy          String?
+  specimenHeld         Boolean        @default(false)
+  sentToLabDate        DateTime?
+  resultsReceivedDate  DateTime?
+  resultsReleasedDate  DateTime?
+
+  testvaultOrderId     String?
+  labAccessionNumber   String?
+  clientPrice          Decimal?       @db.Decimal(10, 2)
+  labCost              Decimal?       @db.Decimal(10, 2) // INTERNAL ONLY
+  paymentReceived      Boolean        @default(false)
+  invoiceNumber        String?        // QuickBooks ref
+
+  notes                String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  // Relations
+  case                 Case           @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  testCatalog          TestCatalog?   @relation(fields: [testCatalogId], references: [id])
+  chainOfCustody       Document?      @relation("TestCOC", fields: [chainOfCustodyId], references: [id])
+  chainOfCustodyId     String?
+  resultDocument       Document?      @relation("TestResult", fields: [resultDocumentId], references: [id])
+  resultDocumentId     String?
+  statusLogs           StatusLog[]
+
+  @@index([caseId])
+  @@index([testStatus])
+  @@index([appointmentDate])
+}
+
+model Document {
+  id              String       @id @default(cuid())
+  caseId          String
+  documentType    DocumentType
+  fileName        String
+  filePath        String       // Supabase storage URL
+  icloudSyncPath  String?      // local iCloud path
+  uploadedBy      String?
+  uploadedAt      DateTime     @default(now())
+  extractedData   Json?        // parsed content from PDF
+  notes           String?
+
+  // Relations
+  case            Case         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  courtOrders     CourtOrder[]
+  cocTestOrders   TestOrder[]  @relation("TestCOC")
+  resultTestOrders TestOrder[] @relation("TestResult")
+
+  @@index([caseId])
+  @@index([documentType])
+}
+
+model CourtOrder {
+  id                  String           @id @default(cuid())
+  caseId              String
+  documentId          String
+  orderDate           DateTime?
+  judgeName           String?
+  courtCaseNumber     String?
+  county              String?
+  testsOrdered        Json?            // array of test types/frequencies
+  testingDuration     String?          // "6 months", "until further order"
+  startDate           DateTime?
+  endDate             DateTime?
+  frequency           String?          // "random 2x/month", "weekly", etc.
+  whoPays             String?
+  resultDistribution  Json?            // who gets results per the order
+  specialInstructions String?
+  complianceStatus    ComplianceStatus @default(pending)
+  parsedByAi          Boolean          @default(false)
+  reviewStatus        ReviewStatus     @default(pending_review)
+
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  // Relations
+  case                Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  document            Document         @relation(fields: [documentId], references: [id])
+
+  @@index([caseId])
+}
+
+model StatusLog {
+  id                     String    @id @default(cuid())
+  caseId                 String?
+  testOrderId            String?
+  oldStatus              String
+  newStatus              String
+  changedBy              String
+  changedAt              DateTime  @default(now())
+  note                   String?
+  notificationSent       Boolean   @default(false)
+  notificationRecipients Json?
+
+  // Relations
+  case                   Case?     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  testOrder              TestOrder? @relation(fields: [testOrderId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([testOrderId])
+  @@index([changedAt])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  caseId         String
+  fromContactId  String?
+  toContacts     Json     // array of contact IDs
+  subject        String?
+  body           String
+  sentAt         DateTime @default(now())
+  readBy         Json?    // tracking who read it
+
+  // Relations
+  case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  fromContact    Contact? @relation("MessageSender", fields: [fromContactId], references: [id])
+
+  @@index([caseId])
+  @@index([sentAt])
+}
