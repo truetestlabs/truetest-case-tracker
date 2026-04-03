@@ -5,6 +5,8 @@ import Link from "next/link";
 
 type Phase = "form" | "success";
 
+type TestOption = { id: string; testName: string; category: string; specimenType: string };
+
 type FormState = {
   firstName: string;
   lastName: string;
@@ -12,6 +14,7 @@ type FormState = {
   caseType: "court_ordered" | "voluntary";
   apptDate: string;
   apptTime: string;
+  testCatalogId: string;
 };
 
 type CreatedCase = {
@@ -90,11 +93,21 @@ export default function QuickIntakePage() {
     caseType: "voluntary",
     apptDate: defaults.apptDate,
     apptTime: defaults.apptTime,
+    testCatalogId: "",
   });
+  const [tests, setTests] = useState<TestOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [createdCase, setCreatedCase] = useState<CreatedCase | null>(null);
   const firstNameRef = useRef<HTMLInputElement>(null);
+
+  // Fetch test catalog on mount
+  useEffect(() => {
+    fetch("/api/test-catalog")
+      .then((r) => r.json())
+      .then((data: TestOption[]) => setTests(data))
+      .catch(() => {});
+  }, []);
 
   // Re-focus first name when form resets (handles iOS Safari autoFocus blocking)
   useEffect(() => {
@@ -120,6 +133,7 @@ export default function QuickIntakePage() {
           },
           apptDate: form.apptDate || null,
           apptTime: form.apptTime || null,
+          testCatalogId: form.testCatalogId || null,
         }),
       });
       if (!res.ok) {
@@ -145,6 +159,7 @@ export default function QuickIntakePage() {
       caseType: "voluntary",
       apptDate: d.apptDate,
       apptTime: d.apptTime,
+      testCatalogId: "",
     });
     setCreatedCase(null);
     setError("");
@@ -334,6 +349,26 @@ export default function QuickIntakePage() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Test Type */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Test Type{" "}
+            <span className="text-gray-400 font-normal text-xs">(optional)</span>
+          </label>
+          <select
+            value={form.testCatalogId}
+            onChange={(e) => setForm((f) => ({ ...f, testCatalogId: e.target.value }))}
+            className={inputClass}
+          >
+            <option value="">— Select a test —</option>
+            {tests.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.testName}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Appointment Date + Time */}

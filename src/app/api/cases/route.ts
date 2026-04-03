@@ -117,12 +117,22 @@ export async function POST(request: NextRequest) {
       const [h, min] = body.apptTime.split(":").map(Number);
       const appointmentDate = new Date(y, mo - 1, d, h, min, 0);
 
+      // Look up test catalog item if provided
+      let catalogItem = null;
+      if (body.testCatalogId) {
+        catalogItem = await prisma.testCatalog.findUnique({
+          where: { id: body.testCatalogId },
+        });
+      }
+
       await prisma.testOrder.create({
         data: {
           caseId: newCase.id,
           testStatus: "scheduled",
           appointmentDate,
-          testDescription: "Pending — added at intake",
+          testDescription: catalogItem?.testName ?? "Pending — added at intake",
+          specimenType: catalogItem?.specimenType ?? null,
+          ...(catalogItem ? { testCatalogId: catalogItem.id } : {}),
           createdBy: "admin",
         },
       });
