@@ -79,6 +79,24 @@ export default function CasesPage() {
     loadCases();
   }
 
+  async function togglePayment(e: React.MouseEvent, caseId: string, currentStatus: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    const newStatus = currentStatus === "paid" ? "unpaid" : "paid";
+    // Optimistic update
+    setCases((prev) => prev.map((c) => c.id === caseId ? { ...c, paymentStatus: newStatus } : c));
+    try {
+      await fetch(`/api/cases/${caseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentStatus: newStatus }),
+      });
+    } catch {
+      // Revert on failure
+      setCases((prev) => prev.map((c) => c.id === caseId ? { ...c, paymentStatus: currentStatus } : c));
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto">
       {/* Header */}
@@ -225,12 +243,13 @@ export default function CasesPage() {
                       )}
                     </td>
                     <td className="px-5 py-3.5">
-                      {(() => {
-                        const method = c.testOrders[0]?.paymentMethod;
-                        if (!method) return <StatusBadge status="unpaid" type="payment" />;
-                        if (method === "invoiced") return <StatusBadge status="invoiced" type="payment" />;
-                        return <StatusBadge status="paid" type="payment" />;
-                      })()}
+                      <button
+                        onClick={(e) => togglePayment(e, c.id, c.paymentStatus)}
+                        title="Click to toggle paid/unpaid"
+                        className="cursor-pointer hover:opacity-75 active:scale-95 transition-all"
+                      >
+                        <StatusBadge status={c.paymentStatus} type="payment" />
+                      </button>
                     </td>
                     <td className="px-5 py-3.5">
                       <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
