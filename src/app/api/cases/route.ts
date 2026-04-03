@@ -134,7 +134,6 @@ export async function POST(request: NextRequest) {
           testDescription: catalogItem?.testName ?? "Pending — added at intake",
           ...(catalogItem?.specimenType ? { specimenType: catalogItem.specimenType } : {}),
           ...(catalogItem ? { testCatalogId: catalogItem.id } : {}),
-          createdBy: "admin",
         },
       });
     }
