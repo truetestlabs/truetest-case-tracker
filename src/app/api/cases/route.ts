@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
           testStatus: "scheduled" as TestStatus,
           appointmentDate,
           testDescription: catalogItem?.testName ?? "Pending — added at intake",
-          specimenType: catalogItem?.specimenType ?? null,
+          ...(catalogItem?.specimenType ? { specimenType: catalogItem.specimenType } : {}),
           ...(catalogItem ? { testCatalogId: catalogItem.id } : {}),
           createdBy: "admin",
         },
