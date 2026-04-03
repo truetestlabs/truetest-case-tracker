@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { ConditionalLayout } from "@/components/layout/ConditionalLayout";
 
 export const metadata: Metadata = {
   title: "TrueTest Labs - Case Tracker",
@@ -15,12 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen" style={{ backgroundColor: "#f8fafc" }} suppressHydrationWarning>
-        <div className="flex h-screen overflow-hidden">
-          <Sidebar />
-          <main className="flex-1 overflow-auto">
-            <div className="px-7 py-6">{children}</div>
-          </main>
-        </div>
+        <ConditionalLayout>{children}</ConditionalLayout>
       </body>
     </html>
   );
