@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateCaseNumber } from "@/lib/case-utils";
+import { SpecimenType, Lab } from "@prisma/client";
 import type { TestStatus } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
@@ -133,8 +134,8 @@ export async function POST(request: NextRequest) {
             testStatus: "scheduled" as TestStatus,
             appointmentDate,
             testDescription: catalogItem?.testName ?? "Pending — added at intake",
-            specimenType: (catalogItem?.specimenType ?? "urine") as import("@prisma/client").$Enums.SpecimenType,
-            lab: (catalogItem?.lab ?? "usdtl") as import("@prisma/client").$Enums.Lab,
+            specimenType: catalogItem?.specimenType ?? SpecimenType.urine,
+            lab: catalogItem?.lab ?? Lab.usdtl,
             ...(catalogItem ? { testCatalogId: catalogItem.id } : {}),
           },
         });
