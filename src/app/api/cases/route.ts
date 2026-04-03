@@ -132,7 +132,8 @@ export async function POST(request: NextRequest) {
           testStatus: "scheduled" as TestStatus,
           appointmentDate,
           testDescription: catalogItem?.testName ?? "Pending — added at intake",
-          ...(catalogItem?.specimenType ? { specimenType: catalogItem.specimenType } : {}),
+          specimenType: (catalogItem?.specimenType ?? "urine") as import("@prisma/client").$Enums.SpecimenType,
+          lab: (catalogItem?.lab ?? "usdtl") as import("@prisma/client").$Enums.Lab,
           ...(catalogItem ? { testCatalogId: catalogItem.id } : {}),
         },
       });
