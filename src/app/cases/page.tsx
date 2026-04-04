@@ -151,6 +151,7 @@ export default function CasesPage() {
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Case #</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Donor</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Case Status</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Test Status</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Payment</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tests</th>
@@ -188,6 +189,9 @@ export default function CasesPage() {
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">Observed</span>
                         )}
                       </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <StatusBadge status={c.caseStatus} type="case" />
                     </td>
                     <td className="px-5 py-3.5">
                       {c.testOrders.length > 0 ? (
