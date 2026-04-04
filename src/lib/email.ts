@@ -199,6 +199,15 @@ export async function sendSampleCollectedEmail(
   const isInvoiced = testOrder?.paymentMethod === "invoiced";
   const isPaid = isInvoiced ? false : !!testOrder?.paymentMethod || testOrder?.paymentReceived === true;
 
+  console.log("[Email] collection payment debug:", {
+    testOrderId,
+    paymentMethod: testOrder?.paymentMethod,
+    paymentReceived: testOrder?.paymentReceived,
+    isInvoiced,
+    isPaid,
+    collectionSiteType: testOrder?.collectionSiteType,
+  });
+
   // Collection location: "truetest" (or unset) = collected at TTL; anything else = external site
   const collectedAtTTL = !testOrder?.collectionSiteType || testOrder.collectionSiteType === "truetest";
 
