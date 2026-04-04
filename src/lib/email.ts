@@ -194,19 +194,10 @@ export async function sendSampleCollectedEmail(
     ? `${caseData.donor.firstName} ${caseData.donor.lastName}`
     : "the donor";
 
-  // Payment state: match exactly what case detail UI shows — only look at test order fields
-  // (caseData.paymentStatus can be stale; the detail page shows paymentMethod per test order)
+  // Payment state: match case detail UI exactly — only check paymentMethod.
+  // (paymentReceived can be stale from old auto-advance logic; paymentMethod is the source of truth)
   const isInvoiced = testOrder?.paymentMethod === "invoiced";
-  const isPaid = isInvoiced ? false : !!testOrder?.paymentMethod || testOrder?.paymentReceived === true;
-
-  console.log("[Email] collection payment debug:", {
-    testOrderId,
-    paymentMethod: testOrder?.paymentMethod,
-    paymentReceived: testOrder?.paymentReceived,
-    isInvoiced,
-    isPaid,
-    collectionSiteType: testOrder?.collectionSiteType,
-  });
+  const isPaid = !isInvoiced && !!testOrder?.paymentMethod;
 
   // Collection location: "truetest" (or unset) = collected at TTL; anything else = external site
   const collectedAtTTL = !testOrder?.collectionSiteType || testOrder.collectionSiteType === "truetest";
