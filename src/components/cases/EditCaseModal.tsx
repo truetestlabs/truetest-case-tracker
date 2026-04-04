@@ -12,7 +12,6 @@ type CaseInfo = {
   hasCourtOrder: boolean;
   isMonitored: boolean;
   paymentStatus: string;
-  paymentResponsibility: string | null;
   notes: string | null;
   donor: { firstName: string; lastName: string; email: string | null; phone: string | null } | null;
 };
@@ -41,7 +40,6 @@ export function EditCaseModal({ caseData, onSaved, onClose }: Props) {
       courtCaseNumber: form.get("courtCaseNumber") || null,
       county: form.get("county") || null,
       judgeName: form.get("judgeName") || null,
-      paymentResponsibility: form.get("paymentResponsibility") || null,
       notes: form.get("notes") || null,
       donor: {
         firstName: form.get("donorFirstName"),
@@ -105,17 +103,6 @@ export function EditCaseModal({ caseData, onSaved, onClose }: Props) {
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Judge</label>
               <input type="text" name="judgeName" defaultValue={caseData.judgeName || ""} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Who Pays?</label>
-              <select name="paymentResponsibility" defaultValue={caseData.paymentResponsibility || ""} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm">
-                <option value="">Not specified</option>
-                <option value="petitioner">Petitioner</option>
-                <option value="respondent">Respondent</option>
-                <option value="split">Split</option>
-                <option value="donor">Donor (self-pay)</option>
-                <option value="attorney">Attorney firm</option>
-              </select>
             </div>
             <div className="col-span-2 mt-1">
               <label className="inline-flex items-center gap-2 cursor-pointer">

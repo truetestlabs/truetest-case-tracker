@@ -59,7 +59,6 @@ export default function NewCasePage() {
       courtCaseNumber: form.get("courtCaseNumber") || null,
       county: form.get("county") || null,
       judgeName: form.get("judgeName") || null,
-      paymentResponsibility: form.get("paymentResponsibility") || null,
       notes: form.get("notes") || null,
       donor: {
         firstName: form.get("donorFirstName"),
@@ -159,22 +158,6 @@ export default function NewCasePage() {
                 placeholder="Judge's name"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Who Pays?
-              </label>
-              <select
-                name="paymentResponsibility"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Not specified</option>
-                <option value="petitioner">Petitioner</option>
-                <option value="respondent">Respondent</option>
-                <option value="split">Split</option>
-                <option value="donor">Donor (self-pay)</option>
-                <option value="attorney">Attorney firm</option>
-              </select>
             </div>
             <div className="md:col-span-2 mt-1">
               <label className="inline-flex items-center gap-2 cursor-pointer">

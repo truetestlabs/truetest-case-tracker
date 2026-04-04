@@ -24,7 +24,6 @@ type CaseData = {
   hasCourtOrder: boolean;
   isMonitored: boolean;
   paymentStatus: string;
-  paymentResponsibility: string | null;
   notes: string | null;
   createdAt: string;
   donor: { firstName: string; lastName: string; email: string | null; phone: string | null } | null;
@@ -461,8 +460,7 @@ export default function CaseDetailPage() {
               <div><dt className="text-gray-500">Type</dt><dd className="font-medium flex items-center gap-2">{caseTypeInfo?.label || caseData.caseType}{caseData.isMonitored && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium">Monitored</span>}</dd></div>
               {caseData.county && <div><dt className="text-gray-500">County</dt><dd className="font-medium">{caseData.county}</dd></div>}
               {caseData.judgeName && <div><dt className="text-gray-500">Judge</dt><dd className="font-medium">{caseData.judgeName}</dd></div>}
-              {caseData.paymentResponsibility && <div><dt className="text-gray-500">Payment Responsibility</dt><dd className="font-medium capitalize">{caseData.paymentResponsibility}</dd></div>}
-              <div><dt className="text-gray-500">Created</dt><dd className="font-medium">{new Date(caseData.createdAt).toLocaleDateString()}</dd></div>
+<div><dt className="text-gray-500">Created</dt><dd className="font-medium">{new Date(caseData.createdAt).toLocaleDateString()}</dd></div>
             </dl>
           </section>
 

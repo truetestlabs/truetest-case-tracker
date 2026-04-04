@@ -100,16 +100,6 @@ export default function UploadOrderPage() {
               <input type="date" name="orderDate" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Who Pays?</label>
-              <select name="whoPays" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                <option value="">Not specified</option>
-                <option value="Each party">Each party</option>
-                <option value="Petitioner">Petitioner</option>
-                <option value="Respondent">Respondent</option>
-                <option value="Split">Split</option>
-              </select>
-            </div>
-            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Testing Frequency</label>
               <select name="frequency" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
                 <option value="">Not specified</option>
