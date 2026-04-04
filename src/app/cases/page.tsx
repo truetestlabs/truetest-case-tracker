@@ -45,6 +45,7 @@ type CaseRow = {
     testDescription: string;
     collectionSite: string | null;
     collectionSiteType: string | null;
+    collectionType: string;
     paymentReceived: boolean;
     paymentMethod: string | null;
   }>;
@@ -199,6 +200,9 @@ export default function CasesPage() {
                         <StatusBadge status={c.caseType} type="caseType" />
                         {c.isMonitored && (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">Monitored</span>
+                        )}
+                        {c.testOrders[0]?.collectionType === "observed" && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">Observed</span>
                         )}
                       </span>
                     </td>

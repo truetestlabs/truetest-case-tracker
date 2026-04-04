@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     include: {
       donor: true,
       caseContacts: { include: { contact: true } },
-      testOrders: { take: 1, orderBy: { updatedAt: "desc" }, select: { testStatus: true, appointmentDate: true, schedulingType: true, testDescription: true, collectionSite: true, collectionSiteType: true, paymentReceived: true, paymentMethod: true } },
+      testOrders: { take: 1, orderBy: { updatedAt: "desc" }, select: { testStatus: true, appointmentDate: true, schedulingType: true, testDescription: true, collectionSite: true, collectionSiteType: true, collectionType: true, paymentReceived: true, paymentMethod: true } },
       _count: { select: { testOrders: true, documents: true } },
     },
   });
