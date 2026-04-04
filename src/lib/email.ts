@@ -179,7 +179,6 @@ export async function sendSampleCollectedEmail(
       where: { id: caseId },
       select: {
         caseNumber: true,
-        paymentStatus: true,
         donor: { select: { firstName: true, lastName: true } },
       },
     }),
@@ -195,11 +194,10 @@ export async function sendSampleCollectedEmail(
     ? `${caseData.donor.firstName} ${caseData.donor.lastName}`
     : "the donor";
 
-  // Payment state: invoiced = not yet paid; paid status OR method set (non-invoiced) OR paymentReceived = paid
+  // Payment state: match exactly what case detail UI shows — only look at test order fields
+  // (caseData.paymentStatus can be stale; the detail page shows paymentMethod per test order)
   const isInvoiced = testOrder?.paymentMethod === "invoiced";
-  const isPaid = isInvoiced
-    ? false
-    : caseData.paymentStatus === "paid" || !!testOrder?.paymentMethod || testOrder?.paymentReceived === true;
+  const isPaid = isInvoiced ? false : !!testOrder?.paymentMethod || testOrder?.paymentReceived === true;
 
   // Collection location: "truetest" (or unset) = collected at TTL; anything else = external site
   const collectedAtTTL = !testOrder?.collectionSiteType || testOrder.collectionSiteType === "truetest";
