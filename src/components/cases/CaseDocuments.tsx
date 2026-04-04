@@ -100,20 +100,32 @@ function DocumentUploadSlot({
         <h4 className="text-sm font-semibold text-gray-900">
           {icon} {label}
         </h4>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-          onChange={handleFileSelect}
-          className="hidden"
-        />
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          className="text-xs px-2.5 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
-        >
-          {uploading ? "Uploading..." : "+ Upload"}
-        </button>
+        <div className="flex items-center gap-2">
+          {docs.length > 1 && (
+            <a
+              href={`/api/cases/${caseId}/documents/download?type=${docType}`}
+              className="text-xs px-2.5 py-1 bg-[#1e3a5f] text-white rounded hover:bg-[#2a5490] font-medium flex items-center gap-1"
+              download
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Download All
+            </a>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="text-xs px-2.5 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
+          >
+            {uploading ? "Uploading..." : "+ Upload"}
+          </button>
+        </div>
       </div>
 
       {/* Specimen ID prompt for COC uploads */}
@@ -196,16 +208,6 @@ export function CaseDocuments({ caseId, documents, onUpdated }: Props) {
         <h2 className="text-lg font-semibold text-gray-900">
           Documents ({documents.length})
         </h2>
-        {documents.length > 0 && (
-          <a
-            href={`/api/cases/${caseId}/documents/download?all=true`}
-            className="text-xs px-3 py-1.5 bg-[#1e3a5f] text-white rounded-lg hover:bg-[#2a5490] font-medium flex items-center gap-1.5"
-            download
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-            Download All
-          </a>
-        )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {DOC_SECTIONS.map((section) => (

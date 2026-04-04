@@ -12,6 +12,7 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const documentId = searchParams.get("documentId");
   const downloadAll = searchParams.get("all") === "true";
+  const typeFilter = searchParams.get("type");
 
   try {
     // Single document download
@@ -48,10 +49,13 @@ export async function GET(
       });
     }
 
-    // Download all documents as zip
-    if (downloadAll) {
+    // Download all (optionally filtered by type) as zip
+    if (downloadAll || typeFilter) {
       const documents = await prisma.document.findMany({
-        where: { caseId },
+        where: {
+          caseId,
+          ...(typeFilter ? { documentType: typeFilter as "court_order" | "chain_of_custody" | "result_report" | "invoice" | "agreement" | "correspondence" | "other" } : {}),
+        },
         orderBy: { uploadedAt: "asc" },
       });
 
@@ -87,7 +91,9 @@ export async function GET(
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       }
       const zipBuffer = Buffer.concat(chunks);
-      const zipName = `${caseData?.caseNumber || "case"}-documents.zip`;
+      const zipName = typeFilter
+        ? `${caseData?.caseNumber || "case"}-${typeFilter.replace("_", "-")}.zip`
+        : `${caseData?.caseNumber || "case"}-documents.zip`;
 
       return new NextResponse(zipBuffer, {
         headers: {
@@ -98,7 +104,7 @@ export async function GET(
       });
     }
 
-    return NextResponse.json({ error: "Provide documentId or all=true" }, { status: 400 });
+    return NextResponse.json({ error: "Provide documentId, all=true, or type=..." }, { status: 400 });
   } catch (error) {
     console.error("Error downloading document:", error);
     return NextResponse.json({ error: "Failed to download" }, { status: 500 });
