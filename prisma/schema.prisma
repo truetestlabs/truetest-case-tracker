@@ -26,13 +26,6 @@ enum CaseStatus {
   closed
 }
 
-enum PaymentStatus {
-  unpaid
-  partial
-  paid
-  invoiced
-}
-
 enum ContactType {
   donor
   attorney
@@ -159,8 +152,6 @@ model Case {
   judgeName             String?
   hasCourtOrder         Boolean       @default(false)
   isMonitored           Boolean       @default(false) // repeated testing over time w/ random scheduling
-  paymentStatus         PaymentStatus @default(unpaid)
-  paymentResponsibility String?       // who pays
   notes                 String?
 
   createdAt             DateTime      @default(now())
@@ -284,7 +275,6 @@ model TestOrder {
   labAccessionNumber   String?
   clientPrice          Decimal?       @db.Decimal(10, 2)
   labCost              Decimal?       @db.Decimal(10, 2) // INTERNAL ONLY
-  paymentReceived      Boolean        @default(false)
   invoiceNumber        String?        // QuickBooks ref
 
   notes                String?

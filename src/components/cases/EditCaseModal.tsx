@@ -11,7 +11,6 @@ type CaseInfo = {
   judgeName: string | null;
   hasCourtOrder: boolean;
   isMonitored: boolean;
-  paymentStatus: string;
   notes: string | null;
   donor: { firstName: string; lastName: string; email: string | null; phone: string | null } | null;
 };

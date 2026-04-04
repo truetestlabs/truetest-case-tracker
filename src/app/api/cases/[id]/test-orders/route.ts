@@ -126,19 +126,21 @@ export async function PATCH(
       if (updateData[field] !== undefined) data[field] = updateData[field];
     }
 
+    // Auto-manage paymentDate based on paymentMethod transitions
+    if (updateData.paymentMethod !== undefined) {
+      const oldMethod = existing.paymentMethod;
+      const newMethod = updateData.paymentMethod;
+      if (!oldMethod && newMethod) {
+        data.paymentDate = new Date();
+      } else if (oldMethod && !newMethod) {
+        data.paymentDate = null;
+      }
+    }
 
     const updated = await prisma.testOrder.update({
       where: { id: testOrderId },
       data,
     });
-
-    // Update case-level payment status if provided
-    if (updateData.paymentStatus) {
-      await prisma.case.update({
-        where: { id: caseId },
-        data: { paymentStatus: updateData.paymentStatus },
-      });
-    }
 
     // Log status change + trigger email notifications
     if (updateData.testStatus && updateData.testStatus !== existing.testStatus) {

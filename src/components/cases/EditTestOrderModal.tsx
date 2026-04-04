@@ -15,13 +15,11 @@ type TestOrderData = {
   collectionSiteType: string | null;
   squarePaymentLink: string | null;
   paymentMethod: string | null;
-  paymentReceived: boolean;
   clientPrice: string | null;
   invoiceNumber: string | null;
   labAccessionNumber: string | null;
   appointmentDate: string | null;
   notes: string | null;
-  paymentStatus: string | null;
 };
 
 type CatalogItem = {
@@ -84,9 +82,6 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
       collectionSiteType: form.get("collectionSiteType") || null,
       schedulingType: form.get("schedulingType") || testOrder.schedulingType || "scheduled",
       paymentMethod: (form.get("payment") as string) === "not_paid" ? null : form.get("payment"),
-      paymentStatus: (form.get("payment") as string) === "not_paid" ? "unpaid"
-        : (form.get("payment") as string) === "invoiced" ? "invoiced"
-        : "paid",
       notes: form.get("notes") || null,
     };
 

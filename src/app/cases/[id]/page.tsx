@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { StatusBadge, CourtOrderFlag } from "@/components/ui/StatusBadge";
 import { CASE_TYPE_CONFIG } from "@/lib/case-utils";
+import { getPaymentState, getPaymentLabel } from "@/lib/payment";
 import { AddContactForm } from "@/components/cases/AddContactForm";
 import { EditContactModal } from "@/components/cases/EditContactModal";
 import { EditCaseModal } from "@/components/cases/EditCaseModal";
@@ -23,7 +24,6 @@ type CaseData = {
   judgeName: string | null;
   hasCourtOrder: boolean;
   isMonitored: boolean;
-  paymentStatus: string;
   notes: string | null;
   createdAt: string;
   donor: { firstName: string; lastName: string; email: string | null; phone: string | null } | null;
@@ -47,7 +47,6 @@ type CaseData = {
     specimenHeld: boolean;
     labAccessionNumber: string | null;
     clientPrice: string | null;
-    paymentReceived: boolean;
     invoiceNumber: string | null;
     appointmentDate: string | null;
     collectionDate: string | null;
@@ -347,15 +346,10 @@ export default function CaseDetailPage() {
                     </div>
                     <div className="flex items-center gap-4 mt-2 text-xs">
                       {(() => {
-                        const method = test.paymentMethod;
-                        if (!method) {
-                          return <span className="font-medium text-red-500">Not Paid</span>;
-                        }
-                        if (method === "invoiced") {
-                          return <span className="font-medium text-blue-600">Invoiced</span>;
-                        }
-                        const label = method.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
-                        return <span className="font-medium text-green-600">Paid ({label})</span>;
+                        const state = getPaymentState(test.paymentMethod);
+                        const label = getPaymentLabel(test.paymentMethod);
+                        const color = state === "unpaid" ? "text-red-500" : state === "invoiced" ? "text-blue-600" : "text-green-600";
+                        return <span className={`font-medium ${color}`}>{label}</span>;
                       })()}
                       {test.clientPrice && <span className="text-gray-500">Client: ${Number(test.clientPrice).toFixed(2)}</span>}
                       {test.invoiceNumber && <span className="text-gray-400">Invoice: {test.invoiceNumber}</span>}
@@ -372,7 +366,7 @@ export default function CaseDetailPage() {
                     {editingTestOrder === test.id && (
                       <EditTestOrderModal
                         caseId={caseData.id}
-                        testOrder={{ ...test, paymentStatus: caseData.paymentStatus }}
+                        testOrder={test}
                         onSaved={() => { setEditingTestOrder(null); loadCase(); }}
                         onClose={() => setEditingTestOrder(null)}
                       />

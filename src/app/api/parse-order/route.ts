@@ -55,8 +55,6 @@ export async function POST(request: NextRequest) {
         county: parsed.county || "Cook County",
         judgeName: parsed.judgeName || null,
         hasCourtOrder: true,
-        paymentStatus: "unpaid",
-        paymentResponsibility: parsed.whoPays || null,
         notes: parsed.notes || null,
         donorId: primaryDonorId,
         createdBy: "admin",

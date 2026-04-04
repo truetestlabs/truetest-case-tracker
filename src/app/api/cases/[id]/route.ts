@@ -82,7 +82,7 @@ export async function PATCH(
     const updateData: Record<string, unknown> = {};
     const allowedFields = [
       "caseType", "caseStatus", "courtCaseNumber", "county", "jurisdiction",
-      "judgeName", "hasCourtOrder", "isMonitored", "paymentStatus", "paymentResponsibility", "notes"
+      "judgeName", "hasCourtOrder", "isMonitored", "notes"
     ];
     for (const field of allowedFields) {
       if (body[field] !== undefined) updateData[field] = body[field];

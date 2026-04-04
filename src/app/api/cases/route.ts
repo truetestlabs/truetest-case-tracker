@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     include: {
       donor: true,
       caseContacts: { include: { contact: true } },
-      testOrders: { take: 1, orderBy: { updatedAt: "desc" }, select: { testStatus: true, appointmentDate: true, schedulingType: true, testDescription: true, collectionSite: true, collectionSiteType: true, collectionType: true, paymentReceived: true, paymentMethod: true } },
+      testOrders: { take: 1, orderBy: { updatedAt: "desc" }, select: { testStatus: true, appointmentDate: true, schedulingType: true, testDescription: true, collectionSite: true, collectionSiteType: true, collectionType: true, paymentMethod: true } },
       _count: { select: { testOrders: true, documents: true } },
     },
   });
@@ -114,7 +114,6 @@ export async function POST(request: NextRequest) {
         judgeName: body.judgeName || null,
         hasCourtOrder: body.hasCourtOrder || false,
         isMonitored: body.isMonitored || false,
-        paymentResponsibility: body.paymentResponsibility || null,
         notes: body.notes || null,
         donorId,
         createdBy: "admin", // TODO: replace with actual user

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { StatusBadge, CourtOrderFlag } from "@/components/ui/StatusBadge";
+import { getCasePaymentState } from "@/lib/payment";
 
 const AVATAR_COLORS = [
   "bg-blue-100 text-blue-700",
@@ -31,7 +32,6 @@ type CaseRow = {
   courtCaseNumber: string | null;
   hasCourtOrder: boolean;
   isMonitored: boolean;
-  paymentStatus: string;
   updatedAt: string;
   donor: { firstName: string; lastName: string } | null;
   caseContacts: Array<{
@@ -46,7 +46,6 @@ type CaseRow = {
     collectionSite: string | null;
     collectionSiteType: string | null;
     collectionType: string;
-    paymentReceived: boolean;
     paymentMethod: string | null;
   }>;
   _count: { testOrders: number; documents: number };
@@ -254,13 +253,7 @@ export default function CasesPage() {
                       )}
                     </td>
                     <td className="px-5 py-3.5">
-                      {(() => {
-                        const method = c.testOrders[0]?.paymentMethod;
-                        const status = c.paymentStatus;
-                        if (method === "invoiced") return <StatusBadge status="invoiced" type="payment" />;
-                        if (status === "paid" || method) return <StatusBadge status="paid" type="payment" />;
-                        return <StatusBadge status="unpaid" type="payment" />;
-                      })()}
+                      <StatusBadge status={getCasePaymentState(c.testOrders)} type="payment" />
                     </td>
                     <td className="px-5 py-3.5">
                       <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 text-xs font-semibold text-slate-600">

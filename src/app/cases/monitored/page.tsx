@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { getCasePaymentState } from "@/lib/payment";
 
 type CaseRow = {
   id: string;
@@ -119,12 +120,7 @@ export default function MonitoredCasesPage() {
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      {(() => {
-                        const method = c.testOrders[0]?.paymentMethod;
-                        if (!method) return <StatusBadge status="unpaid" type="payment" />;
-                        if (method === "invoiced") return <StatusBadge status="invoiced" type="payment" />;
-                        return <StatusBadge status="paid" type="payment" />;
-                      })()}
+                      <StatusBadge status={getCasePaymentState(c.testOrders)} type="payment" />
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">{c._count.testOrders}</td>
                     <td className="px-6 py-4 text-xs text-gray-400">{new Date(c.updatedAt).toLocaleDateString()}</td>
