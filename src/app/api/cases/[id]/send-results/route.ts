@@ -42,7 +42,8 @@ export async function POST(
 
     return NextResponse.json({ sentTo, logId: log.id });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : "Failed to send email";
     console.error("Send results email error:", error);
-    return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

@@ -105,6 +105,8 @@ export default function CaseDetailPage() {
   const [expandedSummary, setExpandedSummary] = useState<string | null>(null);
   const [sendingResults, setSendingResults] = useState(false);
   const [resultsSentMsg, setResultsSentMsg] = useState<string | null>(null);
+  const [sendingCollection, setSendingCollection] = useState(false);
+  const [collectionSentMsg, setCollectionSentMsg] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Array<{
     id: string;
     newStatus: string;
@@ -265,7 +267,38 @@ export default function CaseDetailPage() {
             {/* Test Orders */}
             <div className="px-6 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50">
               <h3 className="text-sm font-semibold text-gray-700">Test Orders ({caseData.testOrders.length})</h3>
-              <AddTestOrder caseId={caseData.id} onAdded={loadCase} />
+              <div className="flex items-center gap-2">
+                {caseData.testOrders.some((t) =>
+                  ["specimen_collected", "specimen_held", "sent_to_lab", "results_received", "results_released", "closed"].includes(t.testStatus)
+                ) && (
+                  <>
+                    {collectionSentMsg && <span className="text-xs text-green-600 font-medium">{collectionSentMsg}</span>}
+                    <button
+                      onClick={async () => {
+                        setSendingCollection(true);
+                        setCollectionSentMsg(null);
+                        try {
+                          const res = await fetch(`/api/cases/${caseData.id}/send-collection`, { method: "POST" });
+                          const data = await res.json();
+                          if (res.ok) {
+                            setCollectionSentMsg(`Sent to ${data.sentTo.length} recipient${data.sentTo.length !== 1 ? "s" : ""}`);
+                            loadNotifications(caseData.id);
+                          } else {
+                            setCollectionSentMsg(data.error || "Failed to send");
+                          }
+                        } catch { setCollectionSentMsg("Failed to send"); }
+                        setSendingCollection(false);
+                      }}
+                      disabled={sendingCollection}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+                      style={{ background: "linear-gradient(135deg, #059669 0%, #047857 100%)" }}
+                    >
+                      {sendingCollection ? "Sending…" : "✉ Send Collection Confirmation"}
+                    </button>
+                  </>
+                )}
+                <AddTestOrder caseId={caseData.id} onAdded={loadCase} />
+              </div>
             </div>
             {caseData.testOrders.length === 0 ? (
               <div className="px-6 py-8 text-center text-gray-400">No test orders yet</div>
