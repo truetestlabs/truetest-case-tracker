@@ -80,6 +80,20 @@ export default function CasesPage() {
     loadCases();
   }
 
+  async function toggleCaseStatus(caseId: string, currentStatus: string) {
+    const newStatus = currentStatus === "closed" ? "active" : "closed";
+    try {
+      const res = await fetch(`/api/cases/${caseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caseStatus: newStatus }),
+      });
+      if (res.ok) loadCases();
+    } catch (e) {
+      console.error("Failed to toggle case status", e);
+    }
+  }
+
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -191,7 +205,13 @@ export default function CasesPage() {
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <StatusBadge status={c.caseStatus} type="case" />
+                      <button
+                        onClick={() => toggleCaseStatus(c.id, c.caseStatus)}
+                        className="cursor-pointer hover:opacity-70 transition-opacity"
+                        title="Click to toggle open/closed"
+                      >
+                        <StatusBadge status={c.caseStatus} type="case" />
+                      </button>
                     </td>
                     <td className="px-5 py-3.5">
                       {c.testOrders.length > 0 ? (
