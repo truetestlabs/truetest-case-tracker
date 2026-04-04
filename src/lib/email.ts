@@ -55,7 +55,14 @@ export async function getEmailRecipients(
     }
   }
 
-  return recipients;
+  // Deduplicate by email address (donor is also added as a case contact on creation)
+  const seen = new Set<string>();
+  return recipients.filter((r) => {
+    const key = r.email.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /** Send results-released email with AI-generated summary */
