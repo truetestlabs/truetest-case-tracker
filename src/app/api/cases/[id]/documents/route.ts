@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import type { TestStatus } from "@prisma/client";
 import { claude } from "@/lib/claude";
 import { generateResultSummary } from "@/lib/resultSummary";
-import { sendSampleCollectedEmail } from "@/lib/email";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
@@ -221,17 +220,6 @@ export async function POST(
         });
       }
 
-      // Send collection confirmation email for each advanced order (best-effort)
-      for (const order of testOrders) {
-        try {
-          const sentTo = await sendSampleCollectedEmail(caseId, order.id);
-          if (sentTo.length > 0) {
-            console.log("[Email] COC collection confirmation sent to:", sentTo);
-          }
-        } catch (emailErr) {
-          console.error("[Email] COC collection email error:", emailErr);
-        }
-      }
     }
 
     // Auto-advance test orders when lab results are uploaded

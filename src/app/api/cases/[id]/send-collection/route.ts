@@ -10,26 +10,24 @@ export async function POST(
   const { id: caseId } = await params;
 
   try {
-    const collectedStatuses: TestStatus[] = [
-      "specimen_collected",
-      "specimen_held",
-      "sent_to_lab",
-      "results_received",
-      "results_released",
-      "closed",
-    ];
+    const collectedStatus: TestStatus = "specimen_collected";
 
-    const testOrder = await prisma.testOrder.findFirst({
-      where: { caseId, testStatus: { in: collectedStatuses } },
-      orderBy: { updatedAt: "desc" },
+    // Find all tests currently in specimen_collected status for this case
+    const testOrders = await prisma.testOrder.findMany({
+      where: { caseId, testStatus: collectedStatus },
+      orderBy: { collectionDate: "desc" },
     });
 
-    if (!testOrder) {
-      return NextResponse.json({ error: "No collected test order found" }, { status: 400 });
+    if (testOrders.length === 0) {
+      return NextResponse.json(
+        { error: "No tests in Specimen Collected status" },
+        { status: 400 }
+      );
     }
 
-    const sentTo = await sendSampleCollectedEmail(caseId, testOrder.id);
-    console.log("[Email] collection confirmation manual send to:", sentTo);
+    const testOrderIds = testOrders.map((t) => t.id);
+    const sentTo = await sendSampleCollectedEmail(caseId, testOrderIds);
+    console.log("[Email] collection confirmation manual send to:", sentTo, "tests:", testOrderIds.length);
 
     if (sentTo.length === 0) {
       return NextResponse.json(
@@ -38,20 +36,23 @@ export async function POST(
       );
     }
 
-    await prisma.statusLog.create({
-      data: {
-        caseId,
-        testOrderId: testOrder.id,
-        oldStatus: testOrder.testStatus,
-        newStatus: testOrder.testStatus,
-        changedBy: "admin",
-        note: "Specimen collection confirmation email manually sent",
-        notificationSent: true,
-        notificationRecipients: sentTo,
-      },
-    });
+    // Log a notification entry for each test included in the email
+    for (const t of testOrders) {
+      await prisma.statusLog.create({
+        data: {
+          caseId,
+          testOrderId: t.id,
+          oldStatus: t.testStatus,
+          newStatus: t.testStatus,
+          changedBy: "admin",
+          note: `Collection confirmation email manually sent (${testOrders.length} test${testOrders.length === 1 ? "" : "s"} included)`,
+          notificationSent: true,
+          notificationRecipients: sentTo,
+        },
+      });
+    }
 
-    return NextResponse.json({ sentTo });
+    return NextResponse.json({ sentTo, testsIncluded: testOrders.length });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Failed to send email";
     console.error("Send collection email error:", error);

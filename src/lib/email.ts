@@ -166,14 +166,15 @@ export async function sendResultsReleasedEmail(
   return emailList;
 }
 
-/** Send specimen-collected confirmation email (with payment status notice if unpaid) */
+/** Send specimen-collected confirmation email for one or more tests (with combined payment notice if unpaid) */
 export async function sendSampleCollectedEmail(
   caseId: string,
-  testOrderId: string
+  testOrderIds: string[]
 ): Promise<string[]> {
   if (!process.env.RESEND_API_KEY) return [];
+  if (!testOrderIds || testOrderIds.length === 0) return [];
 
-  const [recipients, caseData, testOrder] = await Promise.all([
+  const [recipients, caseData, testOrders] = await Promise.all([
     getEmailRecipients(caseId, "status"),
     prisma.case.findUnique({
       where: { id: caseId },
@@ -182,45 +183,64 @@ export async function sendSampleCollectedEmail(
         donor: { select: { firstName: true, lastName: true } },
       },
     }),
-    prisma.testOrder.findUnique({
-      where: { id: testOrderId },
-      select: { testDescription: true, collectionDate: true, paymentReceived: true, paymentMethod: true, collectionSiteType: true },
+    prisma.testOrder.findMany({
+      where: { id: { in: testOrderIds } },
+      select: { id: true, testDescription: true, collectionDate: true, paymentMethod: true, collectionSiteType: true },
     }),
   ]);
 
-  if (!recipients.length || !caseData) return [];
+  if (!recipients.length || !caseData || testOrders.length === 0) return [];
 
   const donorName = caseData.donor
     ? `${caseData.donor.firstName} ${caseData.donor.lastName}`
     : "the donor";
 
-  // Payment state: match case detail UI exactly — only check paymentMethod.
-  // (paymentReceived can be stale from old auto-advance logic; paymentMethod is the source of truth)
-  const isInvoiced = testOrder?.paymentMethod === "invoiced";
-  const isPaid = !isInvoiced && !!testOrder?.paymentMethod;
+  // Combined payment state across all tests:
+  //  - "invoiced": every test has paymentMethod === "invoiced"
+  //  - "paid": every test has a paymentMethod set (none "invoiced")
+  //  - "unpaid": at least one test has no paymentMethod
+  const anyUnpaid = testOrders.some((t) => !t.paymentMethod);
+  const allInvoiced = !anyUnpaid && testOrders.every((t) => t.paymentMethod === "invoiced");
+  const allPaid = !anyUnpaid && !allInvoiced && testOrders.every((t) => !!t.paymentMethod);
 
-  // Collection location: "truetest" (or unset) = collected at TTL; anything else = external site
-  const collectedAtTTL = !testOrder?.collectionSiteType || testOrder.collectionSiteType === "truetest";
+  // Collection location: if all share same site type use it; mixed → default to TTL (more conservative)
+  const siteTypes = new Set(testOrders.map((t) => t.collectionSiteType || "truetest"));
+  const collectedAtTTL = siteTypes.size !== 1 || siteTypes.has("truetest");
 
-  const collectionLine = testOrder?.collectionDate
-    ? `<p style="color:#64748b;font-size:13px;margin:0 0 20px;">Collection date: <strong>${new Date(testOrder.collectionDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</strong></p>`
+  // Use the first test's collection date (or earliest)
+  const firstDate = testOrders.find((t) => t.collectionDate)?.collectionDate;
+  const collectionLine = firstDate
+    ? `<p style="color:#64748b;font-size:13px;margin:0 0 20px;">Collection date: <strong>${new Date(firstDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</strong></p>`
     : "";
 
-  const unpaidMessage = collectedAtTTL
-    ? "Your specimen has been collected and is currently being held at TrueTest Labs pending payment. Once payment is received, your sample will be sent to the lab for processing and results will be released promptly. Please contact our office at your earliest convenience to arrange payment."
-    : "Your specimen has been collected at the collection site. Please note that results will be delayed until payment is received. Please contact our office at your earliest convenience to arrange payment so we can process your sample without further delay.";
+  // Render a list of tests
+  const testList = `
+    <ul style="margin:0 0 20px;padding-left:20px;color:#334155;font-size:14px;line-height:1.8;">
+      ${testOrders.map((t) => `<li>${t.testDescription}</li>`).join("")}
+    </ul>`;
 
-  const paymentBlock = !isPaid && !isInvoiced
+  const unpaidMessage = collectedAtTTL
+    ? "Your specimens have been collected and are currently being held at TrueTest Labs pending payment. Once payment is received, your samples will be sent to the lab for processing and results will be released promptly. Please contact our office at your earliest convenience to arrange payment."
+    : "Your specimens have been collected at the collection site. Please note that results will be delayed until payment is received. Please contact our office at your earliest convenience to arrange payment so we can process your samples without further delay.";
+
+  const paymentBlock = anyUnpaid
     ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px;margin:20px 0;">
         <p style="color:#92400e;font-size:13px;font-weight:600;margin:0 0 6px;">Payment Required</p>
         <p style="color:#78350f;font-size:13px;margin:0;">${unpaidMessage}</p>
       </div>`
-    : isInvoiced
+    : allInvoiced
     ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;margin:20px 0;">
         <p style="color:#1e40af;font-size:13px;font-weight:600;margin:0 0 6px;">Invoice on File</p>
-        <p style="color:#1e3a8a;font-size:13px;margin:0;">An invoice has been issued for this test. Your specimen will be processed and results released once payment is confirmed.</p>
+        <p style="color:#1e3a8a;font-size:13px;margin:0;">An invoice has been issued. Your specimens will be processed and results released once payment is confirmed.</p>
       </div>`
     : "";
+  // (allPaid → no payment block)
+  void allPaid;
+
+  const specimenWord = testOrders.length === 1 ? "specimen" : "specimens";
+  const intro = testOrders.length === 1
+    ? `A ${specimenWord} has been collected for:`
+    : `The following ${specimenWord} have been collected for:`;
 
   const html = `
 <!DOCTYPE html>
@@ -230,12 +250,13 @@ export async function sendSampleCollectedEmail(
   <div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
     <div style="background:#059669;padding:24px 32px;">
       <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">TrueTest Labs</p>
-      <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;">Specimen Collected</h1>
+      <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;">Specimen${testOrders.length === 1 ? "" : "s"} Collected</h1>
     </div>
     <div style="padding:28px 32px;">
-      <p style="color:#334155;font-size:15px;margin:0 0 4px;">A specimen has been collected for:</p>
+      <p style="color:#334155;font-size:15px;margin:0 0 4px;">${intro}</p>
       <p style="color:#0f172a;font-size:18px;font-weight:700;margin:0 0 4px;">${donorName}</p>
-      <p style="color:#64748b;font-size:13px;margin:0 0 20px;">Case No. ${caseData.caseNumber}${testOrder?.testDescription ? ` &bull; ${testOrder.testDescription}` : ""}</p>
+      <p style="color:#64748b;font-size:13px;margin:0 0 16px;">Case No. ${caseData.caseNumber}</p>
+      ${testList}
       ${collectionLine}
       ${paymentBlock}
       <div style="border-top:1px solid #e2e8f0;margin-top:${paymentBlock ? "4px" : "20px"};padding-top:20px;">
