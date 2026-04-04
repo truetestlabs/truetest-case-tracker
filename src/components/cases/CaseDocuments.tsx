@@ -101,7 +101,7 @@ function DocumentUploadSlot({
           {icon} {label}
         </h4>
         <div className="flex items-center gap-2">
-          {docs.length > 1 && (
+          {docs.length > 0 && (
             <a
               href={`/api/cases/${caseId}/documents/download?type=${docType}`}
               className="text-xs px-2.5 py-1 bg-[#1e3a5f] text-white rounded hover:bg-[#2a5490] font-medium flex items-center gap-1"
