@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import type { TestStatus } from "@prisma/client";
 import { claude } from "@/lib/claude";
 import { generateResultSummary } from "@/lib/resultSummary";
+import { sendSampleCollectedEmail } from "@/lib/email";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
@@ -205,8 +206,7 @@ export async function POST(
           data: {
             testStatus: "specimen_collected",
             collectionDate: new Date(),
-            paymentReceived: true,
-            paymentDate: order.paymentDate || new Date(),
+            // Note: paymentReceived is NOT set here — payment is tracked separately
           },
         });
         await prisma.statusLog.create({
@@ -219,6 +219,18 @@ export async function POST(
             note: "Auto-advanced: chain of custody uploaded",
           },
         });
+      }
+
+      // Send collection confirmation email for each advanced order (best-effort)
+      for (const order of testOrders) {
+        try {
+          const sentTo = await sendSampleCollectedEmail(caseId, order.id);
+          if (sentTo.length > 0) {
+            console.log("[Email] COC collection confirmation sent to:", sentTo);
+          }
+        } catch (emailErr) {
+          console.error("[Email] COC collection email error:", emailErr);
+        }
       }
     }
 
