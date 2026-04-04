@@ -51,7 +51,24 @@ export default function NewCasePage() {
     setLoading(true);
     setError("");
 
-    const form = new FormData(e.currentTarget);
+    // Safety: run duplicate check synchronously before submit if it hasn't happened yet
+    const formEl = e.currentTarget;
+    const firstNameVal = (formEl.elements.namedItem("donorFirstName") as HTMLInputElement)?.value?.trim() || "";
+    const lastNameVal = (formEl.elements.namedItem("donorLastName") as HTMLInputElement)?.value?.trim() || "";
+    if (firstNameVal && lastNameVal && !dupChecked) {
+      const res = await fetch(`/api/cases/check-duplicate?firstName=${encodeURIComponent(firstNameVal)}&lastName=${encodeURIComponent(lastNameVal)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.cases?.length > 0 && !bypassDup) {
+          setDuplicates(data.cases);
+          setDupChecked(true);
+          setError("This donor already has an existing case. Check the warning below, then confirm if you still want to create a new one.");
+          return;
+        }
+      }
+    }
+
+    const form = new FormData(formEl);
     const data = {
       caseType: form.get("caseType"),
       hasCourtOrder: form.get("hasCourtOrder") === "yes",
@@ -60,6 +77,7 @@ export default function NewCasePage() {
       county: form.get("county") || null,
       judgeName: form.get("judgeName") || null,
       notes: form.get("notes") || null,
+      confirmDuplicate: bypassDup,
       donor: {
         firstName: form.get("donorFirstName"),
         lastName: form.get("donorLastName"),
@@ -74,6 +92,15 @@ export default function NewCasePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
+
+      if (res.status === 409) {
+        const err = await res.json();
+        setDuplicates(err.duplicates || []);
+        setDupChecked(true);
+        setError(err.message || "This donor already has an active case.");
+        setLoading(false);
+        return;
+      }
 
       if (!res.ok) {
         const err = await res.json();
