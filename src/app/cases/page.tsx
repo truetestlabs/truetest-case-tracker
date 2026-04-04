@@ -252,7 +252,14 @@ export default function CasesPage() {
                         title="Click to toggle paid/unpaid"
                         className="cursor-pointer hover:opacity-75 active:scale-95 transition-all"
                       >
-                        <StatusBadge status={c.paymentStatus} type="payment" />
+                        {(() => {
+                          const method = c.testOrders[0]?.paymentMethod;
+                          const status = c.paymentStatus;
+                          // invoiced takes priority, then case paymentStatus, then test order method
+                          if (method === "invoiced") return <StatusBadge status="invoiced" type="payment" />;
+                          if (status === "paid" || method) return <StatusBadge status="paid" type="payment" />;
+                          return <StatusBadge status="unpaid" type="payment" />;
+                        })()}
                       </button>
                     </td>
                     <td className="px-5 py-3.5">
