@@ -185,7 +185,7 @@ export async function sendSampleCollectedEmail(
     }),
     prisma.testOrder.findUnique({
       where: { id: testOrderId },
-      select: { testDescription: true, collectionDate: true, paymentReceived: true, paymentMethod: true },
+      select: { testDescription: true, collectionDate: true, paymentReceived: true, paymentMethod: true, collectionSiteType: true },
     }),
   ]);
 
@@ -201,14 +201,21 @@ export async function sendSampleCollectedEmail(
     ? false
     : caseData.paymentStatus === "paid" || !!testOrder?.paymentMethod || testOrder?.paymentReceived === true;
 
+  // Collection location: "truetest" (or unset) = collected at TTL; anything else = external site
+  const collectedAtTTL = !testOrder?.collectionSiteType || testOrder.collectionSiteType === "truetest";
+
   const collectionLine = testOrder?.collectionDate
     ? `<p style="color:#64748b;font-size:13px;margin:0 0 20px;">Collection date: <strong>${new Date(testOrder.collectionDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</strong></p>`
     : "";
 
+  const unpaidMessage = collectedAtTTL
+    ? "Your specimen has been collected and is currently being held at TrueTest Labs pending payment. Once payment is received, your sample will be sent to the lab for processing and results will be released promptly. Please contact our office at your earliest convenience to arrange payment."
+    : "Your specimen has been collected at the collection site. Please note that results will be delayed until payment is received. Please contact our office at your earliest convenience to arrange payment so we can process your sample without further delay.";
+
   const paymentBlock = !isPaid && !isInvoiced
     ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px;margin:20px 0;">
         <p style="color:#92400e;font-size:13px;font-weight:600;margin:0 0 6px;">Payment Required</p>
-        <p style="color:#78350f;font-size:13px;margin:0;">Your specimen has been collected and is currently being held pending payment. Once payment is received, your sample will be sent to the lab for processing and results will be released promptly. Please contact our office at your earliest convenience to arrange payment.</p>
+        <p style="color:#78350f;font-size:13px;margin:0;">${unpaidMessage}</p>
       </div>`
     : isInvoiced
     ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;margin:20px 0;">
