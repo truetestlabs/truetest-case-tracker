@@ -222,19 +222,28 @@ export async function POST(
       }
     }
 
-    // Auto-advance test orders when lab results are uploaded → results_received
+    // Auto-advance test orders when lab results are uploaded
     if (documentType === "result_report") {
+      const caseInfo = await prisma.case.findUnique({
+        where: { id: caseId },
+        select: { isMonitored: true },
+      });
+      const isMonitored = caseInfo?.isMonitored ?? false;
+
       const preResultStatuses = ["specimen_collected", "sent_to_lab"] as TestStatus[];
       const testOrders = await prisma.testOrder.findMany({
         where: { caseId, testStatus: { in: preResultStatuses } },
       });
 
       for (const order of testOrders) {
+        // Non-monitored: close the test order; Monitored: mark results_received
+        const newTestStatus = isMonitored ? "results_received" : "closed";
         await prisma.testOrder.update({
           where: { id: order.id },
           data: {
-            testStatus: "results_received",
+            testStatus: newTestStatus as TestStatus,
             resultsReceivedDate: new Date(),
+            ...(isMonitored ? {} : { resultsReleasedDate: new Date() }),
           },
         });
         await prisma.statusLog.create({
@@ -242,9 +251,28 @@ export async function POST(
             caseId,
             testOrderId: order.id,
             oldStatus: order.testStatus,
-            newStatus: "results_received",
+            newStatus: newTestStatus,
             changedBy: "admin",
-            note: "Auto-advanced: lab results uploaded",
+            note: isMonitored
+              ? "Auto-advanced: lab results uploaded (monitored case)"
+              : "Auto-closed: lab results uploaded (non-monitored case)",
+          },
+        });
+      }
+
+      // Non-monitored: also close the case
+      if (!isMonitored) {
+        await prisma.case.update({
+          where: { id: caseId },
+          data: { caseStatus: "closed" },
+        });
+        await prisma.statusLog.create({
+          data: {
+            caseId,
+            oldStatus: "active",
+            newStatus: "closed",
+            changedBy: "admin",
+            note: "Auto-closed: lab results uploaded (non-monitored case)",
           },
         });
       }
