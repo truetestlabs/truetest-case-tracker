@@ -81,15 +81,12 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
       lab: currentTest.lab,
       clientPrice: currentTest.clientPrice ? Number(currentTest.clientPrice) : null,
       collectionType: form.get("collectionType"),
-      collectionSite: form.get("collectionSite") || null,
       collectionSiteType: form.get("collectionSiteType") || null,
       schedulingType: form.get("schedulingType") || testOrder.schedulingType || "scheduled",
       paymentMethod: (form.get("payment") as string) === "not_paid" ? null : form.get("payment"),
       paymentStatus: (form.get("payment") as string) === "not_paid" ? "unpaid"
         : (form.get("payment") as string) === "invoiced" ? "invoiced"
         : "paid",
-      invoiceNumber: form.get("invoiceNumber") || null,
-      labAccessionNumber: form.get("labAccessionNumber") || null,
       notes: form.get("notes") || null,
     };
 
@@ -194,10 +191,6 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
           {/* Collection details */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Collection Site</label>
-              <input type="text" name="collectionSite" defaultValue={testOrder.collectionSite || ""} placeholder="e.g., Quest PSC - Chicago Loop" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
-            </div>
-            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Site Type</label>
               <select name="collectionSiteType" defaultValue={testOrder.collectionSiteType || ""} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm">
                 <option value="">Select...</option>
@@ -215,7 +208,7 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Appointment Date</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Collection Date</label>
               <input type="datetime-local" name="appointmentDate" defaultValue={testOrder.appointmentDate ? testOrder.appointmentDate.slice(0, 16) : ""} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
             </div>
           </div>
@@ -223,33 +216,18 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
           {/* Payment */}
           <div className="border-t border-gray-200 pt-4">
             <h4 className="text-sm font-semibold text-gray-900 mb-3">Payment</h4>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Payment</label>
-                <select name="payment" defaultValue={testOrder.paymentMethod || "not_paid"} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm">
-                  <option value="not_paid">Not Paid</option>
-                  <option value="square">Square</option>
-                  <option value="cash">Cash</option>
-                  <option value="check">Check</option>
-                  <option value="credit_card">Credit Card</option>
-                  <option value="direct_deposit">Direct Deposit</option>
-                  <option value="attorney_pays">Attorney Pays</option>
-                  <option value="invoiced">Invoiced</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Invoice # (QuickBooks)</label>
-                <input type="text" name="invoiceNumber" defaultValue={testOrder.invoiceNumber || ""} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
-              </div>
-            </div>
-          </div>
-
-          {/* Lab tracking */}
-          <div className="border-t border-gray-200 pt-4">
-            <h4 className="text-sm font-semibold text-gray-900 mb-3">Lab Tracking</h4>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Lab Accession Number</label>
-              <input type="text" name="labAccessionNumber" defaultValue={testOrder.labAccessionNumber || ""} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
+              <label className="block text-xs font-medium text-gray-600 mb-1">Payment</label>
+              <select name="payment" defaultValue={testOrder.paymentMethod || "not_paid"} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm">
+                <option value="not_paid">Not Paid</option>
+                <option value="square">Square</option>
+                <option value="cash">Cash</option>
+                <option value="check">Check</option>
+                <option value="credit_card">Credit Card</option>
+                <option value="direct_deposit">Direct Deposit</option>
+                <option value="attorney_pays">Attorney Pays</option>
+                <option value="invoiced">Invoiced</option>
+              </select>
             </div>
           </div>
 
