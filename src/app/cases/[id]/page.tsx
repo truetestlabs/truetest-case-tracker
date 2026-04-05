@@ -10,6 +10,8 @@ import { AddContactForm } from "@/components/cases/AddContactForm";
 import { EditContactModal } from "@/components/cases/EditContactModal";
 import { EditCaseModal } from "@/components/cases/EditCaseModal";
 import { AddTestOrder } from "@/components/cases/AddTestOrder";
+import { CreateScheduleModal } from "@/components/cases/CreateScheduleModal";
+import { MonitoringScheduleCard } from "@/components/cases/MonitoringScheduleCard";
 import { TestStatusButtons } from "@/components/cases/TestStatusButtons";
 import { CaseDocuments } from "@/components/cases/CaseDocuments";
 import { EditTestOrderModal } from "@/components/cases/EditTestOrderModal";
@@ -106,6 +108,8 @@ export default function CaseDetailPage() {
   const [sendingCollection, setSendingCollection] = useState(false);
   const [collectionSentMsg, setCollectionSentMsg] = useState<string | null>(null);
   const [collectionConfirmed, setCollectionConfirmed] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0);
   const [notifications, setNotifications] = useState<Array<{
     id: string;
     newStatus: string;
@@ -376,6 +380,30 @@ export default function CaseDetailPage() {
               </div>
             )}
           </section>
+
+          {/* Monitoring Schedules (only for monitored cases) */}
+          {caseData.isMonitored && (
+            <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider">Random Testing Schedules</h3>
+                <button
+                  onClick={() => setShowScheduleModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110"
+                  style={{ background: "linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)" }}
+                >
+                  + Set Up Schedule
+                </button>
+              </div>
+              <MonitoringScheduleCard key={scheduleRefreshKey} caseId={caseData.id} onChanged={loadCase} />
+              {showScheduleModal && (
+                <CreateScheduleModal
+                  caseId={caseData.id}
+                  onSaved={() => { setShowScheduleModal(false); setScheduleRefreshKey((k) => k + 1); loadCase(); }}
+                  onClose={() => setShowScheduleModal(false)}
+                />
+              )}
+            </section>
+          )}
 
           {/* Documents */}
           <CaseDocuments caseId={caseData.id} documents={caseData.documents} onUpdated={loadCase} />

@@ -5,9 +5,9 @@ import { Sidebar } from "./Sidebar";
 
 export function ConditionalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isIntake = pathname === "/intake";
+  const isStandalone = pathname === "/intake" || pathname === "/checkin";
 
-  if (isIntake) {
+  if (isStandalone) {
     return <>{children}</>;
   }
 

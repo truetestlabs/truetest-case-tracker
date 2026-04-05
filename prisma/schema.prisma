@@ -167,6 +167,7 @@ model Case {
   courtOrders           CourtOrder[]
   statusLogs            StatusLog[]
   messages              Message[]
+  monitoringSchedules   MonitoringSchedule[]
 
   @@index([caseStatus])
   @@index([caseType])
@@ -234,7 +235,8 @@ model TestCatalog {
   isAddOn          Boolean      @default(false)
   active           Boolean      @default(true)
 
-  testOrders       TestOrder[]
+  testOrders           TestOrder[]
+  monitoringSchedules  MonitoringSchedule[]
 
   @@index([category])
   @@index([specimenType])
@@ -289,6 +291,7 @@ model TestOrder {
   resultDocument       Document?      @relation("TestResult", fields: [resultDocumentId], references: [id])
   resultDocumentId     String?
   statusLogs           StatusLog[]
+  randomSelection      RandomSelection?
 
   @@index([caseId])
   @@index([testStatus])
@@ -384,4 +387,85 @@ model Message {
 
   @@index([caseId])
   @@index([sentAt])
+}
+
+// ============================================================
+// RANDOM MONITORING SCHEDULER
+// ============================================================
+
+model MonitoringSchedule {
+  id                   String          @id @default(cuid())
+  caseId               String
+  case                 Case            @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  // Test config (locked at creation)
+  testCatalogId        String
+  testCatalog          TestCatalog     @relation(fields: [testCatalogId], references: [id])
+  collectionType       CollectionType  @default(unobserved)
+
+  // Donor check-in
+  checkInPin           String          @unique  // 6-digit PIN donor enters at /checkin
+
+  // Pattern
+  patternType          String          // "range_count" | "per_month" | "per_week"
+  targetCount          Int             // 12 (total) or 2 (per period)
+  minSpacingDays       Int?            // optional spacing constraint
+
+  // Date range
+  startDate            DateTime
+  endDate              DateTime?       // null = ongoing
+
+  // Miss handling
+  autoRescheduleOnMiss Boolean         @default(true)
+  autoRescheduleDays   Int             @default(1)
+
+  // State
+  active               Boolean         @default(true)
+  lastGeneratedThrough DateTime?       // how far ahead selections have been generated
+  createdAt            DateTime        @default(now())
+  createdBy            String?
+
+  selections           RandomSelection[]
+  checkIns             CheckIn[]
+
+  @@index([caseId])
+  @@index([active])
+}
+
+model RandomSelection {
+  id                   String          @id @default(cuid())
+  scheduleId           String
+  schedule             MonitoringSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  selectedDate         DateTime        // date picked (UTC midnight)
+  status               String          @default("pending") // pending | notified | completed | refused | cancelled
+
+  notifiedAt           DateTime?
+  completedAt          DateTime?
+
+  testOrderId          String?         @unique
+  testOrder            TestOrder?      @relation(fields: [testOrderId], references: [id])
+
+  // Replacement chain
+  replacesSelectionId  String?         @unique
+  replacesSelection    RandomSelection? @relation("Replacement", fields: [replacesSelectionId], references: [id])
+  replacementSelection RandomSelection? @relation("Replacement")
+
+  createdAt            DateTime        @default(now())
+
+  @@index([scheduleId, selectedDate])
+  @@index([selectedDate, status])
+}
+
+model CheckIn {
+  id              String              @id @default(cuid())
+  scheduleId      String
+  schedule        MonitoringSchedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  checkedInAt     DateTime            @default(now())
+  wasSelected     Boolean             // true if a selection existed for today
+  selectionId     String?
+  ipAddress       String?
+  userAgent       String?
+
+  @@index([scheduleId, checkedInAt])
 }

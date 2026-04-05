@@ -378,3 +378,99 @@ export async function sendNoShowEmail(
 
   return emailList;
 }
+
+/** Send refusal-to-test email when a donor missed a randomly selected testing day */
+export async function sendRefusalToTestEmail(
+  caseId: string,
+  selectionId: string,
+  replacementDate: Date | null
+): Promise<string[]> {
+  if (!process.env.RESEND_API_KEY) return [];
+
+  const [recipients, selection] = await Promise.all([
+    getEmailRecipients(caseId, "status"),
+    prisma.randomSelection.findUnique({
+      where: { id: selectionId },
+      include: {
+        schedule: {
+          select: {
+            testCatalog: { select: { testName: true } },
+            case: {
+              select: {
+                caseNumber: true,
+                donor: { select: { firstName: true, lastName: true } },
+              },
+            },
+          },
+        },
+      },
+    }),
+  ]);
+
+  if (!recipients.length || !selection) return [];
+
+  const caseData = selection.schedule.case;
+  const donorName = caseData.donor
+    ? `${caseData.donor.firstName} ${caseData.donor.lastName}`
+    : "the donor";
+  const missedDate = new Date(selection.selectedDate).toLocaleDateString("en-US", {
+    weekday: "long", month: "long", day: "numeric", year: "numeric",
+  });
+
+  const replacementBlock = replacementDate
+    ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-bottom:24px;">
+        <p style="color:#991b1b;font-size:13px;font-weight:600;margin:0 0 4px;">Replacement Test Scheduled</p>
+        <p style="color:#7f1d1d;font-size:13px;margin:0;">A replacement test has been scheduled for <strong>${new Date(replacementDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</strong>. The donor must report to TrueTest Labs on that day by 5:00 PM.</p>
+      </div>`
+    : `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-bottom:24px;">
+        <p style="color:#991b1b;font-size:13px;font-weight:600;margin:0 0 4px;">No Replacement Scheduled</p>
+        <p style="color:#7f1d1d;font-size:13px;margin:0;">No replacement test has been scheduled. Please contact TrueTest Labs to discuss next steps.</p>
+      </div>`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;">
+  <div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
+    <div style="background:#991b1b;padding:24px 32px;">
+      <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">TrueTest Labs</p>
+      <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;">Refusal to Test</h1>
+    </div>
+    <div style="padding:28px 32px;">
+      <p style="color:#334155;font-size:15px;margin:0 0 4px;">The following donor did not appear for their randomly selected drug test:</p>
+      <p style="color:#0f172a;font-size:18px;font-weight:700;margin:0 0 4px;">${donorName}</p>
+      <p style="color:#64748b;font-size:13px;margin:0 0 16px;">Case No. ${caseData.caseNumber} &bull; ${selection.schedule.testCatalog.testName}</p>
+      <p style="color:#64748b;font-size:13px;margin:0 0 20px;">Selected date: <strong>${missedDate}</strong></p>
+      ${replacementBlock}
+      <div style="border-top:1px solid #e2e8f0;padding-top:20px;">
+        <p style="color:#475569;font-size:13px;margin:0 0 8px;">Contact our office:</p>
+        <p style="color:#1e3a5f;font-size:14px;font-weight:600;margin:0;">${OFFICE_PHONE}</p>
+        <p style="color:#64748b;font-size:13px;margin:4px 0 0;">${OFFICE_ADDRESS}</p>
+      </div>
+    </div>
+    <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
+      <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;">This notification was sent by TrueTest Labs Case Management System. Do not reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const emailList = recipients.map((r) => r.email);
+  const lastName = caseData.donor?.lastName ?? donorName;
+
+  const { data: sendData, error: sendError } = await getResend().emails.send({
+    from: FROM_EMAIL,
+    replyTo: REPLY_TO,
+    to: emailList,
+    subject: `Refusal to Test — ${lastName} (${caseData.caseNumber})`,
+    html,
+  });
+  if (sendError) {
+    console.error("[Email] Resend error (refusal):", sendError);
+    throw new Error(sendError.message);
+  }
+  console.log("[Email] refusal sent, id:", sendData?.id);
+
+  return emailList;
+}

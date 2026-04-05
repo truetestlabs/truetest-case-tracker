@@ -165,6 +165,9 @@ export default function DashboardPage() {
             })}
           </div>
 
+          {/* Today's Random Selections */}
+          <TodaysSelections />
+
           {/* Recent Cases */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -283,4 +286,65 @@ function CheckIcon({ className }: { className?: string }) {
 }
 function ChevronRightIcon({ className }: { className?: string }) {
   return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9,18 15,12 9,6"/></svg>;
+}
+
+type TodaySelection = {
+  id: string;
+  status: string;
+  schedule: {
+    caseId: string;
+    case: {
+      caseNumber: string;
+      donor: { firstName: string; lastName: string } | null;
+    };
+    testCatalog: { testName: string };
+  };
+};
+
+function TodaysSelections() {
+  const [selections, setSelections] = useState<TodaySelection[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    fetch(`/api/random-selections?date=${dateStr}`)
+      .then((r) => r.json())
+      .then((data) => { setSelections(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading || selections.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">Today&apos;s Random Selections</h2>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+            {selections.length}
+          </span>
+        </div>
+        <Link href="/calendar" className="text-xs font-medium text-blue-600 hover:text-blue-700">Calendar →</Link>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {selections.map((sel) => {
+          const donor = sel.schedule.case.donor;
+          const name = donor ? `${donor.lastName}, ${donor.firstName}` : "—";
+          return (
+            <Link key={sel.id} href={`/cases/${sel.schedule.caseId}`} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50">
+              <div className="flex items-center gap-3">
+                <span className="font-medium text-slate-900 text-sm">{name}</span>
+                <span className="text-xs text-slate-500">{sel.schedule.case.caseNumber}</span>
+                <span className="text-xs text-slate-400">{sel.schedule.testCatalog.testName}</span>
+              </div>
+              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${sel.status === "notified" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
+                {sel.status}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
