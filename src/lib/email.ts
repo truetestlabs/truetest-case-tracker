@@ -495,7 +495,7 @@ export async function sendDonorInstructionsEmail(scheduleId: string): Promise<st
   if (!schedule || !schedule.case.donor?.email) return [];
 
   const donor = schedule.case.donor;
-  const donorEmail: string = donor.email;
+  const donorEmail: string = donor.email!;
   const donorName = `${donor.firstName} ${donor.lastName}`;
   const checkinUrl = (process.env.APP_URL || "https://truetest-case-tracker.vercel.app").replace(/\/$/, "") + "/checkin";
   const patternSummary =
