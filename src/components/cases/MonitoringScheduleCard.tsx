@@ -87,6 +87,17 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
     if (res.ok) { loadSchedules(); onChanged?.(); }
   }
 
+  async function sendInstructions(id: string) {
+    if (!confirm("Send random testing compliance instructions to the donor's email?")) return;
+    const res = await fetch(`/api/monitoring-schedules/${id}/send-instructions`, { method: "POST" });
+    const data = await res.json();
+    if (res.ok) {
+      alert(`Instructions sent to ${data.sentTo.join(", ")}`);
+    } else {
+      alert(data.error || "Failed to send instructions");
+    }
+  }
+
   async function toggleActive(id: string, active: boolean) {
     const res = await fetch(`/api/monitoring-schedules/${id}`, {
       method: "PATCH",
@@ -122,6 +133,13 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
                 </p>
               </div>
               <div className="flex gap-2">
+                <button
+                  onClick={() => sendInstructions(s.id)}
+                  className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                  title="Email PIN and compliance instructions to donor"
+                >
+                  ✉ Send Instructions
+                </button>
                 <button
                   onClick={() => toggleActive(s.id, s.active)}
                   className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-white"

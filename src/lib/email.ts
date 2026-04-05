@@ -474,3 +474,120 @@ export async function sendRefusalToTestEmail(
 
   return emailList;
 }
+
+/** Send donor compliance instructions for a monitoring schedule (PIN, check-in link, rules) */
+export async function sendDonorInstructionsEmail(scheduleId: string): Promise<string[]> {
+  if (!process.env.RESEND_API_KEY) return [];
+
+  const schedule = await prisma.monitoringSchedule.findUnique({
+    where: { id: scheduleId },
+    include: {
+      testCatalog: { select: { testName: true } },
+      case: {
+        select: {
+          caseNumber: true,
+          donor: { select: { firstName: true, lastName: true, email: true } },
+        },
+      },
+    },
+  });
+
+  if (!schedule || !schedule.case.donor?.email) return [];
+
+  const donor = schedule.case.donor;
+  const donorEmail: string = donor.email;
+  const donorName = `${donor.firstName} ${donor.lastName}`;
+  const checkinUrl = (process.env.APP_URL || "https://truetest-case-tracker.vercel.app").replace(/\/$/, "") + "/checkin";
+  const patternSummary =
+    schedule.patternType === "range_count" ? `${schedule.targetCount} random tests through ${schedule.endDate ? new Date(schedule.endDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "an ongoing period"}`
+    : schedule.patternType === "per_month" ? `${schedule.targetCount} random test${schedule.targetCount === 1 ? "" : "s"} per month`
+    : `${schedule.targetCount} random test${schedule.targetCount === 1 ? "" : "s"} per week`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;">
+  <div style="max-width:640px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
+    <div style="background:#1e3a5f;padding:24px 32px;">
+      <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">TrueTest Labs</p>
+      <h1 style="margin:4px 0 0;color:#ffffff;font-size:22px;font-weight:700;">Random Testing — Compliance Instructions</h1>
+    </div>
+    <div style="padding:28px 32px;">
+      <p style="color:#334155;font-size:15px;margin:0 0 4px;">Hello ${donor.firstName},</p>
+      <p style="color:#475569;font-size:14px;margin:0 0 20px;line-height:1.6;">You have been enrolled in a random drug testing schedule. Please read these instructions carefully and save this email — you will need your PIN every weekday.</p>
+
+      <!-- PIN + Case info -->
+      <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:20px;margin-bottom:24px;">
+        <p style="color:#64748b;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin:0 0 6px;">Your Check-In PIN</p>
+        <p style="color:#0f172a;font-size:36px;font-weight:700;font-family:monospace;letter-spacing:4px;margin:0 0 12px;">${schedule.checkInPin}</p>
+        <p style="color:#475569;font-size:13px;margin:0;">Case: <strong>${schedule.case.caseNumber}</strong> &bull; Test: <strong>${schedule.testCatalog.testName}</strong></p>
+        <p style="color:#475569;font-size:13px;margin:4px 0 0;">Schedule: <strong>${patternSummary}</strong></p>
+      </div>
+
+      <!-- How it works -->
+      <h2 style="color:#0f172a;font-size:16px;font-weight:700;margin:0 0 12px;">How It Works</h2>
+      <ol style="color:#334155;font-size:14px;line-height:1.8;margin:0 0 24px;padding-left:20px;">
+        <li><strong>Call in EVERY weekday (Monday–Friday)</strong> between 6:00 AM and 12:00 PM.</li>
+        <li>Visit <a href="${checkinUrl}" style="color:#2563eb;text-decoration:underline;">${checkinUrl}</a> and enter your PIN.</li>
+        <li>The system will tell you one of two things:
+          <ul style="margin:8px 0 0;padding-left:20px;">
+            <li><strong style="color:#dc2626;">"You are selected today"</strong> — report to TrueTest Labs that same day by 5:00 PM</li>
+            <li><strong style="color:#059669;">"No test today"</strong> — no further action needed; check again tomorrow</li>
+          </ul>
+        </li>
+      </ol>
+
+      <!-- Compliance -->
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-bottom:24px;">
+        <p style="color:#991b1b;font-size:13px;font-weight:700;margin:0 0 8px;">⚠️ IMPORTANT — Failure to Comply</p>
+        <p style="color:#7f1d1d;font-size:13px;margin:0 0 6px;line-height:1.6;">If you are selected and do not report to TrueTest Labs by 5:00 PM that same day, it will be recorded as a <strong>Refusal to Test</strong>.</p>
+        <p style="color:#7f1d1d;font-size:13px;margin:0;line-height:1.6;">A Refusal to Test notification will be sent to your case contacts, which may include your attorney, the court, and other parties. This may have the same legal consequences as a positive test result.</p>
+      </div>
+
+      <!-- Address -->
+      <h2 style="color:#0f172a;font-size:16px;font-weight:700;margin:0 0 12px;">Report To</h2>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:24px;">
+        <p style="color:#0f172a;font-size:14px;font-weight:600;margin:0 0 4px;">TrueTest Labs</p>
+        <p style="color:#475569;font-size:13px;margin:0 0 2px;">${OFFICE_ADDRESS}</p>
+        <p style="color:#475569;font-size:13px;margin:0;">Phone: ${OFFICE_PHONE}</p>
+        <p style="color:#64748b;font-size:12px;margin:8px 0 0;">Hours: Mon–Fri 9:00 AM – 5:00 PM</p>
+      </div>
+
+      <!-- FAQ -->
+      <h2 style="color:#0f172a;font-size:16px;font-weight:700;margin:0 0 12px;">Common Questions</h2>
+      <div style="color:#334155;font-size:13px;line-height:1.7;">
+        <p style="margin:0 0 10px;"><strong>What if I forget to call in?</strong><br>You must call in every weekday, even if you think you won't be selected. Missing a call-in on a day you were selected counts as a Refusal to Test.</p>
+        <p style="margin:0 0 10px;"><strong>What about weekends and holidays?</strong><br>You do not need to call in on Saturdays, Sundays, or federal holidays. Tests are only scheduled on weekdays.</p>
+        <p style="margin:0 0 10px;"><strong>What if I'm traveling or sick?</strong><br>Contact our office at ${OFFICE_PHONE} immediately to discuss. Unexcused absences from selected tests will be reported.</p>
+        <p style="margin:0;"><strong>Can I share my PIN with anyone?</strong><br>No. Your PIN is unique to you. Keep it confidential.</p>
+      </div>
+
+      <div style="border-top:1px solid #e2e8f0;margin-top:24px;padding-top:20px;">
+        <p style="color:#475569;font-size:13px;margin:0 0 8px;">Questions? Contact our office:</p>
+        <p style="color:#1e3a5f;font-size:14px;font-weight:600;margin:0;">${OFFICE_PHONE}</p>
+      </div>
+    </div>
+    <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
+      <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;">This notification was sent by TrueTest Labs Case Management System. Please save this email for reference.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const { data: sendData, error: sendError } = await getResend().emails.send({
+    from: FROM_EMAIL,
+    replyTo: REPLY_TO,
+    to: [donorEmail],
+    subject: `Random Testing Instructions — Case ${schedule.case.caseNumber}`,
+    html,
+  });
+  if (sendError) {
+    console.error("[Email] Resend error (donor instructions):", sendError);
+    throw new Error(sendError.message);
+  }
+  console.log("[Email] donor instructions sent, id:", sendData?.id, "to:", donorEmail);
+  void donorName;
+
+  return [donorEmail];
+}
