@@ -133,6 +133,15 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
                 </p>
               </div>
               <div className="flex gap-2">
+                <a
+                  href={`/reports/compliance/${s.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-white inline-flex items-center"
+                  title="Open compliance report in a new tab"
+                >
+                  📋 Report
+                </a>
                 <button
                   onClick={() => sendInstructions(s.id)}
                   className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
