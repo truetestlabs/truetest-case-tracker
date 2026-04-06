@@ -13,6 +13,7 @@ type TestOrderData = {
   schedulingType: string;
   collectionSite: string | null;
   collectionSiteType: string | null;
+  specimenId: string | null;
   squarePaymentLink: string | null;
   paymentMethod: string | null;
   clientPrice: string | null;
@@ -81,6 +82,7 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
       collectionType: form.get("collectionType"),
       collectionSiteType: form.get("collectionSiteType") || null,
       schedulingType: form.get("schedulingType") || testOrder.schedulingType || "scheduled",
+      specimenId: form.get("specimenId") || null,
       paymentMethod: (form.get("payment") as string) === "not_paid" ? null : form.get("payment"),
       notes: form.get("notes") || null,
     };
@@ -181,6 +183,12 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
               <option value="no_show">No Show</option>
               <option value="cancelled">Cancelled</option>
             </select>
+          </div>
+
+          {/* Specimen ID */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Specimen ID</label>
+            <input type="text" name="specimenId" defaultValue={testOrder.specimenId || ""} placeholder="e.g., TTL-2026-04-001" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
           </div>
 
           {/* Collection details */}

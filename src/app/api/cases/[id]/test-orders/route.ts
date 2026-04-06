@@ -119,7 +119,7 @@ export async function PATCH(
     const manualFields = [
       "collectionSite", "collectionSiteType", "schedulingType",
       "paymentMethod", "appointmentDate", "labAccessionNumber",
-      "invoiceNumber", "notes", "collectionType",
+      "invoiceNumber", "notes", "collectionType", "specimenId",
       "testCatalogId", "testDescription", "specimenType", "lab", "clientPrice"
     ];
     for (const field of manualFields) {

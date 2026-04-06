@@ -55,6 +55,7 @@ type CaseData = {
     collectionSite: string | null;
     collectionSiteType: string | null;
     orderReleasedDate: string | null;
+    specimenId: string | null;
     squarePaymentLink: string | null;
     paymentMethod: string | null;
     paymentDate: string | null;

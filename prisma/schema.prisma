@@ -267,6 +267,7 @@ model TestOrder {
 
   appointmentDate      DateTime?
   collectionDate       DateTime?
+  specimenId           String?        // unique specimen identifier
   collectedBy          String?
   specimenHeld         Boolean        @default(false)
   sentToLabDate        DateTime?
