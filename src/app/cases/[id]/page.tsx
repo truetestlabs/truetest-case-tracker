@@ -271,33 +271,36 @@ export default function CaseDetailPage() {
             <div className="px-6 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50">
               <h3 className="text-sm font-semibold text-gray-700">Test Orders ({caseData.testOrders.length})</h3>
               <div className="flex items-center gap-2">
-                {!collectionConfirmed && caseData.testOrders.some((t) =>
+                {caseData.testOrders.some((t) =>
                   ["specimen_collected", "specimen_held", "sent_to_lab", "results_received", "results_released", "closed"].includes(t.testStatus)
                 ) && (
-                  <button
-                    onClick={async () => {
-                      setSendingCollection(true);
-                      setCollectionSentMsg(null);
-                      try {
-                        const res = await fetch(`/api/cases/${caseData.id}/send-collection`, { method: "POST" });
-                        const data = await res.json();
-                        if (res.ok) {
-                          setCollectionConfirmed(true);
-                        } else {
-                          setCollectionSentMsg(data.error || "Failed to send");
-                        }
-                      } catch { setCollectionSentMsg("Failed to send"); }
-                      setSendingCollection(false);
-                    }}
-                    disabled={sendingCollection}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
-                    style={{ background: "linear-gradient(135deg, #059669 0%, #047857 100%)" }}
-                  >
-                    {sendingCollection ? "Sending…" : "✉ Send Collection Confirmation"}
-                  </button>
-                )}
-                {collectionConfirmed && (
-                  <span className="text-xs text-green-600 font-medium">✓ Confirmation sent</span>
+                  collectionConfirmed ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white opacity-60 cursor-default" style={{ background: "#059669" }}>
+                      ✓ Collection Notice Sent
+                    </span>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        setSendingCollection(true);
+                        setCollectionSentMsg(null);
+                        try {
+                          const res = await fetch(`/api/cases/${caseData.id}/send-collection`, { method: "POST" });
+                          const data = await res.json();
+                          if (res.ok) {
+                            setCollectionConfirmed(true);
+                          } else {
+                            setCollectionSentMsg(data.error || "Failed to send");
+                          }
+                        } catch { setCollectionSentMsg("Failed to send"); }
+                        setSendingCollection(false);
+                      }}
+                      disabled={sendingCollection}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+                      style={{ background: "linear-gradient(135deg, #059669 0%, #047857 100%)" }}
+                    >
+                      {sendingCollection ? "Sending…" : "✉ Send Collection Confirmation"}
+                    </button>
+                  )
                 )}
                 {collectionSentMsg && !collectionConfirmed && (
                   <span className="text-xs text-red-500 font-medium">{collectionSentMsg}</span>
