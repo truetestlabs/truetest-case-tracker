@@ -3,8 +3,11 @@
  * Uses the Supabase REST API directly (works on Vercel serverless).
  */
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+// Use service role key if available, fall back to anon key
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  || "";
 const BUCKET = "documents";
 
 function storageUrl(path: string): string {
@@ -12,9 +15,10 @@ function storageUrl(path: string): string {
 }
 
 function headers(contentType?: string): Record<string, string> {
+  const key = SUPABASE_KEY;
   const h: Record<string, string> = {
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${key}`,
+    apikey: key,
   };
   if (contentType) h["Content-Type"] = contentType;
   return h;
@@ -43,8 +47,8 @@ export async function uploadFile(
 
   if (!res.ok) {
     const err = await res.text();
-    console.error("[Storage] Upload failed:", res.status, err);
-    throw new Error(`Storage upload failed: ${res.status}`);
+    console.error("[Storage] Upload failed:", res.status, err, "URL:", SUPABASE_URL, "Key present:", !!SUPABASE_KEY, "Key length:", SUPABASE_KEY.length);
+    throw new Error(`Storage upload failed: ${res.status} — ${err}`);
   }
 
   return storagePath;
