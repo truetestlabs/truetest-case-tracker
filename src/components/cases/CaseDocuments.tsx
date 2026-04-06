@@ -72,12 +72,20 @@ function DocumentUploadSlot({
         body: formData,
       });
       if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.error || `Upload failed (${res.status})`);
+        let detail = `Server returned ${res.status}`;
+        try {
+          const text = await res.text();
+          const json = JSON.parse(text);
+          detail = json.error || text.slice(0, 200);
+        } catch {
+          // response wasn't JSON
+        }
+        throw new Error(detail);
       }
       onUpdated();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to upload file");
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Upload error: ${msg}`);
     } finally {
       setUploading(false);
       setPendingFile(null);
