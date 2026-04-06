@@ -10,8 +10,9 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
   || "";
 const BUCKET = "documents";
 
-function storageUrl(path: string): string {
-  return `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`;
+function storageUrl(filePath: string): string {
+  const encoded = filePath.split("/").map(encodeURIComponent).join("/");
+  return `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${encoded}`;
 }
 
 function headers(contentType?: string): Record<string, string> {
