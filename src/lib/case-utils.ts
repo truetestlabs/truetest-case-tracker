@@ -42,10 +42,10 @@ export const TEST_STATUS_CONFIG = {
  * MRO comes AFTER results are released (family law specific)
  */
 export const TEST_STATUS_FLOW: Record<string, string[]> = {
-  order_created: ["specimen_collected", "no_show", "cancelled"],
-  specimen_collected: ["results_received", "cancelled"],
+  order_created: ["specimen_collected"],
+  specimen_collected: ["results_received"],
   results_received: ["results_released"],
-  results_released: ["at_mro", "closed"],
+  results_released: ["closed"],
   at_mro: ["closed"],
   closed: [],
   no_show: ["order_created"],
