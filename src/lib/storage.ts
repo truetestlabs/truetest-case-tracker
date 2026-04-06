@@ -3,7 +3,7 @@
  * Uses the Supabase REST API directly (works on Vercel serverless).
  */
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ydziufgdiqmikkmdxafx.supabase.co";
 // Use service role key if available, fall back to anon key
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
   || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
