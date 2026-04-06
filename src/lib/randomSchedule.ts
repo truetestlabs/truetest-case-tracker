@@ -21,6 +21,73 @@ export type GenerateResult = {
   warning?: string; // e.g., "Only generated 10 of 12 requested due to spacing"
 };
 
+// ---------- US Federal Holidays ----------
+
+/** Returns a Set of "YYYY-MM-DD" strings for US federal holidays in the given year. */
+function getUSHolidays(year: number): Set<string> {
+  const holidays: Date[] = [];
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const key = (m: number, d: number) => `${year}-${pad(m)}-${pad(d)}`;
+
+  // Fixed-date holidays
+  holidays.push(new Date(Date.UTC(year, 0, 1)));   // New Year's Day
+  holidays.push(new Date(Date.UTC(year, 6, 4)));   // Independence Day
+  holidays.push(new Date(Date.UTC(year, 10, 11))); // Veterans Day
+  holidays.push(new Date(Date.UTC(year, 11, 25))); // Christmas Day
+
+  // Nth-weekday holidays
+  const nthWeekday = (month: number, weekday: number, n: number): Date => {
+    const first = new Date(Date.UTC(year, month, 1));
+    let day = first.getUTCDay();
+    let offset = (weekday - day + 7) % 7 + (n - 1) * 7;
+    return new Date(Date.UTC(year, month, 1 + offset));
+  };
+  const lastWeekday = (month: number, weekday: number): Date => {
+    const last = new Date(Date.UTC(year, month + 1, 0));
+    let day = last.getUTCDay();
+    let offset = (day - weekday + 7) % 7;
+    return new Date(Date.UTC(year, month + 1, -offset));
+  };
+
+  holidays.push(nthWeekday(0, 1, 3));  // MLK Day: 3rd Monday of January
+  holidays.push(nthWeekday(1, 1, 3));  // Presidents' Day: 3rd Monday of February
+  holidays.push(lastWeekday(4, 1));    // Memorial Day: last Monday of May
+  holidays.push(nthWeekday(5, 1, 3));  // Juneteenth observed (nearest weekday handled below)
+  holidays.push(nthWeekday(8, 1, 1));  // Labor Day: 1st Monday of September
+  holidays.push(nthWeekday(9, 1, 2));  // Columbus Day: 2nd Monday of October
+  holidays.push(nthWeekday(10, 4, 4)); // Thanksgiving: 4th Thursday of November
+  // Day after Thanksgiving (common lab closure)
+  const tgiving = nthWeekday(10, 4, 4);
+  holidays.push(new Date(Date.UTC(year, tgiving.getUTCMonth(), tgiving.getUTCDate() + 1)));
+
+  // Juneteenth: June 19 (if weekend, observed on nearest weekday)
+  const juneteenth = new Date(Date.UTC(year, 5, 19));
+  if (juneteenth.getUTCDay() === 0) holidays.push(new Date(Date.UTC(year, 5, 20))); // Sun→Mon
+  else if (juneteenth.getUTCDay() === 6) holidays.push(new Date(Date.UTC(year, 5, 18))); // Sat→Fri
+  else holidays.push(juneteenth);
+
+  const keys = new Set<string>();
+  for (const h of holidays) keys.add(h.toISOString().slice(0, 10));
+
+  // Observed rule for fixed holidays: Sat→Fri, Sun→Mon
+  for (const d of [
+    new Date(Date.UTC(year, 0, 1)),
+    new Date(Date.UTC(year, 6, 4)),
+    new Date(Date.UTC(year, 10, 11)),
+    new Date(Date.UTC(year, 11, 25)),
+  ]) {
+    if (d.getUTCDay() === 6) keys.add(key(d.getUTCMonth() + 1, d.getUTCDate() - 1)); // Fri
+    if (d.getUTCDay() === 0) keys.add(key(d.getUTCMonth() + 1, d.getUTCDate() + 1)); // Mon
+  }
+
+  return keys;
+}
+
+/** Check if a date falls on a US federal holiday. */
+export function isUSHoliday(d: Date): boolean {
+  return getUSHolidays(d.getUTCFullYear()).has(d.toISOString().slice(0, 10));
+}
+
 // ---------- Date helpers (operate on UTC midnight dates) ----------
 
 function utcDate(d: Date): Date {
@@ -30,6 +97,11 @@ function utcDate(d: Date): Date {
 function isWeekday(d: Date): boolean {
   const day = d.getUTCDay();
   return day >= 1 && day <= 5; // Mon-Fri
+}
+
+/** A valid business day: weekday AND not a US federal holiday. */
+function isBusinessDay(d: Date): boolean {
+  return isWeekday(d) && !isUSHoliday(d);
 }
 
 function addDays(d: Date, n: number): Date {
@@ -46,13 +118,13 @@ function dateKey(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** List every weekday between fromDate and toDate (inclusive). */
+/** List every business day (weekday, non-holiday) between fromDate and toDate (inclusive). */
 function listWeekdays(from: Date, to: Date, excludeKeys: Set<string> = new Set()): Date[] {
   const out: Date[] = [];
   let d = utcDate(from);
   const end = utcDate(to);
   while (d.getTime() <= end.getTime()) {
-    if (isWeekday(d) && !excludeKeys.has(dateKey(d))) {
+    if (isBusinessDay(d) && !excludeKeys.has(dateKey(d))) {
       out.push(new Date(d));
     }
     d = addDays(d, 1);
@@ -173,7 +245,7 @@ export function nextWeekday(from: Date, addBusinessDays = 1): Date {
   let added = 0;
   while (added < addBusinessDays) {
     d = addDays(d, 1);
-    if (isWeekday(d)) added++;
+    if (isBusinessDay(d)) added++;
   }
   return d;
 }

@@ -54,6 +54,8 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(now.getMonth());
   const [selections, setSelections] = useState<Selection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [movingSelection, setMovingSelection] = useState<string | null>(null); // selection ID being moved
+  const [movingName, setMovingName] = useState("");
 
   const loadSelections = useCallback(() => {
     setLoading(true);
@@ -90,6 +92,24 @@ export default function CalendarPage() {
     byDate.get(key)!.push(sel);
   }
 
+  async function moveSelectionToDate(targetDate: string) {
+    if (!movingSelection) return;
+    try {
+      const res = await fetch(`/api/random-selections/${movingSelection}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedDate: targetDate + "T00:00:00.000Z" }),
+      });
+      if (res.ok) {
+        setMovingSelection(null);
+        setMovingName("");
+        loadSelections();
+      } else {
+        alert("Failed to move selection");
+      }
+    } catch { alert("Failed to move selection"); }
+  }
+
   const today = new Date();
   const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
@@ -108,6 +128,16 @@ export default function CalendarPage() {
         </div>
       </div>
 
+      {/* Move mode banner */}
+      {movingSelection && (
+        <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-300 rounded-lg flex items-center justify-between">
+          <p className="text-sm text-amber-900">
+            <strong>Moving:</strong> {movingName} — click a date cell to reschedule
+          </p>
+          <button onClick={() => { setMovingSelection(null); setMovingName(""); }} className="text-xs px-3 py-1 border border-amber-400 text-amber-800 rounded hover:bg-amber-100">Cancel</button>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Weekday headers */}
         <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
@@ -123,8 +153,17 @@ export default function CalendarPage() {
             const key = dateKey(cell);
             const daySelections = byDate.get(key) || [];
             const isToday = key === todayKey;
+            const isWeekday = cell.getUTCDay() >= 1 && cell.getUTCDay() <= 5;
             return (
-              <div key={idx} className={`min-h-[110px] border-r border-b border-slate-100 p-1.5 ${isToday ? "bg-blue-50" : ""}`}>
+              <div
+                key={idx}
+                className={`min-h-[110px] border-r border-b border-slate-100 p-1.5 ${isToday ? "bg-blue-50" : ""} ${movingSelection && isWeekday ? "cursor-pointer hover:bg-green-50 hover:ring-2 hover:ring-green-300 hover:ring-inset" : ""}`}
+                onClick={() => {
+                  if (movingSelection && isWeekday) {
+                    moveSelectionToDate(key);
+                  }
+                }}
+              >
                 <div className={`text-xs font-semibold mb-1 ${isToday ? "text-blue-700" : "text-slate-500"}`}>
                   {cell.getUTCDate()}
                 </div>
@@ -132,15 +171,25 @@ export default function CalendarPage() {
                   {daySelections.map((sel) => {
                     const donor = sel.schedule.case.donor;
                     const name = donor ? `${donor.lastName}, ${donor.firstName[0]}.` : "—";
+                    const isMoving = movingSelection === sel.id;
                     return (
-                      <Link
+                      <div
                         key={sel.id}
-                        href={`/cases/${sel.schedule.case.id}`}
-                        className={`block text-xs px-1.5 py-0.5 rounded truncate hover:ring-2 hover:ring-blue-400 transition-all ${statusColor(sel.status)}`}
-                        title={`${name} · ${sel.schedule.testCatalog.testName} · ${sel.status}`}
+                        className={`text-xs px-1.5 py-0.5 rounded truncate transition-all cursor-pointer ${isMoving ? "ring-2 ring-amber-500 bg-amber-100 text-amber-900" : statusColor(sel.status)} ${sel.status === "pending" ? "hover:ring-2 hover:ring-amber-300" : ""}`}
+                        title={`${name} · ${sel.schedule.testCatalog.testName} · ${sel.status}${sel.status === "pending" ? " · Click to move" : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (movingSelection === sel.id) {
+                            setMovingSelection(null);
+                            setMovingName("");
+                          } else if (sel.status === "pending") {
+                            setMovingSelection(sel.id);
+                            setMovingName(`${name} — ${sel.schedule.testCatalog.testName}`);
+                          }
+                        }}
                       >
                         {name}
-                      </Link>
+                      </div>
                     );
                   })}
                 </div>
@@ -158,6 +207,7 @@ export default function CalendarPage() {
         <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-blue-200"></span>Notified</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-green-200"></span>Completed</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-red-200"></span>Refused</span>
+        <span className="text-slate-400 ml-2">Click a pending selection to move it</span>
       </div>
     </div>
   );

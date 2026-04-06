@@ -27,6 +27,11 @@ export async function PATCH(
 
     if (body.testOrderId !== undefined) data.testOrderId = body.testOrderId;
 
+    // Allow rescheduling to a new date
+    if (body.selectedDate) {
+      data.selectedDate = new Date(body.selectedDate);
+    }
+
     const updated = await prisma.randomSelection.update({ where: { id }, data });
     return NextResponse.json(updated);
   } catch (error) {
