@@ -24,6 +24,7 @@ export async function GET() {
       orderBy: { updatedAt: "desc" },
       include: {
         donor: true,
+        testOrders: { select: { paymentMethod: true }, take: 1, orderBy: { updatedAt: "desc" } },
         _count: { select: { testOrders: true } },
       },
     });
