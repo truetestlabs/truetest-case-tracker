@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { readFile, stat } from "fs/promises";
+import { downloadFile } from "@/lib/storage";
 import archiver from "archiver";
 import { PassThrough } from "stream";
 
@@ -22,28 +22,12 @@ export async function GET(
         return NextResponse.json({ error: "Document not found" }, { status: 404 });
       }
 
-      // Check file exists
-      try {
-        await stat(doc.filePath);
-      } catch {
-        return NextResponse.json({ error: "File not found on disk" }, { status: 404 });
-      }
+      const { buffer: fileBuffer, contentType } = await downloadFile(doc.filePath);
 
-      const fileBuffer = await readFile(doc.filePath);
-      const fileName = doc.fileName;
-      const ext = fileName.split(".").pop()?.toLowerCase() || "";
-      const contentType =
-        ext === "pdf" ? "application/pdf"
-        : ext === "jpg" || ext === "jpeg" ? "image/jpeg"
-        : ext === "png" ? "image/png"
-        : ext === "doc" ? "application/msword"
-        : ext === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        : "application/octet-stream";
-
-      return new NextResponse(fileBuffer, {
+      return new NextResponse(new Uint8Array(fileBuffer), {
         headers: {
           "Content-Type": contentType,
-          "Content-Disposition": `attachment; filename="${fileName}"`,
+          "Content-Disposition": `attachment; filename="${doc.fileName}"`,
           "Content-Length": fileBuffer.length.toString(),
         },
       });
@@ -63,7 +47,6 @@ export async function GET(
         return NextResponse.json({ error: "No documents to download" }, { status: 404 });
       }
 
-      // Get case number for zip filename
       const caseData = await prisma.case.findUnique({
         where: { id: caseId },
         select: { caseNumber: true },
@@ -75,17 +58,15 @@ export async function GET(
 
       for (const doc of documents) {
         try {
-          await stat(doc.filePath);
-          archive.file(doc.filePath, { name: doc.fileName });
+          const { buffer } = await downloadFile(doc.filePath);
+          archive.append(buffer, { name: doc.fileName });
         } catch {
-          // Skip files that don't exist on disk
           console.warn(`Skipping missing file: ${doc.filePath}`);
         }
       }
 
       archive.finalize();
 
-      // Collect stream into buffer
       const chunks: Buffer[] = [];
       for await (const chunk of passThrough) {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));

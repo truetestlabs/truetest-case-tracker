@@ -3,13 +3,10 @@ import { prisma } from "@/lib/prisma";
 import type { TestStatus } from "@prisma/client";
 import { claude } from "@/lib/claude";
 import { generateResultSummary } from "@/lib/resultSummary";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { uploadFile } from "@/lib/storage";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { PDFParse } = require("pdf-parse");
-
-const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 
 /** Extract specimen ID and collection date from a USDTL chain of custody PDF.
  *  First tries text extraction (works for typed PDFs).
@@ -129,7 +126,7 @@ export async function POST(
     const collectionDate = latestOrder?.collectionDate
       ? new Date(latestOrder.collectionDate).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" }).replace(/\//g, ".")
       : new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" }).replace(/\//g, ".");
-    const ext = path.extname(file.name) || ".pdf";
+    const ext = file.name.includes(".") ? "." + file.name.split(".").pop() : ".pdf";
 
     // Read file bytes early — needed for both PDF parsing and saving
     const bytes = await file.arrayBuffer();
@@ -152,14 +149,11 @@ export async function POST(
         : `${donorFirst} ${donorLast} COC ${cocDate}${ext}`;
     }
 
-    // Create upload directory structure: uploads/{caseId}/
-    const caseDir = path.join(UPLOAD_DIR, caseId);
-    await mkdir(caseDir, { recursive: true });
-
-    // Save file to disk
+    // Upload to Supabase Storage
     const fileName = `${documentType}_${Date.now()}_${displayName}`;
-    const filePath = path.join(caseDir, fileName);
-    await writeFile(filePath, buffer);
+    const storagePath = `${caseId}/${fileName}`;
+    const contentType = file.type || "application/octet-stream";
+    await uploadFile(storagePath, buffer, contentType);
 
     // For result reports: generate AI summary from PDF (async, best-effort)
     let extractedData: { summary: string } | null = null;
@@ -174,7 +168,7 @@ export async function POST(
         caseId,
         documentType: documentType as "court_order" | "chain_of_custody" | "result_report" | "invoice" | "agreement" | "correspondence" | "other",
         fileName: displayName,
-        filePath: filePath,
+        filePath: storagePath,
         uploadedBy: "admin",
         notes: null,
         ...(extractedData ? { extractedData } : {}),

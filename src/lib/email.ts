@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
-import { readFile } from "fs/promises";
+import { downloadFile } from "@/lib/storage";
 
 // Lazy client — only instantiated when actually sending, so missing key doesn't break build
 function getResend() {
@@ -142,7 +142,7 @@ export async function sendResultsReleasedEmail(
   const attachments: Attachment[] = [];
   if (latestResult?.filePath && latestResult?.fileName) {
     try {
-      const pdfBuffer = await readFile(latestResult.filePath);
+      const { buffer: pdfBuffer } = await downloadFile(latestResult.filePath);
       attachments.push({ filename: latestResult.fileName, content: pdfBuffer });
     } catch (e) {
       console.warn("[Email] Could not read result PDF for attachment:", e);
