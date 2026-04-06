@@ -71,10 +71,13 @@ function DocumentUploadSlot({
         method: "POST",
         body: formData,
       });
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.error || `Upload failed (${res.status})`);
+      }
       onUpdated();
-    } catch {
-      alert("Failed to upload file");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to upload file");
     } finally {
       setUploading(false);
       setPendingFile(null);
