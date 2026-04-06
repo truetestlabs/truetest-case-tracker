@@ -4,10 +4,10 @@
  */
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ydziufgdiqmikkmdxafx.supabase.co";
-// Use service role key if available, fall back to anon key
+// Supabase Storage requires a JWT key (not the publishable key)
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-  || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  || "";
+  || process.env.SUPABASE_ANON_JWT
+  || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlkeml1ZmdkaXFtaWtrbWR4YWZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTgxNTEsImV4cCI6MjA5MDYzNDE1MX0.7O7HB6mxS0SqjoFZRTtotichjoplHwe2ep8nntL3yfs";
 const BUCKET = "documents";
 
 function storageUrl(filePath: string): string {
