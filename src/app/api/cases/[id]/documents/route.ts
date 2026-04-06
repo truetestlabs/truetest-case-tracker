@@ -5,17 +5,24 @@ import { claude } from "@/lib/claude";
 import { generateResultSummary } from "@/lib/resultSummary";
 import { uploadFile } from "@/lib/storage";
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { PDFParse } = require("pdf-parse");
-
 /** Extract specimen ID and collection date from a USDTL chain of custody PDF.
  *  First tries text extraction (works for typed PDFs).
  *  Falls back to Claude Vision for scanned images. */
 async function parseCocPdf(buffer: Buffer): Promise<{ controlNumber?: string; collectionDate?: string }> {
   // Try text extraction first (fast, free)
   try {
+    // Lazy import to avoid crashing on Vercel if pdf-parse has issues
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require("pdf-parse");
+    const PDFParseClass = pdfParse.PDFParse || pdfParse.default || pdfParse;
     const uint8 = new Uint8Array(buffer);
-    const parser = new PDFParse(uint8);
+    const parser = typeof PDFParseClass === "function" && PDFParseClass.prototype
+      ? new PDFParseClass(uint8)
+      : null;
+    if (!parser) {
+      console.warn("[PDF] pdf-parse not available, skipping text extraction");
+      throw new Error("pdf-parse not available");
+    }
     await parser.load();
     const result = await parser.getText();
     const text: string = result.text || "";
