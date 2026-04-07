@@ -310,9 +310,10 @@ export default function CaseDetailPage() {
                           {test.testDescription} <span className="text-xs text-blue-500">edit</span>
                         </p>
                         <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
+                          {test.specimenId && <span className="font-mono font-medium text-gray-700">{test.specimenId}</span>}
                           <span className="capitalize">{test.specimenType}</span>
                           <span className="capitalize">{test.lab.replace("_", "/")}</span>
-                          <span className="capitalize">{test.collectionType}</span>
+                          {test.collectionType === "observed" && <span className="font-medium text-orange-600">Observed</span>}
                         </div>
                       </div>
                     </div>
