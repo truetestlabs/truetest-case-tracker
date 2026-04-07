@@ -267,7 +267,7 @@ export default function CaseDetailPage() {
               <h3 className="text-sm font-semibold text-gray-700">Test Orders ({caseData.testOrders.length})</h3>
               <div className="flex items-center gap-2">
                 {caseData.testOrders.some((t) =>
-                  ["specimen_collected", "specimen_held", "sent_to_lab", "results_received", "results_released", "closed"].includes(t.testStatus)
+                  t.testStatus === "specimen_collected"
                 ) && (
                   collectionConfirmed ? (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white opacity-60 cursor-default" style={{ background: "#059669" }}>
