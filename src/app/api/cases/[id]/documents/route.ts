@@ -206,7 +206,7 @@ export async function POST(
           data: {
             testStatus: "specimen_collected",
             collectionDate: new Date(),
-            // Note: paymentReceived is NOT set here — payment is tracked separately
+            ...(manualSpecimenId && !order.specimenId ? { specimenId: manualSpecimenId } : {}),
           },
         });
         await prisma.statusLog.create({
