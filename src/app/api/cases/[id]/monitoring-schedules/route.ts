@@ -37,7 +37,7 @@ export async function POST(
     }
 
     const patternType = body.patternType as PatternType;
-    if (!["range_count", "per_month", "per_week"].includes(patternType)) {
+    if (!["range_count", "per_month", "per_week", "every_n_days"].includes(patternType)) {
       return NextResponse.json({ error: "Invalid patternType" }, { status: 400 });
     }
 

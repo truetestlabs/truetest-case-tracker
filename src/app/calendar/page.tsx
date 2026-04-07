@@ -92,6 +92,18 @@ export default function CalendarPage() {
     byDate.get(key)!.push(sel);
   }
 
+  async function deleteSelection(selId: string) {
+    if (!confirm("Delete this selection?")) return;
+    try {
+      const res = await fetch(`/api/random-selections/${selId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+      if (res.ok) loadSelections();
+    } catch { /* silent */ }
+  }
+
   async function moveSelectionToDate(targetDate: string) {
     if (!movingSelection) return;
     try {
@@ -175,7 +187,7 @@ export default function CalendarPage() {
                     return (
                       <div
                         key={sel.id}
-                        className={`text-xs px-1.5 py-0.5 rounded truncate transition-all cursor-pointer ${isMoving ? "ring-2 ring-amber-500 bg-amber-100 text-amber-900" : statusColor(sel.status)} ${sel.status === "pending" ? "hover:ring-2 hover:ring-amber-300" : ""}`}
+                        className={`text-xs px-1.5 py-0.5 rounded transition-all cursor-pointer flex items-center gap-0.5 ${isMoving ? "ring-2 ring-amber-500 bg-amber-100 text-amber-900" : statusColor(sel.status)} ${sel.status === "pending" ? "hover:ring-2 hover:ring-amber-300" : ""}`}
                         title={`${name} · ${sel.schedule.testCatalog.testName} · ${sel.status}${sel.status === "pending" ? " · Click to move" : ""}`}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -188,7 +200,16 @@ export default function CalendarPage() {
                           }
                         }}
                       >
-                        {name}
+                        <span className="truncate flex-1">{name}</span>
+                        {sel.status === "pending" && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); deleteSelection(sel.id); }}
+                            className="text-current opacity-40 hover:opacity-100 flex-shrink-0 leading-none"
+                            title="Delete this selection"
+                          >
+                            ✕
+                          </button>
+                        )}
                       </div>
                     );
                   })}

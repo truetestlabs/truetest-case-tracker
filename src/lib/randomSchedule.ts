@@ -5,7 +5,7 @@
  * respecting optional minimum-spacing constraints.
  */
 
-export type PatternType = "range_count" | "per_month" | "per_week";
+export type PatternType = "range_count" | "per_month" | "per_week" | "every_n_days";
 
 export type GenerateParams = {
   patternType: PatternType;
@@ -234,6 +234,28 @@ export function generateSelections(params: GenerateParams): GenerateResult {
       dates: out.sort((a, b) => a.getTime() - b.getTime()),
       warning: totalShortfall > 0 ? `Some weeks couldn't fit the full ${params.targetCount} tests.` : undefined,
     };
+  }
+
+  if (params.patternType === "every_n_days") {
+    // Place one test every N days (targetCount = N), picking the nearest eligible day
+    const interval = params.targetCount;
+    const out: Date[] = [];
+    let cursor = utcDate(params.fromDate);
+    const end = utcDate(params.toDate);
+    while (cursor.getTime() <= end.getTime()) {
+      // Find the nearest eligible day at or after cursor
+      let d = new Date(cursor);
+      let attempts = 0;
+      while (!isBusinessDay(d, params.allowedDays) && attempts < 10) {
+        d = addDays(d, 1);
+        attempts++;
+      }
+      if (d.getTime() <= end.getTime() && isBusinessDay(d, params.allowedDays) && !excludeKeys.has(dateKey(d))) {
+        out.push(new Date(d));
+      }
+      cursor = addDays(cursor, interval);
+    }
+    return { dates: out };
   }
 
   return { dates: [], warning: "Unknown pattern type" };

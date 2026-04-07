@@ -83,6 +83,7 @@ export function CreateScheduleModal({ caseId, onSaved, onClose }: Props) {
 
   const countLabel =
     form.patternType === "range_count" ? "Total tests"
+    : form.patternType === "every_n_days" ? "Every how many days?"
     : form.patternType === "per_month" ? "Tests per month"
     : "Tests per week";
 
@@ -140,6 +141,7 @@ export function CreateScheduleModal({ caseId, onSaved, onClose }: Props) {
                   { value: "range_count", label: "Over Range" },
                   { value: "per_month", label: "Per Month" },
                   { value: "per_week", label: "Per Week" },
+                  { value: "every_n_days", label: "Every N Days" },
                 ].map((p) => (
                   <button
                     key={p.value}
