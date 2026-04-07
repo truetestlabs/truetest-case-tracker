@@ -4,8 +4,8 @@ const STEPS = [
   { key: "order_created", label: "Ordered" },
   { key: "specimen_collected", label: "Collected" },
   { key: "sent_to_lab", label: "Sent to Lab" },
-  { key: "results_received", label: "Results" },
-  { key: "results_released", label: "Released" },
+  { key: "results_received", label: "Results Received" },
+  { key: "results_released", label: "Results Released" },
 ];
 
 const SPECIAL_STATUSES: Record<string, { label: string; color: string }> = {
