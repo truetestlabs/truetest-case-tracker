@@ -176,6 +176,7 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
             <select name="testStatus" defaultValue={testOrder.testStatus} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm">
               <option value="order_created">Order Created</option>
               <option value="specimen_collected">Specimen Collected</option>
+              <option value="sent_to_lab">Sent to Lab</option>
               <option value="results_received">Results Received</option>
               <option value="results_released">Results Released</option>
               <option value="at_mro">At MRO</option>
