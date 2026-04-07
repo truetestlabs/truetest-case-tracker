@@ -20,13 +20,23 @@ type Props = {
   currentStatus: string;
   caseId?: string;
   testOrderId?: string;
+  testDescription?: string;
   onUpdated?: () => void;
 };
 
-export function TestProgressBar({ currentStatus, caseId, testOrderId, onUpdated }: Props) {
+export function TestProgressBar({ currentStatus, caseId, testOrderId, testDescription, onUpdated }: Props) {
+  const isSweatPatch = testDescription?.toLowerCase().includes("sweat patch");
+  const steps = isSweatPatch
+    ? STEPS.map((s) =>
+        s.key === "order_created" ? { ...s, label: "Patch Applied" }
+        : s.key === "specimen_collected" ? { ...s, label: "Patch Removed" }
+        : s
+      )
+    : STEPS;
+
   const special = SPECIAL_STATUSES[currentStatus];
-  const stepIndex = STEPS.findIndex((s) => s.key === currentStatus);
-  const effectiveIndex = currentStatus === "closed" ? STEPS.length : stepIndex;
+  const stepIndex = steps.findIndex((s) => s.key === currentStatus);
+  const effectiveIndex = currentStatus === "closed" ? steps.length : stepIndex;
 
   async function advanceTo(statusKey: string) {
     if (!caseId || !testOrderId) return;
@@ -45,11 +55,11 @@ export function TestProgressBar({ currentStatus, caseId, testOrderId, onUpdated 
   return (
     <div>
       <div className="flex items-center justify-between">
-        {STEPS.map((step, i) => {
+        {steps.map((step, i) => {
           const isCompleted = effectiveIndex > i;
           const isCurrent = effectiveIndex === i;
           const isNext = effectiveIndex === i - 1;
-          const isLast = i === STEPS.length - 1;
+          const isLast = i === steps.length - 1;
           const canClick = isNext && caseId && testOrderId;
 
           return (
