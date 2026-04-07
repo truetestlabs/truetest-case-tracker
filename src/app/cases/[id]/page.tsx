@@ -116,6 +116,8 @@ export default function CaseDetailPage() {
   const [sendingCollection, setSendingCollection] = useState(false);
   const [collectionSentMsg, setCollectionSentMsg] = useState<string | null>(null);
   const [collectionConfirmed, setCollectionConfirmed] = useState(false);
+  const [sendingResultsHeld, setSendingResultsHeld] = useState(false);
+  const [resultsHeldSent, setResultsHeldSent] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0);
   const [showAllLogs, setShowAllLogs] = useState(false);
@@ -297,6 +299,30 @@ export default function CaseDetailPage() {
                 )}
                 {collectionSentMsg && !collectionConfirmed && (
                   <span className="text-xs text-red-500 font-medium">{collectionSentMsg}</span>
+                )}
+                {/* Results Held — Payment Required button */}
+                {!resultsHeldSent && caseData.testOrders.some((t) => t.testStatus === "results_received" && !t.paymentMethod) && (
+                  <button
+                    onClick={async () => {
+                      setSendingResultsHeld(true);
+                      try {
+                        const res = await fetch(`/api/cases/${caseData.id}/send-results-held`, { method: "POST" });
+                        if (res.ok) { setResultsHeldSent(true); loadCase(); }
+                        else { const d = await res.json(); alert(d.error || "Failed"); }
+                      } catch { alert("Failed to send"); }
+                      setSendingResultsHeld(false);
+                    }}
+                    disabled={sendingResultsHeld}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+                    style={{ background: "linear-gradient(135deg, #b45309 0%, #92400e 100%)" }}
+                  >
+                    {sendingResultsHeld ? "Sending…" : "✉ Results Held — Request Payment"}
+                  </button>
+                )}
+                {resultsHeldSent && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white opacity-60 cursor-default" style={{ background: "#b45309" }}>
+                    ✓ Payment Notice Sent
+                  </span>
                 )}
                 <AddTestOrder caseId={caseData.id} onAdded={loadCase} />
               </div>
