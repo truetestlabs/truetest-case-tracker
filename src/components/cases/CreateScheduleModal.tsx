@@ -33,6 +33,7 @@ export function CreateScheduleModal({ caseId, onSaved, onClose }: Props) {
     noEndDate: false,
     autoRescheduleOnMiss: true,
     autoRescheduleDays: 1,
+    allowedDays: [1, 2, 3, 4, 5] as number[], // Mon-Fri default
   });
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export function CreateScheduleModal({ caseId, onSaved, onClose }: Props) {
         endDate: form.noEndDate ? null : form.endDate || null,
         autoRescheduleOnMiss: form.autoRescheduleOnMiss,
         autoRescheduleDays: Number(form.autoRescheduleDays),
+        allowedDays: form.allowedDays,
       };
 
       const res = await fetch(`/api/cases/${caseId}/monitoring-schedules`, {
@@ -177,6 +179,42 @@ export function CreateScheduleModal({ caseId, onSaved, onClose }: Props) {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                   placeholder="Optional"
                 />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Eligible Days</label>
+              <div className="flex gap-1">
+                {[
+                  { day: 0, label: "Sun" },
+                  { day: 1, label: "Mon" },
+                  { day: 2, label: "Tue" },
+                  { day: 3, label: "Wed" },
+                  { day: 4, label: "Thu" },
+                  { day: 5, label: "Fri" },
+                  { day: 6, label: "Sat" },
+                ].map(({ day, label }) => {
+                  const checked = form.allowedDays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => {
+                        const next = checked
+                          ? form.allowedDays.filter((d) => d !== day)
+                          : [...form.allowedDays, day].sort();
+                        setForm({ ...form, allowedDays: next });
+                      }}
+                      className={`flex-1 py-1.5 rounded text-xs font-semibold border transition-all ${
+                        checked
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-gray-400 border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

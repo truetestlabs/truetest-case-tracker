@@ -411,6 +411,7 @@ model MonitoringSchedule {
   patternType          String          // "range_count" | "per_month" | "per_week"
   targetCount          Int             // 12 (total) or 2 (per period)
   minSpacingDays       Int?            // optional spacing constraint
+  allowedDays          Json?           // array of day numbers [0-6], 0=Sun, 1=Mon, etc. Default: [1,2,3,4,5]
 
   // Date range
   startDate            DateTime

@@ -65,6 +65,7 @@ export async function POST(
         patternType,
         targetCount: body.targetCount,
         minSpacingDays: body.minSpacingDays ?? null,
+        allowedDays: body.allowedDays ?? [1, 2, 3, 4, 5],
         startDate,
         endDate,
         autoRescheduleOnMiss: body.autoRescheduleOnMiss ?? true,
@@ -81,6 +82,7 @@ export async function POST(
       minSpacingDays: body.minSpacingDays,
       fromDate: startDate,
       toDate: horizonEnd,
+      allowedDays: body.allowedDays ?? [1, 2, 3, 4, 5],
     });
 
     // Create RandomSelection rows

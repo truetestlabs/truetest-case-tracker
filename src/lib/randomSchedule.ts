@@ -14,6 +14,7 @@ export type GenerateParams = {
   fromDate: Date;
   toDate: Date;
   excludeDates?: Date[]; // existing selection dates to avoid
+  allowedDays?: number[]; // days of week [0-6], 0=Sun. Default [1,2,3,4,5]
 };
 
 export type GenerateResult = {
@@ -99,9 +100,11 @@ function isWeekday(d: Date): boolean {
   return day >= 1 && day <= 5; // Mon-Fri
 }
 
-/** A valid business day: weekday AND not a US federal holiday. */
-function isBusinessDay(d: Date): boolean {
-  return isWeekday(d) && !isUSHoliday(d);
+/** A valid business day: allowed day-of-week AND not a US federal holiday. */
+function isBusinessDay(d: Date, allowedDays?: number[]): boolean {
+  const day = d.getUTCDay();
+  const allowed = allowedDays ?? [1, 2, 3, 4, 5]; // default Mon-Fri
+  return allowed.includes(day) && !isUSHoliday(d);
 }
 
 function addDays(d: Date, n: number): Date {
@@ -118,13 +121,13 @@ function dateKey(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** List every business day (weekday, non-holiday) between fromDate and toDate (inclusive). */
-function listWeekdays(from: Date, to: Date, excludeKeys: Set<string> = new Set()): Date[] {
+/** List every eligible day (allowed days of week, non-holiday) between fromDate and toDate (inclusive). */
+function listWeekdays(from: Date, to: Date, excludeKeys: Set<string> = new Set(), allowedDays?: number[]): Date[] {
   const out: Date[] = [];
   let d = utcDate(from);
   const end = utcDate(to);
   while (d.getTime() <= end.getTime()) {
-    if (isBusinessDay(d) && !excludeKeys.has(dateKey(d))) {
+    if (isBusinessDay(d, allowedDays) && !excludeKeys.has(dateKey(d))) {
       out.push(new Date(d));
     }
     d = addDays(d, 1);
@@ -176,7 +179,7 @@ function monthKey(d: Date): string {
 export function generateSelections(params: GenerateParams): GenerateResult {
   const minSpacing = params.minSpacingDays ?? 0;
   const excludeKeys = new Set((params.excludeDates || []).map((d) => dateKey(utcDate(d))));
-  const allWeekdays = listWeekdays(params.fromDate, params.toDate, excludeKeys);
+  const allWeekdays = listWeekdays(params.fromDate, params.toDate, excludeKeys, params.allowedDays);
 
   if (allWeekdays.length === 0) {
     return { dates: [], warning: "No weekdays available in the selected range." };
