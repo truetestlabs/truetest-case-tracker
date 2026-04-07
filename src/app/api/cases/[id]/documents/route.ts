@@ -110,6 +110,7 @@ export async function POST(
     const file = formData.get("file") as File;
     const documentType = formData.get("documentType") as string;
     const manualSpecimenId = formData.get("specimenId") as string | null;
+    const testOrderId = formData.get("testOrderId") as string | null;
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -173,6 +174,7 @@ export async function POST(
     const document = await prisma.document.create({
       data: {
         caseId,
+        testOrderId: testOrderId || null,
         documentType: documentType as "court_order" | "chain_of_custody" | "result_report" | "invoice" | "agreement" | "correspondence" | "other",
         fileName: displayName,
         filePath: storagePath,
@@ -197,7 +199,11 @@ export async function POST(
     if (documentType === "chain_of_custody") {
       const preCollectionStatuses = ["order_created", "awaiting_payment", "payment_received"] as TestStatus[];
       const testOrders = await prisma.testOrder.findMany({
-        where: { caseId, testStatus: { in: preCollectionStatuses } },
+        where: {
+          caseId,
+          testStatus: { in: preCollectionStatuses },
+          ...(testOrderId ? { id: testOrderId } : {}), // scope to specific test order if provided
+        },
       });
 
       for (const order of testOrders) {
@@ -233,7 +239,11 @@ export async function POST(
 
       const preResultStatuses = ["specimen_collected", "sent_to_lab"] as TestStatus[];
       const testOrders = await prisma.testOrder.findMany({
-        where: { caseId, testStatus: { in: preResultStatuses } },
+        where: {
+          caseId,
+          testStatus: { in: preResultStatuses },
+          ...(testOrderId ? { id: testOrderId } : {}),
+        },
       });
 
       for (const order of testOrders) {

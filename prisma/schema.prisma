@@ -287,10 +287,7 @@ model TestOrder {
   // Relations
   case                 Case           @relation(fields: [caseId], references: [id], onDelete: Cascade)
   testCatalog          TestCatalog?   @relation(fields: [testCatalogId], references: [id])
-  chainOfCustody       Document?      @relation("TestCOC", fields: [chainOfCustodyId], references: [id])
-  chainOfCustodyId     String?
-  resultDocument       Document?      @relation("TestResult", fields: [resultDocumentId], references: [id])
-  resultDocumentId     String?
+  documents            Document[]     @relation("TestOrderDocuments")
   statusLogs           StatusLog[]
   randomSelection      RandomSelection?
 
@@ -314,8 +311,8 @@ model Document {
   // Relations
   case            Case         @relation(fields: [caseId], references: [id], onDelete: Cascade)
   courtOrders     CourtOrder[]
-  cocTestOrders   TestOrder[]  @relation("TestCOC")
-  resultTestOrders TestOrder[] @relation("TestResult")
+  testOrderId     String?
+  testOrder       TestOrder?   @relation("TestOrderDocuments", fields: [testOrderId], references: [id])
 
   @@index([caseId])
   @@index([documentType])

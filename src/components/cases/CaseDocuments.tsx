@@ -15,11 +15,10 @@ type Props = {
   onUpdated: () => void;
 };
 
+// COC, Results, and MRO are now per-test-order (see TestOrderDocuments)
+// Only case-level document types remain here
 const DOC_SECTIONS = [
   { type: "court_order", label: "Court Order", icon: "📋" },
-  { type: "chain_of_custody", label: "Chain of Custody", icon: "🔗" },
-  { type: "result_report", label: "Lab Results", icon: "🧪" },
-  { type: "correspondence", label: "MRO Report", icon: "👨‍⚕️" },
   { type: "other", label: "Other", icon: "📁", matchType: "other" },
 ] as const;
 

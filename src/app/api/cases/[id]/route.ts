@@ -18,7 +18,13 @@ export async function GET(
         },
         testOrders: {
           orderBy: { createdAt: "desc" },
-          include: { testCatalog: true },
+          include: {
+            testCatalog: true,
+            documents: {
+              orderBy: { uploadedAt: "desc" },
+              select: { id: true, documentType: true, fileName: true, uploadedAt: true },
+            },
+          },
         },
         documents: { orderBy: { uploadedAt: "desc" } },
         courtOrders: { include: { document: true } },

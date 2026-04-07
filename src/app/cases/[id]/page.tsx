@@ -13,6 +13,7 @@ import { AddTestOrder } from "@/components/cases/AddTestOrder";
 import { CreateScheduleModal } from "@/components/cases/CreateScheduleModal";
 import { MonitoringScheduleCard } from "@/components/cases/MonitoringScheduleCard";
 import { TestProgressBar } from "@/components/cases/TestProgressBar";
+import { TestOrderDocuments } from "@/components/cases/TestOrderDocuments";
 import { CaseDocuments } from "@/components/cases/CaseDocuments";
 import { EditTestOrderModal } from "@/components/cases/EditTestOrderModal";
 
@@ -64,6 +65,12 @@ type CaseData = {
     resultsReleasedDate: string | null;
     schedulingType: string;
     notes: string | null;
+    documents: Array<{
+      id: string;
+      documentType: string;
+      fileName: string;
+      uploadedAt: string;
+    }>;
   }>;
   documents: Array<{
     id: string;
@@ -326,6 +333,13 @@ export default function CaseDetailPage() {
                         </div>
                       )}
                     </div>
+                    {/* Per-test-order documents (COC, Results, MRO) */}
+                    <TestOrderDocuments
+                      caseId={caseData.id}
+                      testOrderId={test.id}
+                      documents={test.documents || []}
+                      onUpdated={loadCase}
+                    />
                     {/* Edit Test Order Modal */}
                     {editingTestOrder === test.id && (
                       <EditTestOrderModal
