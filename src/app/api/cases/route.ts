@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
       { courtCaseNumber: { contains: q, mode: "insensitive" } },
       { donor: { firstName: { contains: q, mode: "insensitive" } } },
       { donor: { lastName: { contains: q, mode: "insensitive" } } },
+      { testOrders: { some: { specimenId: { contains: q, mode: "insensitive" } } } },
     ];
   }
 
