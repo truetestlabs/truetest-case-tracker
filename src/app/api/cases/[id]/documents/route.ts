@@ -237,14 +237,12 @@ export async function POST(
       });
 
       for (const order of testOrders) {
-        // Non-monitored: close the test order; Monitored: mark results_received
-        const newTestStatus = isMonitored ? "results_received" : "closed";
+        // Always advance to results_received — staff reviews, sends email, then closes
         await prisma.testOrder.update({
           where: { id: order.id },
           data: {
-            testStatus: newTestStatus as TestStatus,
+            testStatus: "results_received" as TestStatus,
             resultsReceivedDate: new Date(),
-            ...(isMonitored ? {} : { resultsReleasedDate: new Date() }),
           },
         });
         await prisma.statusLog.create({
@@ -252,28 +250,9 @@ export async function POST(
             caseId,
             testOrderId: order.id,
             oldStatus: order.testStatus,
-            newStatus: newTestStatus,
+            newStatus: "results_received",
             changedBy: "admin",
-            note: isMonitored
-              ? "Auto-advanced: lab results uploaded (monitored case)"
-              : "Auto-closed: lab results uploaded (non-monitored case)",
-          },
-        });
-      }
-
-      // Non-monitored: also close the case
-      if (!isMonitored) {
-        await prisma.case.update({
-          where: { id: caseId },
-          data: { caseStatus: "closed" },
-        });
-        await prisma.statusLog.create({
-          data: {
-            caseId,
-            oldStatus: "active",
-            newStatus: "closed",
-            changedBy: "admin",
-            note: "Auto-closed: lab results uploaded (non-monitored case)",
+            note: "Auto-advanced: lab results uploaded",
           },
         });
       }
