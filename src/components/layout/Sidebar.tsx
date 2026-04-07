@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 const navigation = [
   { name: "Quick Intake", href: "/intake", icon: ZapIcon },
@@ -14,8 +15,31 @@ const navigation = [
   { name: "Contacts", href: "/contacts", icon: UsersIcon },
 ];
 
+const BOOKING_URL = "https://book.squareup.com/appointments/vktpg026o844b6/location/NRHN4SKCVGFSD/services/362SUMWGC5H55J2MCVTJF4FK";
+
 export function Sidebar() {
   const pathname = usePathname();
+  const [bookingModal, setBookingModal] = useState<"text" | "email" | null>(null);
+  const [bookingName, setBookingName] = useState("");
+  const [bookingContact, setBookingContact] = useState("");
+
+  function sendBooking() {
+    const name = bookingName.trim() || "there";
+    const contact = bookingContact.trim();
+    if (!contact) { alert("Please enter a phone number or email"); return; }
+
+    if (bookingModal === "text") {
+      const msg = encodeURIComponent(`Hi ${name}, please book your appointment at TrueTest Labs here: ${BOOKING_URL}`);
+      window.open(`sms:${contact}&body=${msg}`, "_blank");
+    } else {
+      const subject = encodeURIComponent("TrueTest Labs - Schedule Your Appointment");
+      const body = encodeURIComponent(`Hi ${name},\n\nPlease book your appointment at TrueTest Labs using the link below:\n\n${BOOKING_URL}\n\nThank you,\nTrueTest Labs`);
+      window.open(`mailto:${contact}?subject=${subject}&body=${body}`, "_blank");
+    }
+    setBookingModal(null);
+    setBookingName("");
+    setBookingContact("");
+  }
 
   return (
     <aside className="w-60 flex flex-col flex-shrink-0" style={{ background: "linear-gradient(180deg, #1a3352 0%, #162c47 100%)" }}>
@@ -67,6 +91,72 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* Booking Tools */}
+      <div className="px-3 py-3 border-t border-white/10 space-y-1">
+        <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest px-3 mb-1">Send Booking</p>
+        <button
+          onClick={() => { setBookingModal("text"); setBookingName(""); setBookingContact(""); }}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-green-400 hover:bg-white/8 hover:text-green-300 transition-all"
+        >
+          <MessageIcon className="w-4 h-4 flex-shrink-0" />
+          Text Booking
+        </button>
+        <button
+          onClick={() => { setBookingModal("email"); setBookingName(""); setBookingContact(""); }}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-blue-400 hover:bg-white/8 hover:text-blue-300 transition-all"
+        >
+          <MailIcon className="w-4 h-4 flex-shrink-0" />
+          Email Booking
+        </button>
+      </div>
+
+      {/* Booking Modal */}
+      {bookingModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setBookingModal(null)}>
+          <div className="bg-white rounded-lg w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">
+              {bookingModal === "text" ? "📱 Text Booking Link" : "✉️ Email Booking Link"}
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={bookingName}
+                  onChange={(e) => setBookingName(e.target.value)}
+                  placeholder="Donor's first name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {bookingModal === "text" ? "Phone Number" : "Email Address"}
+                </label>
+                <input
+                  type={bookingModal === "text" ? "tel" : "email"}
+                  value={bookingContact}
+                  onChange={(e) => setBookingContact(e.target.value)}
+                  placeholder={bookingModal === "text" ? "312-555-1234" : "donor@email.com"}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  onKeyDown={(e) => e.key === "Enter" && sendBooking()}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setBookingModal(null)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button
+                onClick={sendBooking}
+                disabled={!bookingContact.trim()}
+                className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 ${bookingModal === "text" ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700"}`}
+              >
+                {bookingModal === "text" ? "Open Messages" : "Open Email"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="px-4 py-4 border-t border-white/10">
@@ -163,6 +253,23 @@ function UsersIcon({ className }: { className?: string }) {
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function MessageIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function MailIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+      <polyline points="22,6 12,13 2,6" />
     </svg>
   );
 }

@@ -249,31 +249,6 @@ export default function CaseDetailPage() {
                       {caseData.donor.email && <span>{caseData.donor.email}</span>}
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    {caseData.donor.phone && (
-                      <button
-                        onClick={() => {
-                          const msg = encodeURIComponent(`Hi ${caseData.donor!.firstName}, please book your appointment at TrueTest Labs here: https://book.squareup.com/appointments/vktpg026o844b6/location/NRHN4SKCVGFSD/services/362SUMWGC5H55J2MCVTJF4FK`);
-                          window.open(`sms:${caseData.donor!.phone}&body=${msg}`, "_blank");
-                        }}
-                        className="px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700"
-                      >
-                        Text Booking
-                      </button>
-                    )}
-                    {caseData.donor.email && (
-                      <button
-                        onClick={() => {
-                          const subject = encodeURIComponent("TrueTest Labs - Schedule Your Appointment");
-                          const body = encodeURIComponent(`Hi ${caseData.donor!.firstName},\n\nPlease book your appointment at TrueTest Labs using the link below:\n\nhttps://book.squareup.com/appointments/vktpg026o844b6/location/NRHN4SKCVGFSD/services/362SUMWGC5H55J2MCVTJF4FK\n\nThank you,\nTrueTest Labs`);
-                          window.open(`mailto:${caseData.donor!.email}?subject=${subject}&body=${body}`, "_blank");
-                        }}
-                        className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700"
-                      >
-                        Email Booking
-                      </button>
-                    )}
-                  </div>
                 </div>
               ) : <p className="text-gray-400 py-2">No donor assigned</p>}
             </div>
