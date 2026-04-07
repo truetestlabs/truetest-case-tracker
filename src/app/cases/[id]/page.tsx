@@ -146,11 +146,10 @@ export default function CaseDetailPage() {
         setCaseData(data);
         setLoading(false);
         // Check if "Results held" notification was already sent
-        if (data.statusLogs?.some((log: { note?: string; notificationSent?: boolean }) => log.notificationSent && log.note?.includes("Results held"))) {
+        if (data.statusLogs?.some((log: { note?: string; notificationSent?: boolean }) => log.notificationSent && log.note?.toLowerCase().includes("results held"))) {
           setResultsHeldSent(true);
         }
-        // Check if collection confirmation was already sent
-        if (data.statusLogs?.some((log: { note?: string; notificationSent?: boolean }) => log.notificationSent && log.note?.includes("collection confirmation"))) {
+        if (data.statusLogs?.some((log: { note?: string; notificationSent?: boolean }) => log.notificationSent && log.note?.toLowerCase().includes("collection confirmation"))) {
           setCollectionConfirmed(true);
         }
       })
