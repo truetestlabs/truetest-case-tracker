@@ -423,7 +423,7 @@ export default function CaseDetailPage() {
                         <p className="text-xs text-gray-500 mt-0.5">Specimen ID: <span className="font-mono font-medium text-gray-700">{test.specimenId}</span></p>
                       )}
                       <div className="mt-2.5 mb-1">
-                        <TestProgressBar currentStatus={test.testStatus} />
+                        <TestProgressBar currentStatus={test.testStatus} caseId={caseData.id} testOrderId={test.id} onUpdated={loadCase} />
                       </div>
                       <div className="flex items-center justify-between mt-2 text-xs">
                         <span className={`font-medium ${payColor}`}>{label}</span>
