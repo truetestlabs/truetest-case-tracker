@@ -28,6 +28,40 @@ export function Sidebar() {
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [reminderCount, setReminderCount] = useState(0);
   const [showReminders, setShowReminders] = useState(false);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  // Load dismissed IDs from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("dismissedReminders") || "{}");
+      const now = Date.now();
+      // Clean expired (24hr TTL) and build set
+      const valid: Record<string, number> = {};
+      const ids = new Set<string>();
+      for (const [id, ts] of Object.entries(stored)) {
+        if (now - (ts as number) < 24 * 60 * 60 * 1000) {
+          valid[id] = ts as number;
+          ids.add(id);
+        }
+      }
+      localStorage.setItem("dismissedReminders", JSON.stringify(valid));
+      setDismissed(ids);
+    } catch { /* ignore */ }
+  }, []);
+
+  function dismissReminder(id: string) {
+    const next = new Set(dismissed);
+    next.add(id);
+    setDismissed(next);
+    try {
+      const stored = JSON.parse(localStorage.getItem("dismissedReminders") || "{}");
+      stored[id] = Date.now();
+      localStorage.setItem("dismissedReminders", JSON.stringify(stored));
+    } catch { /* ignore */ }
+  }
+
+  const filteredReminders = reminders.filter((r) => !dismissed.has(r.id));
+  const filteredCount = filteredReminders.length;
 
   const loadReminders = useCallback(() => {
     fetch("/api/reminders")
@@ -119,9 +153,9 @@ export function Sidebar() {
         >
           <BellIcon className="w-4 h-4 flex-shrink-0" />
           <span>Reminders</span>
-          {reminderCount > 0 && (
+          {filteredCount > 0 && (
             <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-xs font-bold">
-              {reminderCount}
+              {filteredCount}
             </span>
           )}
         </button>
@@ -129,23 +163,39 @@ export function Sidebar() {
         {/* Dropdown */}
         {showReminders && (
           <div className="absolute bottom-full left-3 right-3 mb-2 bg-white rounded-lg shadow-xl border border-gray-200 max-h-[400px] overflow-y-auto z-50">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-900">Action Needed ({reminderCount})</h3>
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-900">Action Needed ({filteredCount})</h3>
+              {filteredCount > 0 && (
+                <button
+                  onClick={() => { filteredReminders.forEach((r) => dismissReminder(r.id)); }}
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                >
+                  Clear all
+                </button>
+              )}
             </div>
-            {reminders.length === 0 ? (
+            {filteredReminders.length === 0 ? (
               <div className="px-4 py-6 text-center text-sm text-gray-400">All clear — nothing overdue</div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {reminders.map((r) => (
-                  <Link
-                    key={r.id}
-                    href={`/cases/${r.caseId}`}
-                    onClick={() => setShowReminders(false)}
-                    className="block px-4 py-3 hover:bg-gray-50 transition-colors"
-                  >
-                    <p className="text-sm text-gray-900 font-medium">{r.message}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{r.caseNumber} · {r.age}</p>
-                  </Link>
+                {filteredReminders.map((r) => (
+                  <div key={r.id} className="flex items-start hover:bg-gray-50 transition-colors">
+                    <Link
+                      href={`/cases/${r.caseId}`}
+                      onClick={() => setShowReminders(false)}
+                      className="flex-1 px-4 py-3"
+                    >
+                      <p className="text-sm text-gray-900 font-medium">{r.message}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{r.caseNumber} · {r.age}</p>
+                    </Link>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); dismissReminder(r.id); }}
+                      className="px-3 py-3 text-gray-400 hover:text-gray-600 text-sm"
+                      title="Dismiss for 24 hours"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
