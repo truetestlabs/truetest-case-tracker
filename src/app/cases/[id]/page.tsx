@@ -13,7 +13,6 @@ import { AddTestOrder } from "@/components/cases/AddTestOrder";
 import { CreateScheduleModal } from "@/components/cases/CreateScheduleModal";
 import { MonitoringScheduleCard } from "@/components/cases/MonitoringScheduleCard";
 import { TestProgressBar } from "@/components/cases/TestProgressBar";
-import { TestStatusButtons } from "@/components/cases/TestStatusButtons";
 import { CaseDocuments } from "@/components/cases/CaseDocuments";
 import { EditTestOrderModal } from "@/components/cases/EditTestOrderModal";
 
@@ -341,13 +340,6 @@ export default function CaseDetailPage() {
                           <span className="capitalize">{test.collectionType}</span>
                         </div>
                       </div>
-                      <TestStatusButtons
-                        caseId={caseData.id}
-                        testOrderId={test.id}
-                        currentStatus={test.testStatus}
-                        testDescription={test.testDescription}
-                        onUpdated={loadCase}
-                      />
                     </div>
                     {/* Edit Test Order Modal */}
                     {editingTestOrder === test.id && (
