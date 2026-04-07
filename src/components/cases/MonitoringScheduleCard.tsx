@@ -120,44 +120,43 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
         const past = s.selections.filter((sel) => new Date(sel.selectedDate) < today);
         return (
           <div key={s.id} className={`border rounded-lg overflow-hidden ${s.active ? "border-gray-200" : "border-gray-200 opacity-60"}`}>
-            <div className="bg-gray-50 px-5 py-3 border-b border-gray-200 flex items-center justify-between">
-              <div>
-                <h4 className="text-sm font-semibold text-gray-900">{s.testCatalog.testName}</h4>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {patternLabel(s)} · {s.collectionType} · PIN: <span className="font-mono font-semibold text-gray-700">{s.checkInPin}</span>
-                  {!s.active && <span className="ml-2 inline-block px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 text-xs font-medium">Paused</span>}
-                </p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {new Date(s.startDate).toLocaleDateString()} → {s.endDate ? new Date(s.endDate).toLocaleDateString() : "Ongoing"}
-                  {s.minSpacingDays ? ` · ≥${s.minSpacingDays} days apart` : ""}
-                </p>
+            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+              {/* Schedule info */}
+              <div className="flex items-start justify-between gap-2">
+                <h4 className="text-xs font-semibold text-gray-900 leading-tight">{s.testCatalog.testName}</h4>
+                {!s.active && <span className="px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 text-[10px] font-medium flex-shrink-0">Paused</span>}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 text-[10px] text-gray-500">
+                <span>{patternLabel(s)}</span>
+                <span>PIN: <span className="font-mono font-semibold text-gray-700">{s.checkInPin}</span></span>
+                <span>{new Date(s.startDate).toLocaleDateString()} → {s.endDate ? new Date(s.endDate).toLocaleDateString() : "Ongoing"}</span>
+                {s.minSpacingDays ? <span>≥{s.minSpacingDays}d apart</span> : null}
+              </div>
+              {/* Action buttons — 2x2 grid */}
+              <div className="grid grid-cols-2 gap-1.5 mt-2">
                 <a
                   href={`/reports/compliance/${s.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-white inline-flex items-center"
-                  title="Open compliance report in a new tab"
+                  className="text-[10px] px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-white text-center"
                 >
                   📋 Report
                 </a>
                 <button
                   onClick={() => sendInstructions(s.id)}
-                  className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-                  title="Email PIN and compliance instructions to donor"
+                  className="text-[10px] px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
                 >
-                  ✉ Send Instructions
+                  ✉ Instructions
                 </button>
                 <button
                   onClick={() => toggleActive(s.id, s.active)}
-                  className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-white"
+                  className="text-[10px] px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-white"
                 >
                   {s.active ? "Pause" : "Resume"}
                 </button>
                 <button
                   onClick={() => cancelSchedule(s.id)}
-                  className="text-xs px-2 py-1 rounded border border-red-300 text-red-700 hover:bg-red-50"
+                  className="text-[10px] px-2 py-1 rounded border border-red-300 text-red-700 hover:bg-red-50"
                 >
                   Cancel
                 </button>
