@@ -142,7 +142,18 @@ export default function CaseDetailPage() {
         if (!res.ok) throw new Error("Case not found");
         return res.json();
       })
-      .then((data) => { setCaseData(data); setLoading(false); })
+      .then((data) => {
+        setCaseData(data);
+        setLoading(false);
+        // Check if "Results held" notification was already sent
+        if (data.statusLogs?.some((log: { note?: string; notificationSent?: boolean }) => log.notificationSent && log.note?.includes("Results held"))) {
+          setResultsHeldSent(true);
+        }
+        // Check if collection confirmation was already sent
+        if (data.statusLogs?.some((log: { note?: string; notificationSent?: boolean }) => log.notificationSent && log.note?.includes("collection confirmation"))) {
+          setCollectionConfirmed(true);
+        }
+      })
       .catch((err) => { setError(err.message); setLoading(false); });
   }
 
