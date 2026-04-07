@@ -83,7 +83,7 @@ export function CreateScheduleModal({ caseId, onSaved, onClose }: Props) {
 
   const countLabel =
     form.patternType === "range_count" ? "Total tests"
-    : form.patternType === "every_n_days" ? "Every how many days?"
+    : form.patternType === "every_n_days" ? "Days between tests"
     : form.patternType === "per_month" ? "Tests per month"
     : "Tests per week";
 
@@ -146,7 +146,11 @@ export function CreateScheduleModal({ caseId, onSaved, onClose }: Props) {
                   <button
                     key={p.value}
                     type="button"
-                    onClick={() => setForm({ ...form, patternType: p.value })}
+                    onClick={() => setForm({
+                      ...form,
+                      patternType: p.value,
+                      targetCount: p.value === "every_n_days" ? 30 : p.value === "range_count" ? 12 : 2,
+                    })}
                     className={`px-3 py-2 rounded-lg text-sm font-medium border ${
                       form.patternType === p.value
                         ? "bg-blue-600 text-white border-blue-600"
@@ -159,29 +163,34 @@ export function CreateScheduleModal({ caseId, onSaved, onClose }: Props) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className={`grid gap-3 ${form.patternType === "every_n_days" ? "grid-cols-1" : "grid-cols-2"}`}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{countLabel} <span className="text-red-500">*</span></label>
                 <input
                   type="number"
-                  min="1"
+                  min={form.patternType === "every_n_days" ? 7 : 1}
                   value={form.targetCount}
                   onChange={(e) => setForm({ ...form, targetCount: Number(e.target.value) })}
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 />
+                {form.patternType === "every_n_days" && (
+                  <p className="text-xs text-gray-500 mt-1">e.g., 30 = once a month, 90 = once a quarter, 14 = biweekly</p>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Min Days Apart</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={form.minSpacingDays}
-                  onChange={(e) => setForm({ ...form, minSpacingDays: Number(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  placeholder="Optional"
-                />
-              </div>
+              {form.patternType !== "every_n_days" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Min Days Apart</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.minSpacingDays}
+                    onChange={(e) => setForm({ ...form, minSpacingDays: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    placeholder="Optional"
+                  />
+                </div>
+              )}
             </div>
 
             <div>
