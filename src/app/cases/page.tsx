@@ -72,7 +72,13 @@ export default function CasesPage() {
       .catch(() => setLoading(false));
   }
 
-  useEffect(() => { loadCases(); }, []);
+  useEffect(() => {
+    loadCases();
+    const interval = setInterval(loadCases, 30_000);
+    const onVisible = () => { if (document.visibilityState === "visible") loadCases(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); };
+  }, []);
 
   function handleFilter(e: React.FormEvent) {
     e.preventDefault();

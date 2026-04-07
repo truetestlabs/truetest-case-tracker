@@ -31,7 +31,13 @@ export default function ClosedCasesPage() {
       .catch(() => setLoading(false));
   }
 
-  useEffect(() => { loadCases(); }, []);
+  useEffect(() => {
+    loadCases();
+    const interval = setInterval(loadCases, 60_000);
+    const onVisible = () => { if (document.visibilityState === "visible") loadCases(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); };
+  }, []);
 
   return (
     <div>

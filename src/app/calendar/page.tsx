@@ -66,7 +66,13 @@ export default function CalendarPage() {
       .catch(() => setLoading(false));
   }, [year, month]);
 
-  useEffect(() => { loadSelections(); }, [loadSelections]);
+  useEffect(() => {
+    loadSelections();
+    const interval = setInterval(loadSelections, 60_000);
+    const onVisible = () => { if (document.visibilityState === "visible") loadSelections(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); };
+  }, [loadSelections]);
 
   function prev() {
     if (month === 0) { setYear(year - 1); setMonth(11); }

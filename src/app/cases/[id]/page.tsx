@@ -160,6 +160,10 @@ export default function CaseDetailPage() {
   useEffect(() => {
     loadCase();
     if (params.id) loadNotifications(params.id as string);
+    const interval = setInterval(() => { loadCase(); if (params.id) loadNotifications(params.id as string); }, 15_000);
+    const onVisible = () => { if (document.visibilityState === "visible") { loadCase(); if (params.id) loadNotifications(params.id as string); } };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); };
   }, [params.id, loadNotifications]);
 
   if (loading) return <div className="text-center py-12 text-gray-400">Loading case...</div>;

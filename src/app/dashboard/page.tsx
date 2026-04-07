@@ -53,10 +53,17 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/dashboard")
-      .then((res) => res.json())
-      .then((data) => { setStats(data); setLoading(false); })
-      .catch(() => setLoading(false));
+    function loadStats() {
+      fetch("/api/dashboard")
+        .then((res) => res.json())
+        .then((data) => { setStats(data); setLoading(false); })
+        .catch(() => setLoading(false));
+    }
+    loadStats();
+    const interval = setInterval(loadStats, 60_000);
+    const onVisible = () => { if (document.visibilityState === "visible") loadStats(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); };
   }, []);
 
   const statCards = [
