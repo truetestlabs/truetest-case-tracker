@@ -256,6 +256,23 @@ export async function POST(
           },
         });
       }
+
+      // Reopen case if it was closed (results need review before re-closing)
+      if (testOrders.length > 0) {
+        const currentCase = await prisma.case.findUnique({ where: { id: caseId }, select: { caseStatus: true } });
+        if (currentCase?.caseStatus === "closed") {
+          await prisma.case.update({ where: { id: caseId }, data: { caseStatus: "active" } });
+          await prisma.statusLog.create({
+            data: {
+              caseId,
+              oldStatus: "closed",
+              newStatus: "active",
+              changedBy: "admin",
+              note: "Auto-reopened: new lab results uploaded on closed case",
+            },
+          });
+        }
+      }
     }
 
     return NextResponse.json(document, { status: 201 });
