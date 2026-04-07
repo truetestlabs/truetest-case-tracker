@@ -12,6 +12,7 @@ import { EditCaseModal } from "@/components/cases/EditCaseModal";
 import { AddTestOrder } from "@/components/cases/AddTestOrder";
 import { CreateScheduleModal } from "@/components/cases/CreateScheduleModal";
 import { MonitoringScheduleCard } from "@/components/cases/MonitoringScheduleCard";
+import { TestProgressBar } from "@/components/cases/TestProgressBar";
 import { TestStatusButtons } from "@/components/cases/TestStatusButtons";
 import { CaseDocuments } from "@/components/cases/CaseDocuments";
 import { EditTestOrderModal } from "@/components/cases/EditTestOrderModal";
@@ -111,6 +112,7 @@ export default function CaseDetailPage() {
   const [collectionConfirmed, setCollectionConfirmed] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0);
+  const [showAllLogs, setShowAllLogs] = useState(false);
   const [notifications, setNotifications] = useState<Array<{
     id: string;
     newStatus: string;
@@ -163,6 +165,15 @@ export default function CaseDetailPage() {
             <StatusBadge status={caseData.caseStatus} type="case" />
             <StatusBadge status={caseData.caseType} type="caseType" />
           </div>
+          {(caseData.courtCaseNumber || caseData.county || caseData.judgeName) && (
+            <p className="text-xs text-gray-500 mt-1.5">
+              {[
+                caseData.courtCaseNumber && `Court: ${caseData.courtCaseNumber}`,
+                caseData.county,
+                caseData.judgeName && `Judge ${caseData.judgeName}`,
+              ].filter(Boolean).join(" · ")}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -314,62 +325,30 @@ export default function CaseDetailPage() {
             ) : (
               <div className="divide-y divide-gray-100">
                 {caseData.testOrders.map((test) => (
-                  <div key={test.id} className="px-6 py-4">
-                    <div className="flex items-start justify-between">
+                  <div key={test.id} className="px-6 py-3">
+                    <div className="flex items-center justify-between">
                       <div>
                         <p
-                          className="font-medium text-gray-900 cursor-pointer hover:text-blue-600"
+                          className="font-medium text-gray-900 cursor-pointer hover:text-blue-600 text-sm"
                           onClick={() => setEditingTestOrder(test.id)}
                           title="Click to edit"
                         >
                           {test.testDescription} <span className="text-xs text-blue-500">edit</span>
                         </p>
-                        <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                        <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
                           <span className="capitalize">{test.specimenType}</span>
                           <span className="capitalize">{test.lab.replace("_", "/")}</span>
                           <span className="capitalize">{test.collectionType}</span>
-                          {test.collectionSite && <span>@ {test.collectionSite}</span>}
-                          {test.labAccessionNumber && <span>Accession: {test.labAccessionNumber}</span>}
                         </div>
-                        {test.specimenHeld && (
-                          <p className="mt-1 text-xs font-semibold text-orange-600">SPECIMEN HELD — Awaiting payment before sending to lab</p>
-                        )}
                       </div>
-                      {(() => {
-                        const isSweatPatch = test.testDescription?.toLowerCase().includes("sweat patch");
-                        const testLabel = isSweatPatch && test.testStatus === "order_created" ? "Patch Applied"
-                          : isSweatPatch && test.testStatus === "specimen_collected" ? "Patch Removed"
-                          : undefined;
-                        return <StatusBadge status={test.testStatus} type="test" label={testLabel} />;
-                      })()}
+                      <TestStatusButtons
+                        caseId={caseData.id}
+                        testOrderId={test.id}
+                        currentStatus={test.testStatus}
+                        testDescription={test.testDescription}
+                        onUpdated={loadCase}
+                      />
                     </div>
-                    <div className="flex flex-wrap gap-4 mt-3 text-xs text-gray-400">
-                      {test.paymentDate && <span>Paid: {new Date(test.paymentDate).toLocaleDateString()}</span>}
-                      {test.orderReleasedDate && <span>Released: {new Date(test.orderReleasedDate).toLocaleDateString()}</span>}
-                      {test.appointmentDate && <span>Appt: {new Date(test.appointmentDate).toLocaleDateString()}</span>}
-                      {test.collectionDate && <span>Collected: {new Date(test.collectionDate).toLocaleDateString()}</span>}
-                      {test.sentToLabDate && <span>Sent to Lab: {new Date(test.sentToLabDate).toLocaleDateString()}</span>}
-                      {test.resultsReceivedDate && <span>Results In: {new Date(test.resultsReceivedDate).toLocaleDateString()}</span>}
-                      {test.resultsReleasedDate && <span>Results Released: {new Date(test.resultsReleasedDate).toLocaleDateString()}</span>}
-                    </div>
-                    <div className="flex items-center gap-4 mt-2 text-xs">
-                      {(() => {
-                        const state = getPaymentState(test.paymentMethod);
-                        const label = getPaymentLabel(test.paymentMethod);
-                        const color = state === "unpaid" ? "text-red-500" : state === "invoiced" ? "text-blue-600" : "text-green-600";
-                        return <span className={`font-medium ${color}`}>{label}</span>;
-                      })()}
-                      {test.clientPrice && <span className="text-gray-500">Client: ${Number(test.clientPrice).toFixed(2)}</span>}
-                      {test.invoiceNumber && <span className="text-gray-400">Invoice: {test.invoiceNumber}</span>}
-                    </div>
-                    {/* Status advance buttons */}
-                    <TestStatusButtons
-                      caseId={caseData.id}
-                      testOrderId={test.id}
-                      currentStatus={test.testStatus}
-                      testDescription={test.testDescription}
-                      onUpdated={loadCase}
-                    />
                     {/* Edit Test Order Modal */}
                     {editingTestOrder === test.id && (
                       <EditTestOrderModal
@@ -384,30 +363,6 @@ export default function CaseDetailPage() {
               </div>
             )}
           </section>
-
-          {/* Monitoring Schedules (only for monitored cases) */}
-          {caseData.isMonitored && (
-            <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider">Random Testing Schedules</h3>
-                <button
-                  onClick={() => setShowScheduleModal(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110"
-                  style={{ background: "linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)" }}
-                >
-                  + Set Up Schedule
-                </button>
-              </div>
-              <MonitoringScheduleCard key={scheduleRefreshKey} caseId={caseData.id} onChanged={loadCase} />
-              {showScheduleModal && (
-                <CreateScheduleModal
-                  caseId={caseData.id}
-                  onSaved={() => { setShowScheduleModal(false); setScheduleRefreshKey((k) => k + 1); loadCase(); }}
-                  onClose={() => setShowScheduleModal(false)}
-                />
-              )}
-            </section>
-          )}
 
           {/* Documents */}
           <CaseDocuments caseId={caseData.id} documents={caseData.documents} onUpdated={loadCase} />
@@ -478,17 +433,63 @@ export default function CaseDetailPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">Case Info</h3>
-            <dl className="space-y-3 text-sm">
-              <div><dt className="text-gray-500">Case Number</dt><dd className="font-medium">{caseData.caseNumber}</dd></div>
-              {caseData.courtCaseNumber && <div><dt className="text-gray-500">Court Case #</dt><dd className="font-medium">{caseData.courtCaseNumber}</dd></div>}
-              <div><dt className="text-gray-500">Type</dt><dd className="font-medium flex items-center gap-2">{caseTypeInfo?.label || caseData.caseType}{caseData.isMonitored && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium">Monitored</span>}</dd></div>
-              {caseData.county && <div><dt className="text-gray-500">County</dt><dd className="font-medium">{caseData.county}</dd></div>}
-              {caseData.judgeName && <div><dt className="text-gray-500">Judge</dt><dd className="font-medium">{caseData.judgeName}</dd></div>}
-<div><dt className="text-gray-500">Created</dt><dd className="font-medium">{new Date(caseData.createdAt).toLocaleDateString()}</dd></div>
-            </dl>
+          <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+            <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">Test Status</h3>
+            {caseData.testOrders.length === 0 ? (
+              <p className="text-sm text-gray-400 py-4 text-center">No tests ordered</p>
+            ) : (
+              <div className="space-y-3">
+                {caseData.testOrders.map((test) => {
+                  const state = getPaymentState(test.paymentMethod);
+                  const label = getPaymentLabel(test.paymentMethod);
+                  const payColor = state === "unpaid" ? "text-red-600" : state === "invoiced" ? "text-blue-600" : "text-green-600";
+                  return (
+                    <div
+                      key={test.id}
+                      className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
+                      onClick={() => setEditingTestOrder(test.id)}
+                      title="Click to edit"
+                    >
+                      <p className="text-sm font-semibold text-gray-900 truncate">{test.testDescription}</p>
+                      {test.specimenId && (
+                        <p className="text-xs text-gray-500 mt-0.5">Specimen ID: <span className="font-mono font-medium text-gray-700">{test.specimenId}</span></p>
+                      )}
+                      <div className="mt-2.5 mb-1">
+                        <TestProgressBar currentStatus={test.testStatus} />
+                      </div>
+                      <div className="flex items-center justify-between mt-2 text-xs">
+                        <span className={`font-medium ${payColor}`}>{label}</span>
+                        {test.clientPrice && <span className="text-gray-500">${Number(test.clientPrice).toFixed(2)}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
+
+          {/* Monitoring Schedules (sidebar, for monitored cases) */}
+          {caseData.isMonitored && (
+            <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wider">Schedules</h3>
+                <button
+                  onClick={() => setShowScheduleModal(true)}
+                  className="text-xs px-2 py-1 rounded bg-purple-600 text-white hover:bg-purple-700"
+                >
+                  + New
+                </button>
+              </div>
+              <MonitoringScheduleCard key={scheduleRefreshKey} caseId={caseData.id} onChanged={loadCase} />
+              {showScheduleModal && (
+                <CreateScheduleModal
+                  caseId={caseData.id}
+                  onSaved={() => { setShowScheduleModal(false); setScheduleRefreshKey((k) => k + 1); loadCase(); }}
+                  onClose={() => setShowScheduleModal(false)}
+                />
+              )}
+            </section>
+          )}
 
           {/* Combined Contacts & Distribution */}
           <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -706,17 +707,27 @@ export default function CaseDetailPage() {
             {caseData.statusLogs.length === 0 ? (
               <p className="text-sm text-gray-400">No activity yet</p>
             ) : (
-              <ul className="space-y-3">
-                {caseData.statusLogs.map((log) => (
-                  <li key={log.id} className="text-xs border-l-2 border-gray-200 pl-3 py-1">
-                    <div className="text-gray-500">{new Date(log.changedAt).toLocaleString()}</div>
-                    <div className="text-gray-700 mt-0.5">
-                      <span className="capitalize">{log.oldStatus.replace("_", " ")}</span> &rarr; <span className="font-medium capitalize">{log.newStatus.replace("_", " ")}</span>
-                    </div>
-                    {log.note && <div className="text-gray-400 mt-0.5">{log.note}</div>}
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="space-y-3">
+                  {caseData.statusLogs.slice(0, showAllLogs ? undefined : 3).map((log) => (
+                    <li key={log.id} className="text-xs border-l-2 border-gray-200 pl-3 py-1">
+                      <div className="text-gray-500">{new Date(log.changedAt).toLocaleString()}</div>
+                      <div className="text-gray-700 mt-0.5">
+                        <span className="capitalize">{log.oldStatus.replace("_", " ")}</span> &rarr; <span className="font-medium capitalize">{log.newStatus.replace("_", " ")}</span>
+                      </div>
+                      {log.note && <div className="text-gray-400 mt-0.5">{log.note}</div>}
+                    </li>
+                  ))}
+                </ul>
+                {caseData.statusLogs.length > 3 && (
+                  <button
+                    onClick={() => setShowAllLogs(!showAllLogs)}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium mt-3"
+                  >
+                    {showAllLogs ? "Show less" : `Show all (${caseData.statusLogs.length})`}
+                  </button>
+                )}
+              </>
             )}
           </section>
 
