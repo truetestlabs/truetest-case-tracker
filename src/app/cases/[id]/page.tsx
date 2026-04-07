@@ -316,6 +316,15 @@ export default function CaseDetailPage() {
                           {test.collectionType === "observed" && <span className="font-medium text-orange-600">Observed</span>}
                         </div>
                       </div>
+                      {test.notes && (
+                        <div className="relative group flex-shrink-0">
+                          <span className="cursor-default text-gray-400 hover:text-gray-600 text-sm" title="View notes">📝</span>
+                          <div className="absolute right-0 top-6 z-20 hidden group-hover:block w-64 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-pre-wrap">
+                            {test.notes}
+                            <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 rotate-45" />
+                          </div>
+                        </div>
+                      )}
                     </div>
                     {/* Edit Test Order Modal */}
                     {editingTestOrder === test.id && (
