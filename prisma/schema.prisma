@@ -96,6 +96,7 @@ enum TestStatus {
   at_mro
   mro_released
   results_received
+  results_held
   awaiting_payment_for_release
   results_released
   closed

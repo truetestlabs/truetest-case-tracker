@@ -21,6 +21,7 @@ const SPECIAL_STATUSES: Record<string, { label: string; color: string }> = {
   cancelled: { label: "Cancelled", color: "bg-red-100 text-red-700" },
   closed: { label: "Test Closed", color: "bg-gray-200 text-gray-600" },
   specimen_held: { label: "Held", color: "bg-amber-100 text-amber-700" },
+  results_held: { label: "Results Held — Payment Required", color: "bg-amber-100 text-amber-700" },
 };
 
 type Props = {
@@ -45,7 +46,10 @@ export function TestProgressBar({ currentStatus, caseId, testOrderId, testDescri
 
   const special = SPECIAL_STATUSES[currentStatus];
   const stepIndex = steps.findIndex((s) => s.key === currentStatus);
-  const effectiveIndex = currentStatus === "closed" ? steps.length : stepIndex;
+  // results_held is at the same position as results_received in the bar
+  const effectiveIndex = currentStatus === "closed" ? steps.length
+    : currentStatus === "results_held" ? steps.findIndex((s) => s.key === "results_received")
+    : stepIndex;
 
   async function advanceTo(statusKey: string) {
     if (!caseId || !testOrderId) return;

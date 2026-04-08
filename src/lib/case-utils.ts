@@ -28,6 +28,7 @@ export const TEST_STATUS_CONFIG = {
   specimen_collected: { label: "Specimen Collected", color: "bg-indigo-100 text-indigo-700" },
   sent_to_lab: { label: "Sent to Lab", color: "bg-purple-100 text-purple-700" },
   results_received: { label: "Lab Results Received", color: "bg-teal-100 text-teal-700" },
+  results_held: { label: "Results Held — Payment Required", color: "bg-amber-100 text-amber-700" },
   results_released: { label: "Lab Results Released", color: "bg-green-100 text-green-700" },
   at_mro: { label: "Results at MRO", color: "bg-purple-100 text-purple-700" },
   mro_released: { label: "MRO Results Released", color: "bg-green-100 text-green-700" },
@@ -46,8 +47,9 @@ export const TEST_STATUS_FLOW: Record<string, string[]> = {
   order_created: ["specimen_collected"],
   specimen_collected: ["sent_to_lab"],
   sent_to_lab: ["results_received"],
-  results_received: ["results_released"],
-  results_released: ["closed", "at_mro"],  // staff chooses: close or send to MRO
+  results_received: ["results_released", "results_held"],  // paid → released, unpaid → held
+  results_held: ["results_released"],                       // after payment → released
+  results_released: ["closed", "at_mro"],                   // staff chooses: close or send to MRO
   at_mro: ["mro_released"],
   mro_released: ["closed"],
   closed: [],

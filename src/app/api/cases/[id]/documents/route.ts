@@ -247,11 +247,13 @@ export async function POST(
       });
 
       for (const order of testOrders) {
-        // Always advance to results_received — staff reviews, sends email, then closes
+        // Auto-route based on payment: paid → results_received, unpaid → results_held
+        const isPaid = !!order.paymentMethod && order.paymentMethod !== "invoiced";
+        const newStatus = isPaid ? "results_received" : "results_held";
         await prisma.testOrder.update({
           where: { id: order.id },
           data: {
-            testStatus: "results_received" as TestStatus,
+            testStatus: newStatus as TestStatus,
             resultsReceivedDate: new Date(),
           },
         });
@@ -260,9 +262,11 @@ export async function POST(
             caseId,
             testOrderId: order.id,
             oldStatus: order.testStatus,
-            newStatus: "results_received",
+            newStatus: newStatus,
             changedBy: "admin",
-            note: "Auto-advanced: lab results uploaded",
+            note: isPaid
+              ? "Auto-advanced: lab results uploaded (paid)"
+              : "Auto-held: lab results uploaded but payment outstanding",
           },
         });
       }
