@@ -294,6 +294,9 @@ export default function CaseDetailPage() {
                     <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                       {caseData.donor.phone && <span>{caseData.donor.phone}</span>}
                       {caseData.donor.email && <span>{caseData.donor.email}</span>}
+                      {!caseData.donor.email && (
+                        <span className="text-xs text-amber-600 font-medium">⚠ No email — notifications won't be delivered to donor</span>
+                      )}
                     </div>
                   </div>
                 </div>
