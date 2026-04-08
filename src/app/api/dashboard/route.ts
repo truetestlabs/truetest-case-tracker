@@ -8,7 +8,7 @@ export async function GET() {
       prisma.case.count({ where: { caseStatus: { not: "closed" } } }),
       prisma.case.count({ where: { caseStatus: "closed" } }),
       prisma.testOrder.count(),
-      prisma.testOrder.count({ where: { testStatus: "awaiting_payment" } }),
+      prisma.testOrder.count({ where: { paymentMethod: null, testStatus: { notIn: ["closed", "cancelled"] } } }),
     ]);
 
     const noShowsThisMonth = await prisma.testOrder.count({
