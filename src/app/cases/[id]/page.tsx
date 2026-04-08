@@ -93,10 +93,12 @@ type CaseData = {
   }>;
   statusLogs: Array<{
     id: string;
+    testOrderId: string | null;
     oldStatus: string;
     newStatus: string;
     changedAt: string;
     note: string | null;
+    notificationSent: boolean;
   }>;
 };
 
@@ -291,125 +293,6 @@ export default function CaseDetailPage() {
             <div className="px-6 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50">
               <h3 className="text-sm font-semibold text-gray-700">Test Orders ({caseData.testOrders.length})</h3>
               <div className="flex items-center gap-2">
-                {caseData.testOrders.some((t) =>
-                  t.testStatus === "specimen_collected"
-                ) && (
-                  collectionConfirmed ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white opacity-60 cursor-default" style={{ background: "#059669" }}>
-                      ✓ Collection Notice Sent
-                    </span>
-                  ) : (
-                    <button
-                      onClick={async () => {
-                        setSendingCollection(true);
-                        setCollectionSentMsg(null);
-                        try {
-                          const res = await fetch(`/api/cases/${caseData.id}/send-collection`, { method: "POST" });
-                          const data = await res.json();
-                          if (res.ok) {
-                            setCollectionConfirmed(true);
-                          } else {
-                            setCollectionSentMsg(data.error || "Failed to send");
-                          }
-                        } catch { setCollectionSentMsg("Failed to send"); }
-                        setSendingCollection(false);
-                      }}
-                      disabled={sendingCollection}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
-                      style={{ background: "linear-gradient(135deg, #059669 0%, #047857 100%)" }}
-                    >
-                      {sendingCollection ? "Sending…" : "✉ Send Collection Confirmation"}
-                    </button>
-                  )
-                )}
-                {collectionSentMsg && !collectionConfirmed && (
-                  <span className="text-xs text-red-500 font-medium">{collectionSentMsg}</span>
-                )}
-                {/* Results Held — Payment Required button */}
-                {!resultsHeldSent && caseData.testOrders.some((t) => (t.testStatus === "results_received" || t.testStatus === "results_held") && !t.paymentMethod) && (
-                  <button
-                    onClick={async () => {
-                      setSendingResultsHeld(true);
-                      try {
-                        const res = await fetch(`/api/cases/${caseData.id}/send-results-held`, { method: "POST" });
-                        if (res.ok) { setResultsHeldSent(true); loadCase(); }
-                        else { const d = await res.json(); alert(d.error || "Failed"); }
-                      } catch { alert("Failed to send"); }
-                      setSendingResultsHeld(false);
-                    }}
-                    disabled={sendingResultsHeld}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
-                    style={{ background: "linear-gradient(135deg, #b45309 0%, #92400e 100%)" }}
-                  >
-                    {sendingResultsHeld ? "Sending…" : "✉ Results Held — Request Payment"}
-                  </button>
-                )}
-                {resultsHeldSent && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white opacity-60 cursor-default" style={{ background: "#b45309" }}>
-                    ✓ Payment Notice Sent
-                  </span>
-                )}
-                {/* Payment Received — Send to Lab button */}
-                {!paymentReceivedSent && caseData.testOrders.some((t) =>
-                  (t.testStatus === "specimen_collected" || t.testStatus === "specimen_held") && !!t.paymentMethod
-                ) && (
-                  <button
-                    onClick={async () => {
-                      setSendingPaymentReceived(true);
-                      try {
-                        const res = await fetch(`/api/cases/${caseData.id}/send-payment-received`, { method: "POST" });
-                        if (res.ok) { setPaymentReceivedSent(true); loadCase(); }
-                        else { const d = await res.json(); alert(d.error || "Failed"); }
-                      } catch { alert("Failed to send"); }
-                      setSendingPaymentReceived(false);
-                    }}
-                    disabled={sendingPaymentReceived}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
-                    style={{ background: "linear-gradient(135deg, #059669 0%, #047857 100%)" }}
-                  >
-                    {sendingPaymentReceived ? "Sending…" : "✉ Payment Received — Send to Lab"}
-                  </button>
-                )}
-                {paymentReceivedSent && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white opacity-60 cursor-default" style={{ background: "#059669" }}>
-                    ✓ Sent to Lab Notice Sent
-                  </span>
-                )}
-                {/* Send Results & Release (paid tests at results_received) */}
-                {caseData.testOrders.some((t) => t.testStatus === "results_received" && !!t.paymentMethod) && (
-                  <button
-                    onClick={async () => {
-                      setSendingResults(true);
-                      setResultsSentMsg(null);
-                      try {
-                        // First advance paid results_received tests to results_released
-                        for (const t of caseData.testOrders.filter((t) => t.testStatus === "results_received" && !!t.paymentMethod)) {
-                          await fetch(`/api/cases/${caseData.id}/test-orders`, {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ testOrderId: t.id, testStatus: "results_released" }),
-                          });
-                        }
-                        // Then send the results email with PDF
-                        const res = await fetch(`/api/cases/${caseData.id}/send-results`, { method: "POST" });
-                        const data = await res.json();
-                        if (res.ok) {
-                          setResultsSentMsg(`Results sent to ${data.sentTo.length} recipient${data.sentTo.length !== 1 ? "s" : ""}`);
-                        } else {
-                          setResultsSentMsg(data.error || "Failed to send");
-                        }
-                        loadCase();
-                      } catch { setResultsSentMsg("Failed to send"); }
-                      setSendingResults(false);
-                    }}
-                    disabled={sendingResults}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
-                    style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #2a5490 100%)" }}
-                  >
-                    {sendingResults ? "Sending…" : "✉ Send Results & Release"}
-                  </button>
-                )}
-                {resultsSentMsg && <span className="text-xs text-green-600 font-medium">{resultsSentMsg}</span>}
                 <AddTestOrder caseId={caseData.id} onAdded={loadCase} />
               </div>
             </div>
@@ -564,6 +447,43 @@ export default function CaseDetailPage() {
                         <span className={`font-medium ${payColor}`}>{label}</span>
                         {test.clientPrice && <span className="text-gray-500">${Number(test.clientPrice).toFixed(2)}</span>}
                       </div>
+                      {/* Per-test action button */}
+                      {(() => {
+                        const testLogs = caseData.statusLogs?.filter((l) => l.testOrderId === test.id) || [];
+                        const hasSentNotification = (keyword: string) => testLogs.some((l) => l.notificationSent && l.note?.toLowerCase().includes(keyword));
+
+                        // Specimen collected → send collection confirmation
+                        if (test.testStatus === "specimen_collected" && !test.paymentMethod) {
+                          const sent = hasSentNotification("collection confirmation");
+                          return sent
+                            ? <p className="text-[10px] text-green-600 mt-1.5">✓ Collection notice sent</p>
+                            : <button onClick={async (e) => { e.stopPropagation(); const r = await fetch(`/api/cases/${caseData.id}/send-collection`, { method: "POST" }); if (r.ok) loadCase(); else alert((await r.json()).error || "Failed"); }} className="mt-1.5 w-full text-[10px] px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700 font-semibold">✉ Send Collection Notice</button>;
+                        }
+                        // Collected + paid → payment received, send to lab
+                        if ((test.testStatus === "specimen_collected" || test.testStatus === "specimen_held") && !!test.paymentMethod) {
+                          const sent = hasSentNotification("payment received");
+                          return sent
+                            ? <p className="text-[10px] text-green-600 mt-1.5">✓ Sent to lab notice sent</p>
+                            : <button onClick={async (e) => { e.stopPropagation(); const r = await fetch(`/api/cases/${caseData.id}/send-payment-received`, { method: "POST" }); if (r.ok) loadCase(); else alert((await r.json()).error || "Failed"); }} className="mt-1.5 w-full text-[10px] px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700 font-semibold">✉ Payment Received — Send to Lab</button>;
+                        }
+                        // Results received + paid → send results & release
+                        if (test.testStatus === "results_received" && !!test.paymentMethod) {
+                          return <button onClick={async (e) => {
+                            e.stopPropagation();
+                            await fetch(`/api/cases/${caseData.id}/test-orders`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ testOrderId: test.id, testStatus: "results_released" }) });
+                            await fetch(`/api/cases/${caseData.id}/send-results`, { method: "POST" });
+                            loadCase();
+                          }} className="mt-1.5 w-full text-[10px] px-2 py-1 rounded bg-blue-700 text-white hover:bg-blue-800 font-semibold">✉ Send Results & Release</button>;
+                        }
+                        // Results received/held + unpaid → results held notice
+                        if ((test.testStatus === "results_received" || test.testStatus === "results_held") && !test.paymentMethod) {
+                          const sent = hasSentNotification("results held");
+                          return sent
+                            ? <p className="text-[10px] text-amber-600 mt-1.5">✓ Payment notice sent</p>
+                            : <button onClick={async (e) => { e.stopPropagation(); const r = await fetch(`/api/cases/${caseData.id}/send-results-held`, { method: "POST" }); if (r.ok) loadCase(); else alert((await r.json()).error || "Failed"); }} className="mt-1.5 w-full text-[10px] px-2 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 font-semibold">✉ Results Held — Request Payment</button>;
+                        }
+                        return null;
+                      })()}
                     </div>
                   );
                 })}
