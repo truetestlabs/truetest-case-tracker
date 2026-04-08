@@ -86,7 +86,7 @@ export function Sidebar() {
       window.open(`sms:${contact}&body=${msg}`, "_blank");
     } else {
       const subject = encodeURIComponent("TrueTest Labs - Schedule Your Appointment");
-      const body = encodeURIComponent(`Hi ${name},\n\nPlease book your appointment at TrueTest Labs using the link below:\n\n${BOOKING_URL}\n\nThank you,\nTrueTest Labs`);
+      const body = encodeURIComponent(`Hi ${name},\n\nPlease book your appointment at TrueTest Labs using the link below:\n\n${BOOKING_URL}\n\n`);
       window.open(`mailto:${contact}?subject=${subject}&body=${body}`, "_blank");
     }
     setBookingModal(null);
