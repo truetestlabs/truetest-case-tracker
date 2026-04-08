@@ -41,21 +41,36 @@ export async function POST(request: NextRequest) {
     // ── Map reason → caseType ──
     const caseType = mapReasonToCaseType(body.reason || "court_ordered");
 
-    // ── Create or find donor contact ──
-    // Always create a new contact for orders from the website (different cases
-    // may have different email/phone for the same name). Staff can merge later.
-    const donor = await prisma.contact.create({
-      data: {
+    // ── Find or create donor contact (avoid duplicates) ──
+    let donor = await prisma.contact.findFirst({
+      where: {
+        firstName: { equals: donorFirst, mode: "insensitive" },
+        lastName: { equals: donorLast, mode: "insensitive" },
         contactType: "donor",
-        firstName: donorFirst,
-        lastName: donorLast,
-        email: body.donorEmail?.trim() || null,
-        phone: body.donorPhone?.trim() || null,
-        preferredContact: body.donorPhone ? "text" : "email",
-        represents: "na",
-        notes: body.dob ? `DOB: ${body.dob}` : null,
       },
     });
+    if (donor) {
+      const updates: Record<string, string | null> = {};
+      if (body.donorEmail?.trim() && body.donorEmail.trim() !== donor.email) updates.email = body.donorEmail.trim();
+      if (body.donorPhone?.trim() && body.donorPhone.trim() !== donor.phone) updates.phone = body.donorPhone.trim();
+      if (body.dob && !donor.notes?.includes(body.dob)) updates.notes = body.dob ? `DOB: ${body.dob}` : donor.notes;
+      if (Object.keys(updates).length > 0) {
+        donor = await prisma.contact.update({ where: { id: donor.id }, data: updates });
+      }
+    } else {
+      donor = await prisma.contact.create({
+        data: {
+          contactType: "donor",
+          firstName: donorFirst,
+          lastName: donorLast,
+          email: body.donorEmail?.trim() || null,
+          phone: body.donorPhone?.trim() || null,
+          preferredContact: body.donorPhone ? "text" : "email",
+          represents: "na",
+          notes: body.dob ? `DOB: ${body.dob}` : null,
+        },
+      });
+    }
 
     // ── Generate case number ──
     const currentYear = new Date().getFullYear();

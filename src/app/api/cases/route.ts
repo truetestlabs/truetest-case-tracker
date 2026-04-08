@@ -87,20 +87,37 @@ export async function POST(request: NextRequest) {
 
     const caseNumber = generateCaseNumber(sequence);
 
-    // Create or find donor contact
+    // Find or create donor contact (avoid duplicates)
     let donorId: string | null = null;
     if (body.donor?.firstName && body.donor?.lastName) {
-      const donor = await prisma.contact.create({
-        data: {
+      let donor = await prisma.contact.findFirst({
+        where: {
+          firstName: { equals: body.donor.firstName.trim(), mode: "insensitive" },
+          lastName: { equals: body.donor.lastName.trim(), mode: "insensitive" },
           contactType: "donor",
-          firstName: body.donor.firstName,
-          lastName: body.donor.lastName,
-          email: body.donor.email || null,
-          phone: body.donor.phone || null,
-          preferredContact: body.donor.phone ? "text" : "email",
-          represents: "na",
         },
       });
+      if (donor) {
+        // Update with latest info if provided
+        const updates: Record<string, string | null> = {};
+        if (body.donor.email && body.donor.email !== donor.email) updates.email = body.donor.email;
+        if (body.donor.phone && body.donor.phone !== donor.phone) updates.phone = body.donor.phone;
+        if (Object.keys(updates).length > 0) {
+          donor = await prisma.contact.update({ where: { id: donor.id }, data: updates });
+        }
+      } else {
+        donor = await prisma.contact.create({
+          data: {
+            contactType: "donor",
+            firstName: body.donor.firstName.trim(),
+            lastName: body.donor.lastName.trim(),
+            email: body.donor.email || null,
+            phone: body.donor.phone || null,
+            preferredContact: body.donor.phone ? "text" : "email",
+            represents: "na",
+          },
+        });
+      }
       donorId = donor.id;
     }
 
