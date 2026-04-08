@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildComplianceReport, reportToCSV } from "@/lib/compliance";
+import { generateComplianceReportPDF } from "@/lib/pdf/compliance-report";
 
 export async function GET(
   request: NextRequest,
@@ -36,6 +37,17 @@ export async function GET(
       return new NextResponse(csv, {
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+        },
+      });
+    }
+
+    if (format === "pdf") {
+      const pdfBuffer = await generateComplianceReportPDF(report);
+      const filename = `compliance-${report.schedule.caseNumber}-${report.period.from}-to-${report.period.to}.pdf`;
+      return new NextResponse(new Uint8Array(pdfBuffer), {
+        headers: {
+          "Content-Type": "application/pdf",
           "Content-Disposition": `attachment; filename="${filename}"`,
         },
       });

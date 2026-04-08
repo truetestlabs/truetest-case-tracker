@@ -79,8 +79,10 @@ export default function CheckInPage() {
               onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
               className="w-full px-4 py-4 text-2xl text-center font-mono tracking-widest border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="000000"
+              aria-describedby={error ? "pin-error" : undefined}
+              aria-invalid={!!error}
             />
-            {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+            {error && <p id="pin-error" role="alert" className="text-red-600 text-sm mt-2">{error}</p>}
             <button
               type="submit"
               disabled={loading || pin.length < 4}

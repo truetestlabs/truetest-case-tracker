@@ -198,6 +198,12 @@ export default function CaseDetailPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <a
+            href={`/api/cases/${caseData.id}/export`}
+            className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            ⬇ Export
+          </a>
           <button
             onClick={() => setShowEditCase(true)}
             className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"

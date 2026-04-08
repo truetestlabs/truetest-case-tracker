@@ -124,6 +124,16 @@ export default function ComplianceReportPage({ params }: { params: Promise<{ sch
               className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-semibold hover:bg-blue-700">
               🖨 Print / Save as PDF
             </button>
+            <button onClick={() => {
+              const qs = new URLSearchParams();
+              if (from) qs.set("from", from);
+              if (to) qs.set("to", to);
+              qs.set("format", "pdf");
+              window.location.href = `/api/monitoring-schedules/${scheduleId}/compliance-report?${qs}`;
+            }}
+              className="px-4 py-2 bg-red-700 text-white rounded text-sm font-semibold hover:bg-red-800">
+              ⬇ Download PDF
+            </button>
             <button onClick={downloadCsv}
               className="px-4 py-2 border border-slate-300 text-slate-700 rounded text-sm font-semibold hover:bg-slate-50">
               ⬇ Download CSV

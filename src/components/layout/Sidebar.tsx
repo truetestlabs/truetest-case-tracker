@@ -149,6 +149,9 @@ export function Sidebar() {
       <div className="px-3 py-2 border-t border-white/10 relative">
         <button
           onClick={() => setShowReminders(!showReminders)}
+          onKeyDown={(e) => { if (e.key === "Escape" && showReminders) { setShowReminders(false); e.stopPropagation(); } }}
+          aria-expanded={showReminders}
+          aria-label={`Reminders${filteredCount > 0 ? ` (${filteredCount} action needed)` : ""}`}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-white/60 hover:bg-white/8 hover:text-white/90 transition-all"
         >
           <BellIcon className="w-4 h-4 flex-shrink-0" />
@@ -224,8 +227,8 @@ export function Sidebar() {
 
       {/* Booking Modal */}
       {bookingModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setBookingModal(null)}>
-          <div className="bg-white rounded-lg w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setBookingModal(null)} onKeyDown={(e) => { if (e.key === "Escape") setBookingModal(null); }}>
+          <div className="bg-white rounded-lg w-full max-w-sm p-5" role="dialog" aria-modal="true" aria-label={bookingModal === "text" ? "Text Booking Link" : "Email Booking Link"} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-gray-900 mb-4">
               {bookingModal === "text" ? "📱 Text Booking Link" : "✉️ Email Booking Link"}
             </h3>
