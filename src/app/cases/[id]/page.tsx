@@ -279,7 +279,18 @@ export default function CaseDetailPage() {
               {caseData.donor ? (
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">{caseData.donor.firstName} {caseData.donor.lastName}</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-semibold text-gray-900">{caseData.donor.firstName} {caseData.donor.lastName}</h2>
+                      {caseData.notes && (
+                        <div className="relative group">
+                          <span className="cursor-default text-amber-500 text-sm" title="Case has notes">📝</span>
+                          <div className="absolute left-0 top-7 z-20 hidden group-hover:block w-72 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-pre-wrap">
+                            {caseData.notes}
+                            <div className="absolute -top-1 left-3 w-2 h-2 bg-gray-900 rotate-45" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                       {caseData.donor.phone && <span>{caseData.donor.phone}</span>}
                       {caseData.donor.email && <span>{caseData.donor.email}</span>}
