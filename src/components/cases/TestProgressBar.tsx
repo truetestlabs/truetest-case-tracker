@@ -78,7 +78,8 @@ export function TestProgressBar({ currentStatus, caseId, testOrderId, testDescri
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      {/* Dots + lines row */}
+      <div className="flex items-center">
         {steps.map((step, i) => {
           const isCompleted = effectiveIndex > i;
           const isCurrent = effectiveIndex === i;
@@ -89,40 +90,51 @@ export function TestProgressBar({ currentStatus, caseId, testOrderId, testDescri
           return (
             <div key={step.key} className="flex items-center flex-1 last:flex-none">
               <div
-                className={`flex flex-col items-center ${canClick ? "cursor-pointer group" : ""}`}
+                className={`flex-shrink-0 ${canClick ? "cursor-pointer group" : ""}`}
                 onClick={canClick ? (e) => { e.stopPropagation(); advanceTo(step.key); } : undefined}
-                title={canClick ? `Click to advance to ${step.label}` : undefined}
+                onKeyDown={canClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); advanceTo(step.key); } } : undefined}
+                role={canClick ? "button" : undefined}
+                tabIndex={canClick ? 0 : undefined}
+                title={canClick ? `Click to advance to ${step.label}` : step.label}
               >
                 <div
-                  className={`rounded-full flex items-center justify-center transition-all ${
+                  className={`rounded-full transition-all ${
                     isCurrent
-                      ? "w-3.5 h-3.5 ring-2 ring-offset-1 ring-blue-400 bg-blue-600"
+                      ? "w-3 h-3 ring-2 ring-offset-1 ring-blue-400 bg-blue-600"
                       : isCompleted
-                      ? "w-2.5 h-2.5 bg-blue-600"
+                      ? "w-2 h-2 bg-blue-600"
                       : canClick
-                      ? "w-2.5 h-2.5 bg-gray-300 group-hover:bg-blue-400 group-hover:w-3 group-hover:h-3 group-hover:ring-2 group-hover:ring-blue-200"
-                      : "w-2.5 h-2.5 bg-gray-300"
+                      ? "w-2 h-2 bg-gray-300 group-hover:bg-blue-400 group-hover:w-2.5 group-hover:h-2.5 group-hover:ring-2 group-hover:ring-blue-200"
+                      : "w-2 h-2 bg-gray-300"
                   }`}
                 />
-                <span
-                  className={`text-[9px] mt-1 leading-tight text-center transition-colors ${
-                    isCurrent ? "font-semibold text-blue-700"
-                    : isCompleted ? "text-blue-600"
-                    : canClick ? "text-gray-400 group-hover:text-blue-600 group-hover:font-semibold"
-                    : "text-gray-400"
-                  }`}
-                >
-                  {step.label}
-                </span>
               </div>
               {!isLast && (
-                <div
-                  className={`flex-1 h-[2px] mx-1 mt-[-12px] ${
-                    isCompleted ? "bg-blue-500" : "bg-gray-200"
-                  }`}
-                />
+                <div className={`flex-1 h-[1.5px] mx-0.5 ${isCompleted ? "bg-blue-500" : "bg-gray-200"}`} />
               )}
             </div>
+          );
+        })}
+      </div>
+      {/* Labels row */}
+      <div className="flex justify-between mt-1">
+        {steps.map((step, i) => {
+          const isCompleted = effectiveIndex > i;
+          const isCurrent = effectiveIndex === i;
+          const isNext = effectiveIndex === i - 1;
+          const canClick = isNext && caseId && testOrderId;
+          return (
+            <span
+              key={step.key}
+              className={`text-[8px] leading-tight text-center flex-1 ${
+                isCurrent ? "font-bold text-blue-700"
+                : isCompleted ? "text-blue-600 font-medium"
+                : canClick ? "text-gray-400 cursor-pointer hover:text-blue-600"
+                : "text-gray-400"
+              }`}
+            >
+              {step.label}
+            </span>
           );
         })}
       </div>
