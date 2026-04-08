@@ -180,7 +180,18 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json(updated);
+    // Check if all tests on this case are now closed — prompt to close case
+    let promptCloseCase = false;
+    if (updateData.testStatus === "closed") {
+      const openTests = await prisma.testOrder.count({
+        where: { caseId, testStatus: { not: "closed" }, id: { not: testOrderId } },
+      });
+      if (openTests === 0) {
+        promptCloseCase = true;
+      }
+    }
+
+    return NextResponse.json({ ...updated, promptCloseCase });
   } catch (error) {
     console.error("Error updating test order:", error);
     return NextResponse.json({ error: "Failed to update test order" }, { status: 500 });

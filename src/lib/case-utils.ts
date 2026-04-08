@@ -26,27 +26,30 @@ export const TEST_STATUS_CONFIG = {
   awaiting_payment: { label: "Awaiting Payment", color: "bg-orange-100 text-orange-700" },
   payment_received: { label: "Payment Received", color: "bg-green-100 text-green-700" },
   specimen_collected: { label: "Specimen Collected", color: "bg-indigo-100 text-indigo-700" },
-  results_received: { label: "Results Received", color: "bg-teal-100 text-teal-700" },
-  results_released: { label: "Results Released", color: "bg-green-100 text-green-700" },
-  at_mro: { label: "At MRO", color: "bg-purple-100 text-purple-700" },
-  closed: { label: "Closed", color: "bg-gray-200 text-gray-500" },
+  sent_to_lab: { label: "Sent to Lab", color: "bg-purple-100 text-purple-700" },
+  results_received: { label: "Lab Results Received", color: "bg-teal-100 text-teal-700" },
+  results_released: { label: "Lab Results Released", color: "bg-green-100 text-green-700" },
+  at_mro: { label: "Results at MRO", color: "bg-purple-100 text-purple-700" },
+  mro_released: { label: "MRO Results Released", color: "bg-green-100 text-green-700" },
+  closed: { label: "Test Closed", color: "bg-gray-200 text-gray-500" },
   no_show: { label: "No Show", color: "bg-red-100 text-red-700" },
   cancelled: { label: "Cancelled", color: "bg-red-100 text-red-700" },
 } as const;
 
 /**
  * Family Law test status flow:
- * Order Created → Awaiting Payment → Payment Received → Specimen Collected →
- * Results Received → Results Released → At MRO (if needed)
- *
- * MRO comes AFTER results are released (family law specific)
+ * Order Created → Specimen Collected → Sent to Lab → Lab Results Received → Lab Results Released
+ *   → Close Test (no MRO needed)
+ *   → Results at MRO → MRO Results Released → Test Closed
  */
 export const TEST_STATUS_FLOW: Record<string, string[]> = {
   order_created: ["specimen_collected"],
-  specimen_collected: ["results_received"],
+  specimen_collected: ["sent_to_lab"],
+  sent_to_lab: ["results_received"],
   results_received: ["results_released"],
-  results_released: ["closed"],
-  at_mro: ["closed"],
+  results_released: ["closed", "at_mro"],  // staff chooses: close or send to MRO
+  at_mro: ["mro_released"],
+  mro_released: ["closed"],
   closed: [],
   no_show: ["order_created"],
   cancelled: [],

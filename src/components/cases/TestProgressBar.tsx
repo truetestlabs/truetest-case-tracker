@@ -1,18 +1,25 @@
 "use client";
 
-const STEPS = [
+const STANDARD_STEPS = [
   { key: "order_created", label: "Ordered" },
   { key: "specimen_collected", label: "Collected" },
   { key: "sent_to_lab", label: "Sent to Lab" },
-  { key: "results_received", label: "Results Received" },
-  { key: "results_released", label: "Results Released" },
+  { key: "results_received", label: "Lab Results" },
+  { key: "results_released", label: "Lab Released" },
 ];
+
+const MRO_STEPS = [
+  ...STANDARD_STEPS,
+  { key: "at_mro", label: "At MRO" },
+  { key: "mro_released", label: "MRO Released" },
+];
+
+const MRO_STATUSES = ["at_mro", "mro_released"];
 
 const SPECIAL_STATUSES: Record<string, { label: string; color: string }> = {
   no_show: { label: "No Show", color: "bg-red-100 text-red-700" },
   cancelled: { label: "Cancelled", color: "bg-red-100 text-red-700" },
-  at_mro: { label: "At MRO", color: "bg-purple-100 text-purple-700" },
-  closed: { label: "Closed", color: "bg-gray-200 text-gray-600" },
+  closed: { label: "Test Closed", color: "bg-gray-200 text-gray-600" },
   specimen_held: { label: "Held", color: "bg-amber-100 text-amber-700" },
 };
 
@@ -26,13 +33,15 @@ type Props = {
 
 export function TestProgressBar({ currentStatus, caseId, testOrderId, testDescription, onUpdated }: Props) {
   const isSweatPatch = testDescription?.toLowerCase().includes("sweat patch");
+  const isMROPath = MRO_STATUSES.includes(currentStatus);
+  const baseSteps = isMROPath ? MRO_STEPS : STANDARD_STEPS;
   const steps = isSweatPatch
-    ? STEPS.map((s) =>
+    ? baseSteps.map((s) =>
         s.key === "order_created" ? { ...s, label: "Patch Applied" }
         : s.key === "specimen_collected" ? { ...s, label: "Patch Removed" }
         : s
       )
-    : STEPS;
+    : baseSteps;
 
   const special = SPECIAL_STATUSES[currentStatus];
   const stepIndex = steps.findIndex((s) => s.key === currentStatus);
@@ -46,7 +55,22 @@ export function TestProgressBar({ currentStatus, caseId, testOrderId, testDescri
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ testOrderId, testStatus: statusKey }),
       });
-      if (res.ok) onUpdated?.();
+      if (res.ok) {
+        const data = await res.json();
+        onUpdated?.();
+        // If all tests are closed, prompt to close the case
+        if (data.promptCloseCase) {
+          const shouldClose = confirm("All tests on this case are now closed.\n\nWould you like to close the case?");
+          if (shouldClose) {
+            await fetch(`/api/cases/${caseId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ caseStatus: "closed" }),
+            });
+            onUpdated?.();
+          }
+        }
+      }
     } catch {
       // silent fail — user can retry
     }

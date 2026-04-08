@@ -178,9 +178,10 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
               <option value="specimen_collected">Specimen Collected</option>
               <option value="sent_to_lab">Sent to Lab</option>
               <option value="results_received">Results Received</option>
-              <option value="results_released">Results Released</option>
-              <option value="at_mro">At MRO</option>
-              <option value="closed">Closed</option>
+              <option value="results_released">Lab Results Released</option>
+              <option value="at_mro">Results at MRO</option>
+              <option value="mro_released">MRO Results Released</option>
+              <option value="closed">Test Closed</option>
               <option value="no_show">No Show</option>
               <option value="cancelled">Cancelled</option>
             </select>

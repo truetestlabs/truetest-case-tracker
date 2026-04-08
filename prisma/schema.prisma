@@ -94,6 +94,7 @@ enum TestStatus {
   specimen_held
   sent_to_lab
   at_mro
+  mro_released
   results_received
   awaiting_payment_for_release
   results_released
