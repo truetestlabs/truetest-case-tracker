@@ -326,7 +326,7 @@ export default function CaseDetailPage() {
                   <span className="text-xs text-red-500 font-medium">{collectionSentMsg}</span>
                 )}
                 {/* Results Held — Payment Required button */}
-                {!resultsHeldSent && caseData.testOrders.some((t) => t.testStatus === "results_received" && !t.paymentMethod) && (
+                {!resultsHeldSent && caseData.testOrders.some((t) => (t.testStatus === "results_received" || t.testStatus === "results_held") && !t.paymentMethod) && (
                   <button
                     onClick={async () => {
                       setSendingResultsHeld(true);
@@ -375,6 +375,41 @@ export default function CaseDetailPage() {
                     ✓ Sent to Lab Notice Sent
                   </span>
                 )}
+                {/* Send Results & Release (paid tests at results_received) */}
+                {caseData.testOrders.some((t) => t.testStatus === "results_received" && !!t.paymentMethod) && (
+                  <button
+                    onClick={async () => {
+                      setSendingResults(true);
+                      setResultsSentMsg(null);
+                      try {
+                        // First advance paid results_received tests to results_released
+                        for (const t of caseData.testOrders.filter((t) => t.testStatus === "results_received" && !!t.paymentMethod)) {
+                          await fetch(`/api/cases/${caseData.id}/test-orders`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ testOrderId: t.id, testStatus: "results_released" }),
+                          });
+                        }
+                        // Then send the results email with PDF
+                        const res = await fetch(`/api/cases/${caseData.id}/send-results`, { method: "POST" });
+                        const data = await res.json();
+                        if (res.ok) {
+                          setResultsSentMsg(`Results sent to ${data.sentTo.length} recipient${data.sentTo.length !== 1 ? "s" : ""}`);
+                        } else {
+                          setResultsSentMsg(data.error || "Failed to send");
+                        }
+                        loadCase();
+                      } catch { setResultsSentMsg("Failed to send"); }
+                      setSendingResults(false);
+                    }}
+                    disabled={sendingResults}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+                    style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #2a5490 100%)" }}
+                  >
+                    {sendingResults ? "Sending…" : "✉ Send Results & Release"}
+                  </button>
+                )}
+                {resultsSentMsg && <span className="text-xs text-green-600 font-medium">{resultsSentMsg}</span>}
                 <AddTestOrder caseId={caseData.id} onAdded={loadCase} />
               </div>
             </div>
