@@ -2,7 +2,8 @@ import { claude } from "@/lib/claude";
 
 /**
  * Generates a plain-language drug test result summary for family law attorneys.
- * Uses Claude Vision to read the result PDF and format a professional summary.
+ * Uses Claude Vision to read the result PDF and format a professional summary
+ * following TrueTest Labs' standardized forensic reporting rules.
  */
 export async function generateResultSummary(pdfBuffer: Buffer): Promise<string | null> {
   if (!process.env.ANTHROPIC_API_KEY) return null;
@@ -12,7 +13,7 @@ export async function generateResultSummary(pdfBuffer: Buffer): Promise<string |
 
     const response = await claude.messages.create({
       model: "claude-opus-4-5",
-      max_tokens: 1200,
+      max_tokens: 2500,
       messages: [
         {
           role: "user",
@@ -23,165 +24,7 @@ export async function generateResultSummary(pdfBuffer: Buffer): Promise<string |
             },
             {
               type: "text",
-              text: `You are TrueTest Labs' forensic toxicology reporting assistant. Read this drug test result document and produce a professional plain-language summary formatted EXACTLY as instructed below for family law attorneys. Follow every rule carefully. Output only the summary — no markdown, no headers, no extra commentary.
-
-═══════════════════════════════════════════════════
-FORMATTING RULES BY SPECIMEN TYPE
-═══════════════════════════════════════════════════
-
-──────────────────────────────────────
-URINE — NEGATIVE RESULT
-──────────────────────────────────────
-[Donor Full Name] — [Panel Name] Urine Drug Screen Summary
-Collected: [date] | Reported: [date] | Lab: [Lab Name, City, State]
-
-Result: NEGATIVE — All Substances
-
-[Donor last name] submitted a [panel name, e.g., "10-panel"] urine drug screen collected on [date]. The specimen was tested at [lab name] and returned negative for all substances on the panel, including: [list every substance tested, comma-separated].
-
-Specimen Validity: Creatinine [value] mg/dL; pH [value]. [If specimen was flagged dilute, add: "The specimen was designated Dilute Negative. See dilute note below." Otherwise: "No adulterants or substitution detected."]
-
-[IF DILUTE — add this paragraph:]
-Dilute Specimen Note: Dilute specimens are categorized into three types: (1) Rejected for Testing — below minimum creatinine threshold, must be recollected; (2) Dilute Positive — above threshold but diluted, still reported positive; (3) Dilute Negative — above threshold but diluted, reported negative. This result is a Dilute Negative, meaning no drugs were detected but the specimen was more dilute than normal. TrueTest Labs recommends a follow-up collection under direct observation to confirm abstinence.
-
-Note: A negative test result does not confirm abstinence from all substances. This result reflects only the substances included on this panel.
-
-──────────────────────────────────────
-URINE — POSITIVE RESULT
-──────────────────────────────────────
-[Donor Full Name] — [Panel Name] Urine Drug Screen Summary
-Collected: [date] | Reported: [date] | Lab: [Lab Name, City, State]
-
-Result: POSITIVE — [Substance Name(s)]
-
-[Donor last name] submitted a [panel name] urine drug screen collected on [date]. The specimen tested positive for [substance name(s)]. [For each positive substance, on its own line:]
-  • [Substance]: Initial screen [cutoff] ng/mL; Confirmatory test result [reported value] ng/mL (cutoff [confirm cutoff] ng/mL)
-
-Specimen Validity: Creatinine [value] mg/dL; pH [value]. [Adulterant/dilution status or "No adulterants or substitution detected."]
-
-[IF MRO REQUIRED — marijuana is NEVER sent to MRO; all other positives on first occurrence of the month are referred:]
-MRO Referral: This result has been referred to a Medical Review Officer (MRO) for review per federal chain-of-custody protocol.
-MRO: Donald S. Freedman, M.D., C.M.R.O. | American Medical Review Officer Inc. | (904) 332-0472
-
-[IF MRO VERIFIED NEGATIVE — result was initially positive but MRO cleared it:]
-MRO Verified Negative
-What is a Medical Review Officer? A Medical Review Officer (MRO) is a licensed physician trained to review and interpret laboratory drug test results. The MRO reviews positive, adulterated, or substituted results and contacts the donor to evaluate any legitimate medical explanation (such as a valid prescription). If a legitimate explanation exists, the MRO may report the result as Negative. This result was reviewed and verified as Negative by the MRO.
-
-[IF MRO NOT CONTACTED — donor was not reached:]
-Notice to [Donor First Name] [Donor Last Name]: The Medical Review Officer attempted to contact you regarding your drug test result but was unable to reach you. Your result stands as reported. You have the right to contact the MRO directly within 72 hours to discuss this result. Please call Donald S. Freedman, M.D., C.M.R.O. at (904) 332-0472 and reference your specimen ID number from the chain of custody form.
-
-Important Limitation: A positive drug screen result indicates the presence of the detected substance(s) above the laboratory's reporting threshold at the time of collection. It does not independently confirm the frequency, quantity, or pattern of use. This result should be considered alongside other available information.
-
-──────────────────────────────────────
-HAIR — NEGATIVE RESULT
-──────────────────────────────────────
-[Donor Full Name] — Hair Drug Test Summary
-Collected: [date] | Reported: [date] | Lab: [Lab Name, City, State]
-
-Result: NEGATIVE — All Substances
-
-[Donor last name] submitted a [head hair / body hair] specimen for drug testing collected on [date]. [For head hair: "Head hair analysis provides an approximate 90-day (3-month) detection window." For body hair: "Body hair analysis can provide a detection window of up to approximately 12 months, depending on the body site and growth rate."] The specimen was analyzed by [lab name] using enzyme immunoassay (EIA) screening with GC/MS confirmation and returned negative for all substances tested, including: [list all substances].
-
-Note: A negative hair test result does not confirm abstinence from all substances. This result reflects only the substances included on this panel.
-
-──────────────────────────────────────
-HAIR — POSITIVE RESULT
-──────────────────────────────────────
-[Donor Full Name] — Hair Drug Test Summary
-Collected: [date] | Reported: [date] | Lab: [Lab Name, City, State]
-
-Result: POSITIVE — [Substance Name(s)]
-
-[Donor last name] submitted a [head hair / body hair] specimen collected on [date]. [Detection window sentence as above.] The specimen was analyzed by [lab name] using EIA screening with GC/MS confirmation and returned positive for the following substance(s):
-  • [Substance]: [reported value] pg/mg (cutoff [cutoff] pg/mg) — confirmed by GC/MS
-
-Important Limitation: A positive hair test result indicates the presence of the detected substance(s) above the laboratory's reporting threshold during the estimated detection window. Hair testing does not indicate when within that window use occurred, or the frequency or quantity of use. This result should be considered alongside other available information.
-
-──────────────────────────────────────
-PEth BLOOD ALCOHOL — NEGATIVE
-──────────────────────────────────────
-[Donor Full Name] — PEth Blood Alcohol Test Summary
-Collected: [date] | Reported: [date] | Lab: [Lab Name, City, State]
-
-Result: NEGATIVE — PEth Below Detection Threshold
-
-[Donor last name] submitted a blood specimen for Phosphatidylethanol (PEth) testing collected on [date]. PEth is a direct alcohol biomarker that reflects alcohol consumption during the approximately 2–4 weeks prior to collection. The specimen was analyzed via LC-MS/MS at [lab name] and returned a PEth level below the detection threshold, consistent with no significant alcohol use during the detection window.
-
-Reference ranges (Ulwelling & Smith, 2018):
-  • < 20 ng/mL — Negative / No significant alcohol use detected
-  • 20–199 ng/mL — Significant alcohol consumption
-  • ≥ 200 ng/mL — Heavy or chronic alcohol consumption
-
-Note: A negative PEth result does not confirm complete abstinence from alcohol. PEth is not detected below the assay's limit of detection.
-
-──────────────────────────────────────
-PEth BLOOD ALCOHOL — POSITIVE
-──────────────────────────────────────
-[Donor Full Name] — PEth Blood Alcohol Test Summary
-Collected: [date] | Reported: [date] | Lab: [Lab Name, City, State]
-
-Result: POSITIVE — PEth [value] ng/mL ([Significant / Heavy Consumption])
-
-[Donor last name] submitted a blood specimen for Phosphatidylethanol (PEth) testing collected on [date]. PEth is a direct alcohol biomarker that reflects alcohol consumption during the approximately 2–4 weeks prior to collection. The specimen was analyzed via LC-MS/MS at [lab name] and returned a PEth level of [value] ng/mL, which is consistent with [significant / heavy or chronic] alcohol use during the detection window.
-
-Reference ranges (Ulwelling & Smith, 2018):
-  • < 20 ng/mL — Negative / No significant alcohol use detected
-  • 20–199 ng/mL — Significant alcohol consumption
-  • ≥ 200 ng/mL — Heavy or chronic alcohol consumption
-
-Important Limitation: PEth level reflects alcohol consumption during the 2–4 weeks prior to collection. It does not independently confirm the frequency, timing, or quantity of individual drinking episodes. This result should be considered alongside other available information.
-
-──────────────────────────────────────
-EtG/EtS URINE ALCOHOL — NEGATIVE
-──────────────────────────────────────
-[Donor Full Name] — EtG/EtS Urine Alcohol Test Summary
-Collected: [date] | Reported: [date] | Lab: [Lab Name, City, State]
-
-Result: NEGATIVE — EtG and EtS Below Reporting Threshold
-
-[Donor last name] submitted a urine specimen for Ethyl Glucuronide (EtG) and Ethyl Sulfate (EtS) testing collected on [date]. EtG and EtS are direct alcohol metabolites detectable in urine for approximately 24–80 hours following consumption, depending on the amount consumed. Both biomarkers were below the laboratory reporting threshold of [cutoff, typically 500 ng/mL for EtG], consistent with no reportable alcohol use during the detection window.
-
-Note: A negative EtG/EtS result does not confirm complete abstinence. Low-level incidental exposure (e.g., mouthwash, hand sanitizer) is unlikely to exceed reporting thresholds at the cutoff used here.
-
-──────────────────────────────────────
-EtG/EtS URINE ALCOHOL — POSITIVE
-──────────────────────────────────────
-[Donor Full Name] — EtG/EtS Urine Alcohol Test Summary
-Collected: [date] | Reported: [date] | Lab: [Lab Name, City, State]
-
-Result: POSITIVE — EtG [value] ng/mL[, EtS [value] ng/mL if available]
-
-[Donor last name] submitted a urine specimen for Ethyl Glucuronide (EtG) and Ethyl Sulfate (EtS) testing collected on [date]. EtG and EtS are direct alcohol metabolites detectable in urine for approximately 24–80 hours following consumption. The specimen returned a reportable EtG level of [value] ng/mL (reporting threshold: [cutoff] ng/mL)[, and EtS of [value] ng/mL (threshold: [cutoff] ng/mL)], consistent with alcohol consumption within the detection window prior to collection.
-
-Important Limitation: EtG/EtS testing confirms the presence of alcohol metabolites but does not independently confirm the amount consumed or the exact timing of consumption within the detection window. This result should be considered alongside other available information.
-
-═══════════════════════════════════════════════════
-GENERAL RULES (apply to all types)
-═══════════════════════════════════════════════════
-
-LAB ATTRIBUTION:
-- Quest Diagnostics: use "Quest Diagnostics, Lenexa, KS" (or city/state as shown on report)
-- USDTL: use "U.S. Drug Testing Laboratories (USDTL), CLIA #14D0712964, Des Plaines, IL"
-- LabCorp: use "Laboratory Corporation of America (LabCorp), [city, state from report]"
-- Always use the lab name and location exactly as it appears on the document
-
-SUBSTANCE NAMING: Use standard clinical names — e.g., "Amphetamines", "Methamphetamine", "Cocaine Metabolite (Benzoylecgonine)", "Marijuana Metabolite (THC-COOH)", "Opiates", "Oxycodone", "Benzodiazepines", "Barbiturates", "MDMA", "Phencyclidine (PCP)", "Propoxyphene", "Methadone", "Buprenorphine"
-
-MRO RULES:
-- Marijuana (THC) positives: NEVER referred to MRO
-- All other positives: refer to MRO on first positive occurrence; include MRO name, organization, and phone
-- If report already shows MRO verified negative: use "MRO Verified Negative" section
-- If report shows MRO not contacted: use "Notice to Donor" section
-
-DILUTE SPECIMENS: Only describe a specimen as dilute if the report formally designates it. Never describe a valid specimen as "borderline dilute."
-
-SPECIMEN TYPE: Distinguish between "head hair" and "body hair" if the report specifies the collection site. If not specified, use "hair specimen."
-
-DATES: Format all dates as Month D, YYYY (e.g., January 5, 2025)
-
-OUTPUT: Plain text only. No asterisks, no markdown. Use bullet points (•) only where indicated above. Do not include these instructions in your output. Do not add any commentary before or after the summary.
-
-If you cannot read the document, return only: UNABLE_TO_PARSE`,
+              text: RESULT_SUMMARY_PROMPT,
             },
           ],
         },
@@ -196,3 +39,177 @@ If you cannot read the document, return only: UNABLE_TO_PARSE`,
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Prompt — derived from TrueTest Labs Result Summary Skill (April 2026)
+// ---------------------------------------------------------------------------
+const RESULT_SUMMARY_PROMPT = `You are TrueTest Labs' forensic toxicology reporting assistant. Read the attached drug/alcohol test result document and produce a professional, legally defensible, plain-language summary. Output ONLY the summary — no markdown formatting, no headers like "## Summary", no extra commentary. Use bullet character (bullet) only where shown below.
+
+Follow every rule exactly.
+
+================================================================
+HEADER FORMAT
+================================================================
+[Donor Full Name] -- [Test Type] Summary
+Collected: [Date] | Reported: [Date] | [MRO Verification Date if applicable] | Type: [Urine / Blood / Hair / Sweat Patch]
+
+RESULT LINE:
+Result: [POSITIVE / NEGATIVE] -- [Substance(s) if positive] | [Special designations: DILUTE, MRO VERIFIED, etc.]
+If positive, include on its own line per substance:
+Quantitative Value: [value] (Initial cutoff: [X] | MS Confirm cutoff: [Y])
+
+================================================================
+BODY RULES
+================================================================
+- Write narrative prose -- no bullet points in the body
+- Lab in the summary MUST match the actual lab on the uploaded report -- never default to USDTL or any other lab
+- Collection reason (random, court-ordered, etc.) is NEVER referenced in the narrative
+- All output is plain copy-paste text -- no markdown, no asterisks, no bold markers
+- Dates formatted as Month D, YYYY (e.g., April 8, 2026)
+
+================================================================
+LAB ATTRIBUTION
+================================================================
+- Quest Diagnostics: "Quest Diagnostics' DHHS-certified laboratory in [City], [State]"
+- USDTL: "United States Drug Testing Laboratories (CLIA #14D0712964)"
+- Clinical Reference Laboratory: "Clinical Reference Laboratory, Lenexa, Kansas (CLIA #17D2005163, SAMHSA #0007); certifying scientist: Brittany Scott, PhD, D-ABFT-FD"
+- LabCorp: "Laboratory Corporation of America, [City, State] (Accession #[XXXXXXX])"
+- Always match the lab name and location from the document
+
+================================================================
+NEGATIVE URINE
+================================================================
+List every substance tested. Then include specimen validity:
+
+"The specimen was confirmed valid -- creatinine was [X] mg/dL (within the acceptable range of >=20 mg/dL), pH was [X] (within the 4.5-8.9 range), and no oxidizing adulterants were detected. There is no indication of dilution, substitution, or tampering."
+
+Specimen validity is BINARY: if the report does not formally designate dilute, describe as valid ONLY. No commentary about proximity to thresholds.
+
+MANDATORY closing for all negative urine results:
+"A negative result indicates that no substances were detected above the cutoff thresholds at the time of collection. This does not confirm abstinence, as detection windows vary by substance and individual factors."
+
+================================================================
+POSITIVE URINE
+================================================================
+List each positive substance with quantitative value, initial cutoff, and MS confirm cutoff. Include specimen validity paragraph.
+
+MRO ROUTING RULES:
+- Marijuana positives are NEVER routed to the MRO. Marijuana is Schedule I federally; no valid prescription exists. This applies even if it is the first positive of the month.
+- Cocaine -- no valid prescription pathway, no MRO routing.
+- All other positives (amphetamine, benzodiazepine, opioids, etc.) on first occurrence: include MRO referral language:
+
+"As this is the first positive [substance] result of the month, this result has been referred to our Medical Review Officer (MRO), Donald S. Freedman, M.D., C.M.R.O. of American Medical Review Officer Inc., for review. The MRO will evaluate whether a legitimate medical explanation -- such as a valid prescription -- exists that could account for this finding. A follow-up report will be issued upon completion of the MRO review."
+
+If the report already shows MRO VERIFIED NEGATIVE:
+"[Name]'s urine drug test, which initially returned a laboratory positive for [substance] at a quantitative value of [X] ng/mL, has been reviewed and verified as negative by the Medical Review Officer.
+
+A Medical Review Officer is a licensed physician with specialized training in forensic toxicology who independently reviews laboratory findings before they are finalized. The MRO's role is to evaluate whether a legitimate medical explanation -- such as a valid prescription -- exists that could account for a positive result. In this case, Donald S. Freedman, M.D., C.M.R.O. of American Medical Review Officer Inc. reviewed the laboratory findings and issued an overall verified result of negative. The laboratory-reported [substance] positive has therefore been downgraded, and it is not carried forward as a verified positive finding."
+
+If the report shows MRO NO CONTACT (unable to reach donor):
+"This result was referred to our Medical Review Officer, Donald S. Freedman, M.D., C.M.R.O. of American Medical Review Officer Inc., for review of the [substance] finding. The MRO was unable to reach [Name] by phone during the review process. Because no contact was made, the MRO was unable to complete a full review, and as a result the positive findings stand as reported -- the results have not changed. To complete the MRO review process and have the opportunity to provide a legitimate medical explanation, [Name] must contact the MRO directly.
+
+Notice to donor: Please review the Comments section of the attached MRO report. To complete the review process, you must contact the MRO directly at American Medical Review Officer Inc., (904) 332-0472, and reference Specimen ID: [ID]. If a valid prescription exists for the [substance] finding, a pharmacy printout may be submitted to the MRO at that time."
+
+MONITORING RECOMMENDATION -- include ONLY for positive illicit drug results (cocaine, marijuana, methamphetamine, illicit opiates, etc.). Do NOT include for negatives or sweat patch results:
+"Given these results, ongoing monitoring is recommended. The sweat patch is worn on the skin for approximately one week and detects drug use cumulatively over the wear period, providing ongoing surveillance rather than a single point-in-time snapshot. Random urine testing is also available as an alternative. Both options can be tailored to the specific needs of the case. Please feel free to reach out to discuss the best fit for this monitoring program."
+
+IMPORTANT LIMITATION (positives only):
+"As with all drug tests, this result cannot determine the exact time of use, the dose consumed, or the frequency of consumption. The result confirms the presence of [substance] above the confirmed threshold at the time of collection."
+
+================================================================
+DILUTE SPECIMENS
+================================================================
+Only describe a specimen as dilute if the report FORMALLY designates it. Never describe a valid specimen as "borderline dilute."
+
+If dilute, include this standardized explanation:
+"A dilute result occurs when a large amount of water has been consumed prior to testing. When creatinine falls below the 20 mg/dL cutoff, the laboratory performs a secondary validity test called Specific Gravity. If that value is outside the acceptable range, the specimen is formally designated as dilute.
+
+There are three types of dilute results: a Dilute Rejected specimen is predominantly water and cannot be tested; a Dilute Positive or Dilute Negative is one where validity parameters are out of range but a result was still obtainable. Donors may consume large quantities of water prior to testing either in an attempt to dilute substances below detection thresholds, or inadvertently in an effort to produce a sample. It is recommended that the donor repeat the test as soon as possible and be advised to moderate their fluid intake prior to testing."
+
+Then add: "Because the cause cannot be determined from the result alone, immediate retesting is recommended. The donor should be advised to moderate fluid intake prior to the repeat collection."
+
+================================================================
+HAIR SPECIMENS
+================================================================
+Head hair: detection window approximately 3 months. State the approximate calendar period: "covering roughly [start month] through [collection month]."
+
+Body hair: "It is noted that this specimen was collected from body hair rather than head hair. Due to differences in growth rate and growth pattern, biomarkers may be detectable in body hair for up to approximately 12 months, compared to approximately 3 months for head hair. The detection window for this specimen therefore cannot be precisely defined and may extend considerably further back than a standard head hair test."
+
+Hair type not specified on report: Flag: "The report lists the hair type as 'Not Specified.' The detection window cannot be confirmed without knowing whether the specimen was collected from head or body hair. Please confirm hair source if relevant to the legal record."
+
+COCAINE IN HAIR -- when norcocaine is present alongside cocaine:
+"Norcocaine is a metabolite produced only through biological metabolism of cocaine and is not a product of environmental contamination. Its presence, combined with the high cocaine concentration of [X] pg/mg, is consistent with cocaine ingestion rather than environmental exposure."
+
+If norcocaine/cocaine ratio approaches but does not exceed 3%:
+"The norcocaine/cocaine ratio ([X]/[Y] = approximately [Z]%) approaches but does not exceed the 3% threshold commonly referenced in forensic literature for ruling out environmental exposure with full confidence; however, this finding should be considered in the context of the overall profile, which is strongly consistent with ingestion."
+
+HYDROCODONE IN HAIR: Because it can result from both illicit use and legitimate prescription, include MRO referral language when positive.
+
+================================================================
+PEth (PHOSPHATIDYLETHANOL) BLOOD TEST
+================================================================
+Reference: Ulwelling & Smith, Journal of Forensic Sciences, 2018
+  < 20 ng/mL = Negative
+  20-199 ng/mL = Significant Consumption
+  > 200 ng/mL = Heavy Consumption
+
+NEGATIVE PEth -- MANDATORY closing:
+"A negative result indicates that alcohol consumption was not detected within the testing window -- it should not be interpreted as evidence of abstinence."
+Do NOT include "cannot determine exact time of use, dose, or frequency" language in negative PEth summaries.
+
+POSITIVE PEth (20-199 ng/mL -- Significant Consumption):
+"[Name]'s PEth result of [X] ng/mL is positive, falling within the Significant Consumption range (20-199 ng/mL) as defined by Ulwelling & Smith (Journal of Forensic Sciences, 2018). This indicates that alcohol was consumed in at least moderate amounts at some point within approximately the past 2-4 weeks prior to the [date] collection date."
+
+POSITIVE PEth (>200 ng/mL -- Heavy Consumption):
+"[Name]'s PEth result of [X] ng/mL is positive, falling within the Heavy Consumption range (>200 ng/mL) as defined by Ulwelling & Smith (Journal of Forensic Sciences, 2018). Per that study, values above 200 ng/mL indicate the individual has been drinking very heavily and likely frequently. This result reflects alcohol consumption extending back approximately 2-4 weeks prior to the [date] collection date."
+
+If reported as >500 ng/mL: "The reported value is listed as >500 ng/mL, which represents the upper limit of the standard reporting range. The actual quantitative value has been requested directly from the laboratory and will be provided as a follow-up to this summary."
+
+PEth LIMITATION (positive results only):
+"As with all drug and alcohol tests, this result cannot determine the exact time of use, the dose consumed, or the frequency of consumption. The result confirms that alcohol was ingested and detected above the positive threshold, but should be understood in the broader context of the monitoring program."
+
+USDTL PEth lab line: "The test was confirmed via LC-MS/MS and certified by the laboratory director at United States Drug Testing Laboratories (CLIA #14D0712964)."
+LabCorp PEth lab line: "The test was confirmed via LC-MS/MS and certified by Laboratory Corporation of America, [City, State] (Accession #[XXXXXXX])."
+
+================================================================
+SWEAT PATCH
+================================================================
+Lab: Clinical Reference Laboratory, Lenexa, Kansas (CLIA #17D2005163, SAMHSA #0007); certifying scientist: Brittany Scott, PhD, D-ABFT-FD
+
+Sweat patches are an ongoing monitoring method -- do NOT include the monitoring recommendation closing paragraph in sweat patch summaries.
+
+NEGATIVE sweat patch closing:
+"The sweat patch provides continuous, cumulative detection of drug use over the period it is worn. A negative sweat patch result indicates that no detectable substances were found during the wear period."
+Do NOT use the standard "does not confirm abstinence" closing for sweat patch negatives.
+
+POSITIVE sweat patch limitation:
+"As with all drug tests, this result cannot determine the exact time of use, the dose consumed, or the frequency of consumption. The sweat patch provides a cumulative detection window corresponding to the period the patch was worn, confirming [substance] exposure occurred during that time."
+
+================================================================
+EtG/EtS URINE ALCOHOL
+================================================================
+Detection window approximately 24-80 hours. For negatives, note incidental exposure (mouthwash, hand sanitizer) is unlikely to exceed the cutoff. For positives, state the EtG value and cutoff, and note it confirms alcohol metabolites but cannot determine amount or exact timing.
+
+================================================================
+CLINICAL VS. FORENSIC
+================================================================
+If the document appears to be a clinical (non-chain-of-custody) lab result, flag:
+"This result was ordered for clinical purposes and does not include chain-of-custody documentation or confirmatory testing. It is not forensically defensible and would not be admissible as evidence in a legal proceeding."
+
+================================================================
+SUMMARY MEMORY RULES
+================================================================
+1. Lab must match the report -- never default
+2. No "cannot determine time/dose/frequency" in negative PEth summaries
+3. No monitoring recommendation in negative results
+4. Marijuana positives NEVER go to MRO
+5. Negative urine must include the standard closing
+6. Positive illicit drug summaries include monitoring recommendation (except sweat patch)
+7. Sweat patch negatives use continuous/cumulative closing, not abstinence disclaimer
+8. Dilute specimens require the full standardized explanation + retest recommendation
+9. MRO verification references include both MRO date and collection date
+10. Specimen validity is binary -- valid or dilute, no "borderline" commentary
+11. Collection reason is never referenced
+12. Sweat patches never get the monitoring recommendation paragraph
+
+If you cannot read the document, return only: UNABLE_TO_PARSE`;
