@@ -673,3 +673,82 @@ export async function sendResultsHeldEmail(
 
   return emailList;
 }
+
+/** Send payment received + sample shipping to lab notification */
+export async function sendPaymentReceivedEmail(
+  caseId: string,
+  testOrderIds: string[]
+): Promise<string[]> {
+  if (!process.env.RESEND_API_KEY || !testOrderIds.length) return [];
+
+  const [recipients, caseData, testOrders] = await Promise.all([
+    getEmailRecipients(caseId, "status"),
+    prisma.case.findUnique({
+      where: { id: caseId },
+      select: { caseNumber: true, donor: { select: { firstName: true, lastName: true } } },
+    }),
+    prisma.testOrder.findMany({
+      where: { id: { in: testOrderIds } },
+      select: { testDescription: true },
+    }),
+  ]);
+
+  if (!recipients.length || !caseData) return [];
+
+  const donorName = caseData.donor
+    ? `${caseData.donor.firstName} ${caseData.donor.lastName}`
+    : "the donor";
+
+  const testList = testOrders.length === 1
+    ? `<p style="color:#64748b;font-size:13px;margin:0 0 20px;">${testOrders[0].testDescription}</p>`
+    : `<ul style="margin:0 0 20px;padding-left:20px;color:#334155;font-size:14px;line-height:1.8;">${testOrders.map(t => `<li>${t.testDescription}</li>`).join("")}</ul>`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;">
+  <div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
+    <div style="background:#059669;padding:24px 32px;">
+      <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">TrueTest Labs</p>
+      <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;">Payment Received — Sample Sent to Lab</h1>
+    </div>
+    <div style="padding:28px 32px;">
+      <p style="color:#334155;font-size:15px;margin:0 0 4px;">Payment has been received for:</p>
+      <p style="color:#0f172a;font-size:18px;font-weight:700;margin:0 0 4px;">${donorName}</p>
+      <p style="color:#64748b;font-size:13px;margin:0 0 16px;">Case No. ${caseData.caseNumber}</p>
+      ${testList}
+      <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:16px;margin:20px 0;">
+        <p style="color:#065f46;font-size:13px;font-weight:600;margin:0 0 6px;">Sample Being Processed</p>
+        <p style="color:#064e3b;font-size:13px;margin:0;">Your payment has been received and your specimen is now being sent to the lab for processing. Results will be released once testing is complete.</p>
+      </div>
+      <div style="border-top:1px solid #e2e8f0;padding-top:20px;">
+        <p style="color:#475569;font-size:13px;margin:0 0 8px;">Questions? Contact our office:</p>
+        <p style="color:#1e3a5f;font-size:14px;font-weight:600;margin:0;">${OFFICE_PHONE}</p>
+        <p style="color:#64748b;font-size:13px;margin:4px 0 0;">${OFFICE_ADDRESS}</p>
+      </div>
+    </div>
+    <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
+      <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;">This notification was sent by TrueTest Labs Case Management System. Do not reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const emailList = recipients.map((r) => r.email);
+
+  const { data: sendData, error: sendError } = await getResend().emails.send({
+    from: FROM_EMAIL,
+    replyTo: REPLY_TO,
+    to: emailList,
+    subject: `Payment Received — ${caseData.donor?.lastName ?? donorName} (${caseData.caseNumber})`,
+    html,
+  });
+  if (sendError) {
+    console.error("[Email] Resend error (payment received):", sendError);
+    throw new Error(sendError.message);
+  }
+  console.log("[Email] payment-received sent, id:", sendData?.id);
+
+  return emailList;
+}

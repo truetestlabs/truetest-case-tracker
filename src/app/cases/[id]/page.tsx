@@ -118,6 +118,8 @@ export default function CaseDetailPage() {
   const [collectionConfirmed, setCollectionConfirmed] = useState(false);
   const [sendingResultsHeld, setSendingResultsHeld] = useState(false);
   const [resultsHeldSent, setResultsHeldSent] = useState(false);
+  const [sendingPaymentReceived, setSendingPaymentReceived] = useState(false);
+  const [paymentReceivedSent, setPaymentReceivedSent] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0);
   const [showAllLogs, setShowAllLogs] = useState(false);
@@ -151,6 +153,9 @@ export default function CaseDetailPage() {
         }
         if (data.statusLogs?.some((log: { note?: string; notificationSent?: boolean }) => log.notificationSent && log.note?.toLowerCase().includes("collection confirmation"))) {
           setCollectionConfirmed(true);
+        }
+        if (data.statusLogs?.some((log: { note?: string; notificationSent?: boolean }) => log.notificationSent && log.note?.toLowerCase().includes("payment received"))) {
+          setPaymentReceivedSent(true);
         }
       })
       .catch((err) => { setError(err.message); setLoading(false); });
@@ -342,6 +347,32 @@ export default function CaseDetailPage() {
                 {resultsHeldSent && (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white opacity-60 cursor-default" style={{ background: "#b45309" }}>
                     ✓ Payment Notice Sent
+                  </span>
+                )}
+                {/* Payment Received — Send to Lab button */}
+                {!paymentReceivedSent && caseData.testOrders.some((t) =>
+                  (t.testStatus === "specimen_collected" || t.testStatus === "specimen_held") && !!t.paymentMethod
+                ) && (
+                  <button
+                    onClick={async () => {
+                      setSendingPaymentReceived(true);
+                      try {
+                        const res = await fetch(`/api/cases/${caseData.id}/send-payment-received`, { method: "POST" });
+                        if (res.ok) { setPaymentReceivedSent(true); loadCase(); }
+                        else { const d = await res.json(); alert(d.error || "Failed"); }
+                      } catch { alert("Failed to send"); }
+                      setSendingPaymentReceived(false);
+                    }}
+                    disabled={sendingPaymentReceived}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+                    style={{ background: "linear-gradient(135deg, #059669 0%, #047857 100%)" }}
+                  >
+                    {sendingPaymentReceived ? "Sending…" : "✉ Payment Received — Send to Lab"}
+                  </button>
+                )}
+                {paymentReceivedSent && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white opacity-60 cursor-default" style={{ background: "#059669" }}>
+                    ✓ Sent to Lab Notice Sent
                   </span>
                 )}
                 <AddTestOrder caseId={caseData.id} onAdded={loadCase} />
