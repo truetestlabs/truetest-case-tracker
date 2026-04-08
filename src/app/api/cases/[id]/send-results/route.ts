@@ -3,15 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { sendResultsReleasedEmail } from "@/lib/email";
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: caseId } = await params;
+  const { searchParams } = new URL(request.url);
+  const mroReview = searchParams.get("mro") === "true";
 
   try {
-    // Find the most recent released test order
+    // Find the most recent released or at_mro test order
     const testOrder = await prisma.testOrder.findFirst({
-      where: { caseId, testStatus: "results_released" },
+      where: { caseId, testStatus: { in: ["results_released", "at_mro"] } },
       orderBy: { updatedAt: "desc" },
     });
 
@@ -19,8 +21,8 @@ export async function POST(
       return NextResponse.json({ error: "No released test order found" }, { status: 400 });
     }
 
-    const sentTo = await sendResultsReleasedEmail(caseId, testOrder.id);
-    console.log("[Email] results manual send to:", sentTo);
+    const sentTo = await sendResultsReleasedEmail(caseId, testOrder.id, { mroReview });
+    console.log("[Email] results manual send to:", sentTo, mroReview ? "(MRO)" : "");
 
     if (sentTo.length === 0) {
       return NextResponse.json({ error: "No recipients found — add contacts with Receives Results checked" }, { status: 400 });
@@ -31,10 +33,10 @@ export async function POST(
       data: {
         caseId,
         testOrderId: testOrder.id,
-        oldStatus: "results_released",
-        newStatus: "results_released",
+        oldStatus: testOrder.testStatus,
+        newStatus: testOrder.testStatus,
         changedBy: "admin",
-        note: "Results email manually sent",
+        note: mroReview ? "Results email sent (with MRO review notice)" : "Results email manually sent",
         notificationSent: true,
         notificationRecipients: sentTo,
       },

@@ -68,7 +68,8 @@ export async function getEmailRecipients(
 /** Send results-released email with AI-generated summary */
 export async function sendResultsReleasedEmail(
   caseId: string,
-  testOrderId: string
+  testOrderId: string,
+  options?: { mroReview?: boolean }
 ): Promise<string[]> {
   if (!process.env.RESEND_API_KEY) return [];
 
@@ -120,6 +121,11 @@ export async function sendResultsReleasedEmail(
       <p style="color:#64748b;font-size:13px;margin:0 0 24px;">Case No. ${caseData.caseNumber}${testOrder ? ` &bull; ${testOrder.testDescription}` : ""}</p>
 
       ${summaryHtml}
+
+      ${options?.mroReview ? `<div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:16px;margin:20px 0;">
+        <p style="color:#5b21b6;font-size:13px;font-weight:600;margin:0 0 6px;">Medical Review Officer (MRO) Review</p>
+        <p style="color:#4c1d95;font-size:13px;margin:0;">Please note: These results are being forwarded to a Medical Review Officer (MRO) for additional review. If the MRO determines that a valid prescription explains the test result, the final report may differ from the laboratory findings above. You will be notified once the MRO review is complete.</p>
+      </div>` : ""}
 
       <div style="border-top:1px solid #e2e8f0;margin-top:24px;padding-top:20px;">
         <p style="color:#475569;font-size:13px;margin:0 0 8px;">Questions? Contact our office:</p>

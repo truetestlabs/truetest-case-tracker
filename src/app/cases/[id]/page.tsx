@@ -480,14 +480,24 @@ export default function CaseDetailPage() {
                             ? <p className="text-[10px] text-green-600 mt-1.5">✓ Sent to lab notice sent</p>
                             : <button onClick={async (e) => { e.stopPropagation(); const r = await fetch(`/api/cases/${caseData.id}/send-payment-received`, { method: "POST" }); if (r.ok) loadCase(); else alert((await r.json()).error || "Failed"); }} className="mt-1.5 w-full text-[10px] px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700 font-semibold">✉ Payment Received — Send to Lab</button>;
                         }
-                        // Results received + paid → send results & release
+                        // Results received + paid → two options: release or release → MRO
                         if (test.testStatus === "results_received" && !!test.paymentMethod) {
-                          return <button onClick={async (e) => {
-                            e.stopPropagation();
-                            await fetch(`/api/cases/${caseData.id}/test-orders`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ testOrderId: test.id, testStatus: "results_released" }) });
-                            await fetch(`/api/cases/${caseData.id}/send-results`, { method: "POST" });
-                            loadCase();
-                          }} className="mt-1.5 w-full text-[10px] px-2 py-1 rounded bg-blue-700 text-white hover:bg-blue-800 font-semibold">✉ Send Results & Release</button>;
+                          return (
+                            <div className="mt-1.5 flex gap-1">
+                              <button onClick={async (e) => {
+                                e.stopPropagation();
+                                await fetch(`/api/cases/${caseData.id}/test-orders`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ testOrderId: test.id, testStatus: "results_released" }) });
+                                await fetch(`/api/cases/${caseData.id}/send-results`, { method: "POST" });
+                                loadCase();
+                              }} className="flex-1 text-[10px] px-2 py-1.5 rounded bg-blue-700 text-white hover:bg-blue-800 font-semibold">✉ Release Results</button>
+                              <button onClick={async (e) => {
+                                e.stopPropagation();
+                                await fetch(`/api/cases/${caseData.id}/test-orders`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ testOrderId: test.id, testStatus: "at_mro" }) });
+                                await fetch(`/api/cases/${caseData.id}/send-results?mro=true`, { method: "POST" });
+                                loadCase();
+                              }} className="flex-1 text-[10px] px-2 py-1.5 rounded bg-purple-700 text-white hover:bg-purple-800 font-semibold">✉ Release → MRO</button>
+                            </div>
+                          );
                         }
                         // Results received/held + unpaid → results held notice
                         if ((test.testStatus === "results_received" || test.testStatus === "results_held") && !test.paymentMethod) {
