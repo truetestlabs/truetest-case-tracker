@@ -142,10 +142,14 @@ export async function PATCH(
       }
     }
 
+    console.log("[PATCH test-order] updating:", testOrderId, "data keys:", Object.keys(data), "collectionDate:", data.collectionDate);
+
     const updated = await prisma.testOrder.update({
       where: { id: testOrderId },
       data,
     });
+
+    console.log("[PATCH test-order] saved collectionDate:", updated.collectionDate);
 
     // Log status change + trigger email notifications
     if (updateData.testStatus && updateData.testStatus !== existing.testStatus) {
