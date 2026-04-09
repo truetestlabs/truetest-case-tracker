@@ -5,6 +5,9 @@ import { claude } from "@/lib/claude";
 import { generateResultSummary } from "@/lib/resultSummary";
 import { uploadFile } from "@/lib/storage";
 
+// Allow longer execution for AI summary generation on upload
+export const maxDuration = 60;
+
 /** Extract specimen ID and collection date from a USDTL chain of custody PDF.
  *  First tries text extraction (works for typed PDFs).
  *  Falls back to Claude Vision for scanned images. */
