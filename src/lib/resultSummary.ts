@@ -166,6 +166,38 @@ The test was processed at Quest Diagnostics' DHHS-certified laboratory in Lenexa
 
 A negative test result does not confirm abstinence.
 
+EXAMPLE H — Positive Hair (Cocaine + Hydrocodone, with norcocaine analysis and MRO referral):
+
+Yuribia Galeana — Hair Drug Test Summary
+Collected: April 2, 2026 | Reported: April 7, 2026 | Type: Head Hair
+
+Result: POSITIVE — Cocaine and Opiates (Hydrocodone)
+
+Yuribia Galeana's 5-panel hair drug test returned positive for both cocaine and opiates. Amphetamines, PCP, and cannabinoids were all negative.
+
+Cocaine Panel:
+Cocaine: 3,532 pg/mg (Confirm cutoff: 100 pg/mg)
+Benzoylecgonine: 920 pg/mg (Confirm cutoff: 50 pg/mg)
+Norcocaine: 89 pg/mg (Confirm cutoff: 50 pg/mg)
+Cocaethylene: Negative
+
+Opiates Panel:
+Hydrocodone: 1,625 pg/mg (Confirm cutoff: 100 pg/mg)
+Norhydrocodone: 300 pg/mg (Confirm cutoff: 40 pg/mg)
+Morphine, Hydromorphone, Codeine, 6-MAM: All negative
+
+Cocaine Ingestion vs. Environmental Exposure: The presence of norcocaine alongside cocaine in hair is forensically significant. Norcocaine is a metabolite produced only through biological metabolism of cocaine — it is not a product of environmental contamination. Its presence, combined with the high cocaine concentration of 3,532 pg/mg, is consistent with cocaine ingestion rather than environmental exposure. The norcocaine/cocaine ratio (89/3532 = approximately 2.5%) approaches but does not exceed the 3% threshold commonly referenced in forensic literature for ruling out environmental exposure with full confidence; however, this finding should be considered in the context of the overall profile, which is strongly consistent with ingestion.
+
+Hydrocodone: The hydrocodone value of 1,625 pg/mg — well above the 100 pg/mg confirmation cutoff — indicates exposure to hydrocodone during the approximately 3-month detection window represented by this head hair specimen. Norhydrocodone was also detected at 300 pg/mg, a metabolite formed only through biological processing of hydrocodone, further confirming systemic exposure. Because hydrocodone can result from both illicit use and legitimate prescription medications, this result has been referred to our Medical Review Officer (MRO) for evaluation. The MRO is a licensed physician who reviews positive findings to determine whether a valid prescription exists that could account for the result. A follow-up report will be issued upon completion of the MRO review.
+
+This specimen was collected from head hair, providing a detection window of approximately 3 months prior to the April 2nd collection date — covering roughly early January through early April 2026.
+
+Important Limitation: As with all drug tests, this result cannot determine the exact time of use, the dose consumed, or the frequency of consumption.
+
+The results were confirmed by LC-MS/MS and certified by the laboratory director at United States Drug Testing Laboratories (CLIA #14D0712964).
+
+Monitoring Recommendation: Given these results, ongoing monitoring is recommended. The sweat patch is worn on the skin for approximately one week and detects drug use cumulatively over the wear period, providing ongoing surveillance rather than a single point-in-time snapshot. Random urine testing is also available as an alternative. Both options can be tailored to the specific needs of the case. Please feel free to reach out to discuss the best fit for this monitoring program.
+
 ================================================================
 RULES — follow these constraints
 ================================================================
