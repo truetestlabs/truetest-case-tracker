@@ -122,8 +122,13 @@ export async function PATCH(
       "invoiceNumber", "notes", "collectionType", "specimenId",
       "testCatalogId", "testDescription", "specimenType", "lab", "clientPrice"
     ];
+    // Date fields need conversion from ISO string to Date object
+    const dateFields = new Set(["appointmentDate", "collectionDate"]);
     for (const field of manualFields) {
-      if (updateData[field] !== undefined) data[field] = updateData[field];
+      if (updateData[field] !== undefined) {
+        const val = updateData[field];
+        data[field] = dateFields.has(field) && val ? new Date(val as string) : val;
+      }
     }
 
     // Auto-manage paymentDate based on paymentMethod transitions
