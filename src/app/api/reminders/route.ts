@@ -8,6 +8,7 @@ type Reminder = {
   caseId: string;
   caseNumber: string;
   age: string; // "1 hour ago", "3 days ago"
+  draftId?: string; // for email_draft type
 };
 
 function timeAgo(date: Date): string {
@@ -38,6 +39,7 @@ export async function GET() {
       unpaidCollected,
       noTestOrders,
       noSchedule,
+      pendingDrafts,
     ] = await Promise.all([
       // 1. Collection notice not sent (1 hour grace)
       prisma.testOrder.findMany({
@@ -126,9 +128,34 @@ export async function GET() {
         select: { id: true, caseNumber: true, createdAt: true },
         take: 20,
       }),
+
+      // 7. Pending email drafts (no grace period — show immediately)
+      prisma.emailDraft.findMany({
+        where: { status: "pending" },
+        include: {
+          case: { select: { id: true, caseNumber: true, donor: { select: { firstName: true, lastName: true } } } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
     ]);
 
-    // Build reminder list
+    // Build reminder list — email drafts first (highest priority)
+    for (const d of pendingDrafts) {
+      const donor = d.case.donor;
+      const name = donor ? `${donor.lastName}, ${donor.firstName}` : "Unknown";
+      const label = d.draftType === "results_mro" ? "MRO results email" : "Results email";
+      reminders.push({
+        id: `draft-${d.id}`,
+        type: "email_draft",
+        message: `${label} ready for review — ${name}`,
+        caseId: d.case.id,
+        caseNumber: d.case.caseNumber,
+        age: timeAgo(d.createdAt),
+        draftId: d.id,
+      });
+    }
+
     for (const t of collectionNotSent) {
       const donor = t.case.donor;
       const name = donor ? `${donor.lastName}, ${donor.firstName[0]}.` : "Unknown";

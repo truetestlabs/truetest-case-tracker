@@ -24,11 +24,19 @@ export function Sidebar() {
   const [bookingContact, setBookingContact] = useState("");
 
   // Reminders
-  type ReminderItem = { id: string; type: string; message: string; caseId: string; caseNumber: string; age: string };
+  type ReminderItem = { id: string; type: string; message: string; caseId: string; caseNumber: string; age: string; draftId?: string };
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [reminderCount, setReminderCount] = useState(0);
   const [showReminders, setShowReminders] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  // Email draft review modal
+  type DraftData = { id: string; subject: string; body: string; recipients: string[]; draftType: string; caseNumber: string; donorName: string };
+  const [reviewDraft, setReviewDraft] = useState<DraftData | null>(null);
+  const [draftSubject, setDraftSubject] = useState("");
+  const [draftBody, setDraftBody] = useState("");
+  const [draftSending, setDraftSending] = useState(false);
+  const [draftMsg, setDraftMsg] = useState<string | null>(null);
 
   // Load dismissed IDs from localStorage on mount
   useEffect(() => {
@@ -93,6 +101,67 @@ export function Sidebar() {
     setBookingName("");
     setBookingContact("");
   }
+
+  async function openDraftReview(draftId: string) {
+    try {
+      const res = await fetch(`/api/email-drafts`);
+      const data = await res.json();
+      const draft = (data.drafts || []).find((d: { id: string }) => d.id === draftId);
+      if (!draft) { alert("Draft not found — it may have been sent or discarded."); return; }
+      const donorName = draft.case?.donor ? `${draft.case.donor.firstName} ${draft.case.donor.lastName}` : "Unknown";
+      setReviewDraft({
+        id: draft.id,
+        subject: draft.subject,
+        body: draft.body,
+        recipients: draft.recipients as string[],
+        draftType: draft.draftType,
+        caseNumber: draft.case?.caseNumber || "",
+        donorName,
+      });
+      setDraftSubject(draft.subject);
+      setDraftBody(draft.body);
+      setDraftMsg(null);
+      setShowReminders(false);
+    } catch { alert("Failed to load draft"); }
+  }
+
+  async function sendDraft() {
+    if (!reviewDraft) return;
+    setDraftSending(true);
+    setDraftMsg(null);
+    try {
+      // Save any edits first
+      if (draftSubject !== reviewDraft.subject || draftBody !== reviewDraft.body) {
+        await fetch(`/api/email-drafts/${reviewDraft.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subject: draftSubject, body: draftBody }),
+        });
+      }
+      const res = await fetch(`/api/email-drafts/${reviewDraft.id}/send`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setDraftMsg(`Sent to ${data.sentTo.length} recipient${data.sentTo.length !== 1 ? "s" : ""}`);
+        setTimeout(() => { setReviewDraft(null); loadReminders(); }, 1500);
+      } else {
+        setDraftMsg(data.error || "Failed to send");
+      }
+    } catch { setDraftMsg("Failed to send"); }
+    setDraftSending(false);
+  }
+
+  async function discardDraft() {
+    if (!reviewDraft) return;
+    if (!confirm("Discard this email draft? This cannot be undone.")) return;
+    try {
+      await fetch(`/api/email-drafts/${reviewDraft.id}`, { method: "DELETE" });
+      setReviewDraft(null);
+      loadReminders();
+    } catch { alert("Failed to discard"); }
+  }
+
+  const draftReminders = filteredReminders.filter((r) => r.type === "email_draft");
+  const otherReminders = filteredReminders.filter((r) => r.type !== "email_draft");
 
   return (
     <aside className="w-60 flex flex-col flex-shrink-0" style={{ background: "linear-gradient(180deg, #1a3352 0%, #162c47 100%)" }}>
@@ -180,26 +249,69 @@ export function Sidebar() {
             {filteredReminders.length === 0 ? (
               <div className="px-4 py-6 text-center text-sm text-gray-400">All clear — nothing overdue</div>
             ) : (
-              <div className="divide-y divide-gray-100">
-                {filteredReminders.map((r) => (
-                  <div key={r.id} className="flex items-start hover:bg-gray-50 transition-colors">
-                    <Link
-                      href={`/cases/${r.caseId}`}
-                      onClick={() => setShowReminders(false)}
-                      className="flex-1 px-4 py-3"
-                    >
-                      <p className="text-sm text-gray-900 font-medium">{r.message}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{r.caseNumber} · {r.age}</p>
-                    </Link>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); dismissReminder(r.id); }}
-                      className="px-3 py-3 text-gray-400 hover:text-gray-600 text-sm"
-                      title="Dismiss for 24 hours"
-                    >
-                      ✕
-                    </button>
+              <div>
+                {/* Email drafts section */}
+                {draftReminders.length > 0 && (
+                  <div>
+                    <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Email Drafts ({draftReminders.length})</p>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {draftReminders.map((r) => (
+                        <div key={r.id} className="px-4 py-3 hover:bg-blue-50/50 transition-colors">
+                          <p className="text-sm text-gray-900 font-medium">{r.message}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">{r.caseNumber} · {r.age}</p>
+                          <div className="flex gap-2 mt-2">
+                            <button
+                              onClick={() => r.draftId && openDraftReview(r.draftId)}
+                              className="px-3 py-1 text-xs font-semibold rounded bg-blue-600 text-white hover:bg-blue-700"
+                            >
+                              Review & Send
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (r.draftId && confirm("Discard this draft?")) {
+                                  await fetch(`/api/email-drafts/${r.draftId}`, { method: "DELETE" });
+                                  loadReminders();
+                                }
+                              }}
+                              className="px-3 py-1 text-xs font-medium rounded border border-gray-300 text-gray-600 hover:bg-gray-100"
+                            >
+                              Discard
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                )}
+                {/* Other reminders */}
+                {otherReminders.length > 0 && draftReminders.length > 0 && (
+                  <div className="px-4 py-2 bg-gray-50 border-y border-gray-100">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Other Reminders</p>
+                  </div>
+                )}
+                <div className="divide-y divide-gray-100">
+                  {otherReminders.map((r) => (
+                    <div key={r.id} className="flex items-start hover:bg-gray-50 transition-colors">
+                      <Link
+                        href={`/cases/${r.caseId}`}
+                        onClick={() => setShowReminders(false)}
+                        className="flex-1 px-4 py-3"
+                      >
+                        <p className="text-sm text-gray-900 font-medium">{r.message}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{r.caseNumber} · {r.age}</p>
+                      </Link>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); dismissReminder(r.id); }}
+                        className="px-3 py-3 text-gray-400 hover:text-gray-600 text-sm"
+                        title="Dismiss for 24 hours"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -267,6 +379,79 @@ export function Sidebar() {
               >
                 {bookingModal === "text" ? "Open Messages" : "Open Email"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email Draft Review Modal */}
+      {reviewDraft && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setReviewDraft(null)} onKeyDown={(e) => { if (e.key === "Escape") setReviewDraft(null); }}>
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl" role="dialog" aria-modal="true" aria-label="Review Email Draft" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className={`px-6 py-4 rounded-t-xl ${reviewDraft.draftType === "results_mro" ? "bg-purple-700" : "bg-[#1e3a5f]"}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-white/60 font-semibold uppercase tracking-wider">
+                    {reviewDraft.draftType === "results_mro" ? "MRO Results Email" : "Results Email"} — Review Before Sending
+                  </p>
+                  <p className="text-white font-bold mt-1">{reviewDraft.donorName} · {reviewDraft.caseNumber}</p>
+                </div>
+                <button onClick={() => setReviewDraft(null)} className="text-white/60 hover:text-white text-lg">✕</button>
+              </div>
+            </div>
+
+            {/* Recipients */}
+            <div className="px-6 py-3 border-b border-gray-200 bg-gray-50">
+              <p className="text-xs font-medium text-gray-500 mb-1">To:</p>
+              <div className="flex flex-wrap gap-1">
+                {reviewDraft.recipients.map((email) => (
+                  <span key={email} className="inline-flex items-center px-2 py-0.5 rounded-full bg-white border border-gray-200 text-xs text-gray-700">{email}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Subject */}
+            <div className="px-6 py-3 border-b border-gray-200">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Subject:</label>
+              <input
+                type="text"
+                value={draftSubject}
+                onChange={(e) => setDraftSubject(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              />
+            </div>
+
+            {/* Body (editable) */}
+            <div className="px-6 py-3 flex-1 overflow-y-auto min-h-0">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Body (editable):</label>
+              <textarea
+                value={draftBody}
+                onChange={(e) => setDraftBody(e.target.value)}
+                rows={16}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono leading-relaxed resize-y"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50 rounded-b-xl">
+              <button
+                onClick={discardDraft}
+                className="px-4 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                Discard Draft
+              </button>
+              <div className="flex items-center gap-3">
+                {draftMsg && <span className={`text-xs font-medium ${draftMsg.startsWith("Sent") ? "text-green-600" : "text-red-600"}`}>{draftMsg}</span>}
+                <button onClick={() => setReviewDraft(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
+                <button
+                  onClick={sendDraft}
+                  disabled={draftSending}
+                  className={`px-5 py-2 rounded-lg text-sm font-bold text-white disabled:opacity-50 ${reviewDraft.draftType === "results_mro" ? "bg-purple-600 hover:bg-purple-700" : "bg-blue-600 hover:bg-blue-700"}`}
+                >
+                  {draftSending ? "Sending..." : "Approve & Send"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

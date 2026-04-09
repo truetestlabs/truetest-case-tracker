@@ -380,23 +380,21 @@ export default function CaseDetailPage() {
                         setSendingResults(true);
                         setResultsSentMsg(null);
                         try {
-                          const res = await fetch(`/api/cases/${caseData.id}/compose-results`);
-                          const data = await res.json();
+                          const res = await fetch(`/api/cases/${caseData.id}/compose-results`, { method: "POST" });
                           if (res.ok) {
-                            const mailto = `mailto:${data.to.join(",")}?subject=${encodeURIComponent(data.subject)}&body=${encodeURIComponent(data.body)}`;
-                            window.open(mailto, "_blank");
-                            setResultsSentMsg("Opened in email client");
+                            setResultsSentMsg("Draft saved — review in Reminders bell");
                           } else {
-                            setResultsSentMsg(data.error || "Failed to compose");
+                            const data = await res.json();
+                            setResultsSentMsg(data.error || "Failed to create draft");
                           }
-                        } catch { setResultsSentMsg("Failed to compose"); }
+                        } catch { setResultsSentMsg("Failed to create draft"); }
                         setSendingResults(false);
                       }}
                       disabled={sendingResults}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
                       style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #2a5490 100%)" }}
                     >
-                      {sendingResults ? "Composing…" : "✉ Compose Results Email"}
+                      {sendingResults ? "Creating draft…" : "✉ Draft Results Email"}
                     </button>
                   </div>
                 )}
@@ -487,32 +485,20 @@ export default function CaseDetailPage() {
                             <div className="mt-1.5 flex gap-1">
                               <button onClick={async (e) => {
                                 e.stopPropagation();
-                                // Advance status first
+                                // Advance status
                                 await fetch(`/api/cases/${caseData.id}/test-orders`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ testOrderId: test.id, testStatus: "results_released" }) });
-                                // Compose in email client instead of auto-sending
-                                const res = await fetch(`/api/cases/${caseData.id}/compose-results`);
-                                if (res.ok) {
-                                  const data = await res.json();
-                                  window.open(`mailto:${data.to.join(",")}?subject=${encodeURIComponent(data.subject)}&body=${encodeURIComponent(data.body)}`, "_blank");
-                                }
-                                // Log it (no Resend send)
+                                // Create draft for review
                                 await fetch(`/api/cases/${caseData.id}/compose-results`, { method: "POST" });
                                 loadCase();
-                              }} className="flex-1 text-[10px] px-2 py-1.5 rounded bg-blue-700 text-white hover:bg-blue-800 font-semibold">✉ Release Results</button>
+                              }} className="flex-1 text-[10px] px-2 py-1.5 rounded bg-blue-700 text-white hover:bg-blue-800 font-semibold">Release Results</button>
                               <button onClick={async (e) => {
                                 e.stopPropagation();
                                 // Advance status to MRO
                                 await fetch(`/api/cases/${caseData.id}/test-orders`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ testOrderId: test.id, testStatus: "at_mro" }) });
-                                // Compose MRO version in email client
-                                const res = await fetch(`/api/cases/${caseData.id}/compose-results?mro=true`);
-                                if (res.ok) {
-                                  const data = await res.json();
-                                  window.open(`mailto:${data.to.join(",")}?subject=${encodeURIComponent(data.subject)}&body=${encodeURIComponent(data.body)}`, "_blank");
-                                }
-                                // Log it (no Resend send)
+                                // Create MRO draft for review
                                 await fetch(`/api/cases/${caseData.id}/compose-results?mro=true`, { method: "POST" });
                                 loadCase();
-                              }} className="flex-1 text-[10px] px-2 py-1.5 rounded bg-purple-700 text-white hover:bg-purple-800 font-semibold">✉ Release → MRO</button>
+                              }} className="flex-1 text-[10px] px-2 py-1.5 rounded bg-purple-700 text-white hover:bg-purple-800 font-semibold">Release → MRO</button>
                             </div>
                           );
                         }

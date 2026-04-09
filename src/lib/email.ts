@@ -65,7 +65,112 @@ export async function getEmailRecipients(
   });
 }
 
-/** Send results-released email with AI-generated summary */
+/** Send an approved EmailDraft via Resend — builds HTML from the draft's plain-text body */
+export async function sendDraftEmail(draftId: string): Promise<string[]> {
+  if (!process.env.RESEND_API_KEY) return [];
+
+  const draft = await prisma.emailDraft.findUnique({
+    where: { id: draftId },
+    include: {
+      case: { select: { caseNumber: true, donor: { select: { firstName: true, lastName: true } } } },
+      testOrder: { select: { testDescription: true } },
+    },
+  });
+
+  if (!draft || draft.status === "sent") return [];
+
+  const isMro = draft.draftType === "results_mro";
+  const donorName = draft.case.donor
+    ? `${draft.case.donor.firstName} ${draft.case.donor.lastName}`
+    : "the donor";
+
+  // Build HTML from the editable plain-text body
+  const escapedBody = draft.body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const summaryHtml = `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:20px 0;font-family:monospace;font-size:13px;line-height:1.7;white-space:pre-wrap;">${escapedBody}</div>`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;">
+  <div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
+    <div style="background:${isMro ? "#5b21b6" : "#1e3a5f"};padding:24px 32px;">
+      <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">TrueTest Labs</p>
+      <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;">${isMro ? "Test Results — MRO Review" : "Test Results Available"}</h1>
+    </div>
+    <div style="padding:28px 32px;">
+      ${summaryHtml}
+      <div style="border-top:1px solid #e2e8f0;margin-top:24px;padding-top:20px;">
+        <p style="color:#475569;font-size:13px;margin:0 0 8px;">Questions? Contact our office:</p>
+        <p style="color:#1e3a5f;font-size:14px;font-weight:600;margin:0;">${OFFICE_PHONE}</p>
+        <p style="color:#64748b;font-size:13px;margin:4px 0 0;">${OFFICE_ADDRESS}</p>
+      </div>
+    </div>
+    <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
+      <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;">This notification was sent by TrueTest Labs Case Management System.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const emailList = (draft.recipients as string[]) || [];
+  if (emailList.length === 0) return [];
+
+  // Attach the result PDF if available
+  type Attachment = { filename: string; content: Buffer };
+  const attachments: Attachment[] = [];
+  const latestResult = await prisma.document.findFirst({
+    where: { caseId: draft.caseId, documentType: "result_report" },
+    orderBy: { uploadedAt: "desc" },
+    select: { filePath: true, fileName: true },
+  });
+  if (latestResult?.filePath && latestResult?.fileName) {
+    try {
+      const { buffer: pdfBuffer } = await downloadFile(latestResult.filePath);
+      attachments.push({ filename: latestResult.fileName, content: pdfBuffer });
+    } catch (e) {
+      console.warn("[Email] Could not attach result PDF:", e);
+    }
+  }
+
+  const { data: sendData, error: sendError } = await getResend().emails.send({
+    from: FROM_EMAIL,
+    replyTo: REPLY_TO,
+    to: emailList,
+    subject: draft.subject,
+    html,
+    ...(attachments.length > 0 ? { attachments } : {}),
+  });
+  if (sendError) {
+    console.error("[Email] Resend error (draft send):", sendError);
+    throw new Error(sendError.message);
+  }
+  console.log("[Email] draft sent, id:", sendData?.id);
+
+  // Mark draft as sent
+  await prisma.emailDraft.update({
+    where: { id: draftId },
+    data: { status: "sent", sentAt: new Date() },
+  });
+
+  // Create audit trail
+  await prisma.statusLog.create({
+    data: {
+      caseId: draft.caseId,
+      testOrderId: draft.testOrderId,
+      oldStatus: "results_released",
+      newStatus: "results_released",
+      changedBy: "admin",
+      note: isMro ? "Results email sent (MRO review)" : "Results email sent",
+      notificationSent: true,
+      notificationRecipients: emailList,
+    },
+  });
+
+  return emailList;
+}
+
+/** Send results-released email with AI-generated summary (legacy — used by other flows) */
 export async function sendResultsReleasedEmail(
   caseId: string,
   testOrderId: string,

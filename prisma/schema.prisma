@@ -169,6 +169,7 @@ model Case {
   courtOrders           CourtOrder[]
   statusLogs            StatusLog[]
   messages              Message[]
+  emailDrafts           EmailDraft[]
   monitoringSchedules   MonitoringSchedule[]
 
   @@index([caseStatus])
@@ -291,6 +292,7 @@ model TestOrder {
   testCatalog          TestCatalog?   @relation(fields: [testCatalogId], references: [id])
   documents            Document[]     @relation("TestOrderDocuments")
   statusLogs           StatusLog[]
+  emailDrafts          EmailDraft[]
   randomSelection      RandomSelection?
 
   @@index([caseId])
@@ -387,6 +389,27 @@ model Message {
 
   @@index([caseId])
   @@index([sentAt])
+}
+
+model EmailDraft {
+  id           String    @id @default(cuid())
+  caseId       String
+  case         Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  testOrderId  String?
+  testOrder    TestOrder? @relation(fields: [testOrderId], references: [id])
+
+  draftType    String    // "results" | "results_mro"
+  recipients   Json      // string[] of email addresses
+  subject      String
+  body         String    // plain-text summary (editable before send)
+
+  status       String    @default("pending") // "pending" | "sent"
+  createdBy    String    @default("admin")
+  createdAt    DateTime  @default(now())
+  sentAt       DateTime?
+
+  @@index([status])
+  @@index([caseId])
 }
 
 // ============================================================
