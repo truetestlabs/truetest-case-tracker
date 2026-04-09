@@ -69,6 +69,15 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
     window.open(`/api/cases/${caseId}/documents/download?documentId=${docId}`, "_blank");
   }
 
+  async function handleDelete(docId: string, fileName: string) {
+    if (!confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/cases/${caseId}/documents?documentId=${docId}`, { method: "DELETE" });
+      if (res.ok) onUpdated();
+      else alert("Failed to delete");
+    } catch { alert("Failed to delete"); }
+  }
+
   return (
     <div className="mt-2 space-y-1">
       {DOC_SLOTS.map((slot) => {
@@ -81,14 +90,21 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
             <span className="text-gray-500 w-14 flex-shrink-0">{slot.label}:</span>
 
             {doc ? (
-              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                <span className="text-gray-700 truncate">{doc.fileName}</span>
+              <div className="flex items-center gap-1 flex-1 min-w-0">
+                <span className="text-gray-700 truncate flex-1">{doc.fileName}</span>
                 <button
                   onClick={() => handleDownload(doc.id)}
-                  className="text-blue-500 hover:text-blue-700 flex-shrink-0"
+                  className="text-blue-500 hover:text-blue-700 flex-shrink-0 px-1"
                   title="Download"
                 >
-                  ⬇
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </button>
+                <button
+                  onClick={() => handleDelete(doc.id, doc.fileName)}
+                  className="text-red-400 hover:text-red-600 flex-shrink-0 px-1"
+                  title="Delete"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>
               </div>
             ) : (
