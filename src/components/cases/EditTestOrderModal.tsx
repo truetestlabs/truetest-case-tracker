@@ -173,19 +173,24 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
           {/* Status */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-            <select name="testStatus" defaultValue={testOrder.testStatus} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm">
-              <option value="order_created">Order Created</option>
-              <option value="specimen_collected">Specimen Collected</option>
-              <option value="sent_to_lab">Sent to Lab</option>
-              <option value="results_received">Lab Results Received</option>
-              <option value="results_held">Results Held — Payment Required</option>
-              <option value="results_released">Lab Results Released</option>
-              <option value="at_mro">Results at MRO</option>
-              <option value="mro_released">MRO Results Released</option>
-              <option value="closed">Test Closed</option>
-              <option value="no_show">No Show</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
+            {(() => {
+              const isSweat = testOrder.testDescription?.toLowerCase().includes("sweat patch");
+              return (
+                <select name="testStatus" defaultValue={testOrder.testStatus} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm">
+                  <option value="order_created">{isSweat ? "Patch Applied" : "Order Created"}</option>
+                  <option value="specimen_collected">{isSweat ? "Patch Removed" : "Specimen Collected"}</option>
+                  <option value="sent_to_lab">Sent to Lab</option>
+                  <option value="results_received">Lab Results Received</option>
+                  <option value="results_held">Results Held — Payment Required</option>
+                  <option value="results_released">Lab Results Released</option>
+                  <option value="at_mro">Results at MRO</option>
+                  <option value="mro_released">MRO Results Released</option>
+                  <option value="closed">Test Closed</option>
+                  <option value="no_show">No Show</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              );
+            })()}
           </div>
 
           {/* Specimen ID */}
