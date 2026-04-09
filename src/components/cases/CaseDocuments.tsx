@@ -57,28 +57,52 @@ function DocumentUploadSlot({
 
   async function uploadFile(file: File, extraFields?: Record<string, string>) {
     setUploading(true);
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("documentType", docType === "other" ? "other" : docType);
-    if (extraFields) {
-      Object.entries(extraFields).forEach(([k, v]) => formData.append(k, v));
-    }
+    const effectiveDocType = docType === "other" ? "other" : docType;
 
     try {
-      const res = await fetch(`/api/cases/${caseId}/documents`, {
+      // Step 1: Get pre-authorized Supabase upload URL
+      const urlRes = await fetch("/api/upload-url", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          caseId,
+          fileName: file.name,
+          contentType: file.type || "application/octet-stream",
+          documentType: effectiveDocType,
+        }),
       });
-      if (!res.ok) {
-        let detail = `Server returned ${res.status}`;
+      if (!urlRes.ok) throw new Error("Failed to get upload URL");
+      const { uploadUrl, storagePath, headers } = await urlRes.json();
+
+      // Step 2: Upload file directly to Supabase Storage (no size limit)
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { ...headers, "x-upsert": "true" },
+        body: file,
+      });
+      if (!uploadRes.ok) {
+        const err = await uploadRes.text();
+        throw new Error(`Storage upload failed: ${uploadRes.status} — ${err}`);
+      }
+
+      // Step 3: Tell the API to process the uploaded file
+      const processRes = await fetch(`/api/cases/${caseId}/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storagePath,
+          fileName: file.name,
+          documentType: effectiveDocType,
+          ...(extraFields || {}),
+        }),
+      });
+      if (!processRes.ok) {
+        let detail = `Server returned ${processRes.status}`;
         try {
-          const text = await res.text();
+          const text = await processRes.text();
           const json = JSON.parse(text);
           detail = json.error || text.slice(0, 200);
-        } catch {
-          // response wasn't JSON
-        }
+        } catch { /* not JSON */ }
         throw new Error(detail);
       }
       onUpdated();

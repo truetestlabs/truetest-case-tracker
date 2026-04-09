@@ -56,6 +56,25 @@ export async function uploadFile(
 }
 
 /**
+ * Generate a pre-authorized upload URL for direct browser-to-Supabase upload.
+ * The browser PUTs the file directly — bypasses Vercel's 4.5MB body limit.
+ * @returns { uploadUrl, storagePath, headers } — everything the browser needs
+ */
+export function getDirectUploadInfo(
+  storagePath: string,
+  contentType: string
+): { uploadUrl: string; storagePath: string; headers: Record<string, string> } {
+  return {
+    uploadUrl: storageUrl(storagePath),
+    storagePath,
+    headers: {
+      ...headers(contentType),
+      "x-upsert": "true",
+    },
+  };
+}
+
+/**
  * Download a file from Supabase Storage.
  * @returns { buffer, contentType }
  */

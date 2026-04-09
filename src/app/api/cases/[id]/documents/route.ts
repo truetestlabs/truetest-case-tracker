@@ -109,15 +109,57 @@ export async function POST(
   const { id: caseId } = await params;
 
   try {
-    const formData = await request.formData();
-    const file = formData.get("file") as File;
-    const documentType = formData.get("documentType") as string;
-    const manualSpecimenId = formData.get("specimenId") as string | null;
-    const testOrderId = formData.get("testOrderId") as string | null;
+    // Detect mode: JSON (direct upload already in Supabase) vs FormData (legacy)
+    const isJson = request.headers.get("content-type")?.includes("application/json");
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    let documentType: string;
+    let manualSpecimenId: string | null;
+    let testOrderId: string | null;
+    let originalFileName: string;
+    let buffer: Buffer;
+    let storagePath: string;
+    let ext: string;
+
+    if (isJson) {
+      // NEW MODE: File already uploaded directly to Supabase Storage
+      const body = await request.json();
+      documentType = body.documentType;
+      manualSpecimenId = body.specimenId || null;
+      testOrderId = body.testOrderId || null;
+      originalFileName = body.fileName;
+      storagePath = body.storagePath;
+      ext = originalFileName.includes(".") ? "." + originalFileName.split(".").pop() : ".pdf";
+
+      // Download from Supabase to get buffer for parsing/AI summary
+      const { downloadFile } = await import("@/lib/storage");
+      const downloaded = await downloadFile(storagePath);
+      buffer = downloaded.buffer;
+    } else {
+      // LEGACY MODE: File sent via FormData through Vercel
+      const formData = await request.formData();
+      const file = formData.get("file") as File;
+      documentType = formData.get("documentType") as string;
+      manualSpecimenId = formData.get("specimenId") as string | null;
+      testOrderId = formData.get("testOrderId") as string | null;
+
+      if (!file) {
+        return NextResponse.json({ error: "No file provided" }, { status: 400 });
+      }
+
+      originalFileName = file.name;
+      ext = file.name.includes(".") ? "." + file.name.split(".").pop() : ".pdf";
+
+      const bytes = await file.arrayBuffer();
+      buffer = Buffer.from(bytes);
+
+      // Upload to Supabase Storage (legacy path — file goes through Vercel)
+      const timestamp = Date.now();
+      storagePath = `${caseId}/${documentType}_${timestamp}_${originalFileName}`;
+      const contentType = file.type || "application/octet-stream";
+      await uploadFile(storagePath, buffer, contentType);
     }
+
+    // === From here, both modes converge — buffer and storagePath are set ===
 
     // Fetch case with donor and latest test order for smart file naming
     const caseData = await prisma.case.findUnique({
@@ -137,20 +179,13 @@ export async function POST(
     const collectionDate = latestOrder?.collectionDate
       ? new Date(latestOrder.collectionDate).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" }).replace(/\//g, ".")
       : new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" }).replace(/\//g, ".");
-    const ext = file.name.includes(".") ? "." + file.name.split(".").pop() : ".pdf";
-
-    // Read file bytes early — needed for both PDF parsing and saving
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
 
     // Build smart file name based on document type
-    let displayName = file.name;
+    let displayName = originalFileName;
     if (documentType === "result_report" && donor) {
       displayName = `${donor.firstName} ${donor.lastName} Results ${collectionDate}${ext}`;
     } else if (documentType === "chain_of_custody") {
-      // Parse the COC PDF to extract specimen ID and collection date (works for typed PDFs, not scanned)
       const parsed = ext.toLowerCase() === ".pdf" ? await parseCocPdf(buffer) : {};
-      // Priority: manual input > PDF parsed > DB accession number
       const specimenId = manualSpecimenId || parsed.controlNumber || latestOrder?.labAccessionNumber || "";
       const donorFirst = donor?.firstName || "Unknown";
       const donorLast = donor?.lastName || "Donor";
@@ -159,12 +194,6 @@ export async function POST(
         ? `${specimenId} ${donorFirst} ${donorLast} ${cocDate}${ext}`
         : `${donorFirst} ${donorLast} COC ${cocDate}${ext}`;
     }
-
-    // Upload to Supabase Storage
-    const fileName = `${documentType}_${Date.now()}_${displayName}`;
-    const storagePath = `${caseId}/${fileName}`;
-    const contentType = file.type || "application/octet-stream";
-    await uploadFile(storagePath, buffer, contentType);
 
     // For result reports: generate AI summary from PDF (async, best-effort)
     let extractedData: { summary: string } | null = null;
@@ -194,7 +223,7 @@ export async function POST(
         oldStatus: "—",
         newStatus: "document_uploaded",
         changedBy: "admin",
-        note: `Uploaded ${documentType.replace("_", " ")}: ${file.name}`,
+        note: `Uploaded ${documentType.replace("_", " ")}: ${originalFileName}`,
       },
     });
 

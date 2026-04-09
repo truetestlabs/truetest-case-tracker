@@ -30,25 +30,53 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
 
   async function uploadFile(file: File, docType: string, extraSpecimenId?: string) {
     setUploading(docType);
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("documentType", docType);
-    formData.append("testOrderId", testOrderId);
-    if (extraSpecimenId) formData.append("specimenId", extraSpecimenId);
 
     try {
-      const res = await fetch(`/api/cases/${caseId}/documents`, {
+      // Step 1: Get a pre-authorized Supabase upload URL
+      const urlRes = await fetch("/api/upload-url", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          caseId,
+          fileName: file.name,
+          contentType: file.type || "application/octet-stream",
+          documentType: docType,
+        }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        alert(err?.error || `Upload failed (${res.status})`);
+      if (!urlRes.ok) throw new Error("Failed to get upload URL");
+      const { uploadUrl, storagePath, headers } = await urlRes.json();
+
+      // Step 2: Upload file directly to Supabase Storage (bypasses Vercel size limit)
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { ...headers, "x-upsert": "true" },
+        body: file,
+      });
+      if (!uploadRes.ok) {
+        const err = await uploadRes.text();
+        throw new Error(`Storage upload failed: ${uploadRes.status} — ${err}`);
+      }
+
+      // Step 3: Tell the API to process the uploaded file (COC parsing, AI summary, DB record, auto-advance)
+      const processRes = await fetch(`/api/cases/${caseId}/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storagePath,
+          fileName: file.name,
+          documentType: docType,
+          testOrderId,
+          ...(extraSpecimenId ? { specimenId: extraSpecimenId } : {}),
+        }),
+      });
+      if (!processRes.ok) {
+        const err = await processRes.json().catch(() => null);
+        alert(err?.error || `Processing failed (${processRes.status})`);
       } else {
         onUpdated();
       }
-    } catch {
-      alert("Upload failed");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(null);
       setPendingFile(null);
