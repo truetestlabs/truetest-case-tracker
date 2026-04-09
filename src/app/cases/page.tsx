@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { StatusBadge, CourtOrderFlag } from "@/components/ui/StatusBadge";
+import { formatDonorName } from "@/lib/format";
 import { getCasePaymentState } from "@/lib/payment";
 
 const AVATAR_COLORS = [
@@ -178,27 +179,27 @@ export default function CasesPage() {
                 </tr>
               </thead>
               <tbody>
-                {cases.map((c) => (
-                  <tr key={c.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/70 transition-colors">
-                    <td className="px-5 py-3.5">
+                {cases.map((c, idx) => (
+                  <tr key={c.id} className={`border-b border-slate-100 last:border-0 hover:bg-blue-50/50 transition-colors ${idx % 2 === 1 ? "bg-slate-50/50" : ""}`}>
+                    <td className="px-5 py-2.5 whitespace-nowrap">
                       <Link href={`/cases/${c.id}`} className="text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors">
                         {c.caseNumber}
                       </Link>
                       {c.courtCaseNumber && <p className="text-xs text-slate-400 mt-0.5">Court: {c.courtCaseNumber}</p>}
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-5 py-2.5">
                       {c.donor ? (
                         <div className="flex items-center gap-2.5">
                           <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${avatarColor(`${c.donor.firstName} ${c.donor.lastName}`)}`}>
                             {getInitials(c.donor.firstName, c.donor.lastName)}
                           </div>
-                          <span className="text-sm text-slate-800">{c.donor.lastName}, {c.donor.firstName}</span>
+                          <span className="text-sm text-slate-800">{formatDonorName(c.donor)}</span>
                         </div>
                       ) : (
                         <span className="text-sm text-slate-400">—</span>
                       )}
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-5 py-2.5">
                       <span className="inline-flex items-center gap-1 flex-wrap">
                         <StatusBadge status={c.caseType} type="caseType" />
                         {c.isMonitored && (
@@ -209,7 +210,7 @@ export default function CasesPage() {
                         )}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-5 py-2.5">
                       <button
                         onClick={() => toggleCaseStatus(c.id, c.caseStatus)}
                         className="cursor-pointer hover:opacity-70 transition-opacity"
@@ -218,7 +219,7 @@ export default function CasesPage() {
                         <StatusBadge status={c.caseStatus} type="case" />
                       </button>
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-5 py-2.5">
                       {c.testOrders.length > 0 ? (
                         <div className="flex flex-col gap-1">
                           {c.testOrders.map((test, ti) => {
@@ -257,10 +258,10 @@ export default function CasesPage() {
                         <span className="text-xs text-slate-400">No tests</span>
                       )}
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-5 py-2.5">
                       <StatusBadge status={getCasePaymentState(c.testOrders)} type="payment" />
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-5 py-2.5">
                       <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
                         {c._count.testOrders}
                       </span>

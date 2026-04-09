@@ -169,14 +169,9 @@ export function Sidebar() {
   return (
     <aside className="w-60 flex flex-col flex-shrink-0" style={{ background: "linear-gradient(180deg, #1a3352 0%, #162c47 100%)" }}>
       {/* Logo */}
-      <div className="px-5 py-5 flex items-center gap-3 border-b border-white/10">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,255,255,0.15)" }}>
-          <FlaskIcon className="w-4 h-4 text-white" />
-        </div>
-        <div>
-          <h1 className="text-sm font-semibold text-white leading-tight tracking-tight">TrueTest Labs</h1>
-          <p className="text-xs text-white/50 leading-tight">Case Tracker</p>
-        </div>
+      <div className="px-4 py-4 flex items-center gap-3 border-b border-white/10">
+        <img src="/logo.png" alt="TrueTest Labs" className="h-9 w-auto flex-shrink-0" />
+        <p className="text-[10px] text-white/40 font-medium uppercase tracking-widest leading-tight">Case Tracker</p>
       </div>
 
       {/* Navigation */}

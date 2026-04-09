@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { formatDonorName } from "@/lib/format";
 
 type RecentCase = {
   id: string;
@@ -71,8 +72,8 @@ export default function DashboardPage() {
       label: "Open Cases",
       value: stats.activeCases,
       icon: <FolderOpenIcon className="w-5 h-5" />,
-      iconBg: "bg-emerald-50",
-      iconColor: "text-emerald-600",
+      iconBg: "bg-emerald-500",
+      iconColor: "text-white",
       valueColor: "text-emerald-700",
       href: "/cases",
     },
@@ -80,8 +81,8 @@ export default function DashboardPage() {
       label: "Total Cases",
       value: stats.totalCases,
       icon: <BriefcaseIcon className="w-5 h-5" />,
-      iconBg: "bg-blue-50",
-      iconColor: "text-blue-600",
+      iconBg: "bg-blue-500",
+      iconColor: "text-white",
       valueColor: "text-blue-700",
       href: "/cases",
     },
@@ -89,25 +90,25 @@ export default function DashboardPage() {
       label: "Test Orders",
       value: stats.totalTestOrders,
       icon: <ClipboardIcon className="w-5 h-5" />,
-      iconBg: "bg-indigo-50",
-      iconColor: "text-indigo-600",
+      iconBg: "bg-indigo-500",
+      iconColor: "text-white",
       valueColor: "text-indigo-700",
     },
     {
       label: "Awaiting Payment",
       value: stats.awaitingPayment,
       icon: <AlertIcon className="w-5 h-5" />,
-      iconBg: "bg-orange-50",
-      iconColor: "text-orange-600",
-      valueColor: "text-orange-700",
+      iconBg: "bg-amber-500",
+      iconColor: "text-white",
+      valueColor: "text-amber-700",
       alert: stats.awaitingPayment > 0,
     },
     {
       label: "No Shows (Month)",
       value: stats.noShowsThisMonth,
       icon: <XCircleIcon className="w-5 h-5" />,
-      iconBg: "bg-red-50",
-      iconColor: "text-red-500",
+      iconBg: "bg-red-500",
+      iconColor: "text-white",
       valueColor: "text-red-600",
     },
   ];
@@ -156,7 +157,7 @@ export default function DashboardPage() {
               const inner = (
                 <div key={card.label} className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-md transition-all duration-150 hover:-translate-y-0.5">
                   <div className="flex items-start justify-between mb-3">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${card.iconBg} ${card.iconColor}`}>
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center ${card.iconBg} ${card.iconColor}`}>
                       {card.icon}
                     </div>
                     {card.alert && (
@@ -212,31 +213,31 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.recentCases.map((c) => {
+                  {stats.recentCases.map((c, i) => {
                     const donorName = c.donor ? `${c.donor.firstName} ${c.donor.lastName}` : "";
                     const initials = getInitials(c.donor);
                     const color = avatarColor(donorName);
                     return (
-                      <tr key={c.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/70">
-                        <td className="px-5 py-3.5">
+                      <tr key={c.id} className={`border-b border-slate-100 last:border-0 hover:bg-blue-50/50 transition-colors ${i % 2 === 1 ? "bg-slate-50/50" : ""}`}>
+                        <td className="px-5 py-2.5">
                           <Link href={`/cases/${c.id}`} className="text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors">
                             {c.caseNumber}
                           </Link>
                         </td>
-                        <td className="px-5 py-3.5">
+                        <td className="px-5 py-2.5">
                           <div className="flex items-center gap-2.5">
                             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${color}`}>
                               {initials}
                             </div>
                             <span className="text-sm text-slate-800">
-                              {c.donor ? `${c.donor.lastName}, ${c.donor.firstName}` : <span className="text-slate-400">—</span>}
+                              {c.donor ? formatDonorName(c.donor) : <span className="text-slate-400">—</span>}
                             </span>
                           </div>
                         </td>
                         <td className="px-5 py-3.5 text-sm text-slate-600 capitalize">
                           {c.caseType.replace(/_/g, " ")}
                         </td>
-                        <td className="px-5 py-3.5">
+                        <td className="px-5 py-2.5">
                           {c.hasCourtOrder ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
                               <CheckIcon className="w-3 h-3" /> Yes
@@ -247,7 +248,7 @@ export default function DashboardPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-5 py-3.5">
+                        <td className="px-5 py-2.5">
                           {(() => {
                             const method = c.testOrders?.[0]?.paymentMethod;
                             if (!method) return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-100">Unpaid</span>;
@@ -255,7 +256,7 @@ export default function DashboardPage() {
                             return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-100">Paid</span>;
                           })()}
                         </td>
-                        <td className="px-5 py-3.5">
+                        <td className="px-5 py-2.5">
                           <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
                             {c._count.testOrders}
                           </span>
