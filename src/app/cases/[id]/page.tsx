@@ -382,6 +382,7 @@ export default function CaseDetailPage() {
                         try {
                           const res = await fetch(`/api/cases/${caseData.id}/compose-results`, { method: "POST" });
                           if (res.ok) {
+                            window.dispatchEvent(new Event("refreshReminders"));
                             setResultsSentMsg("Draft saved — review in Reminders bell");
                           } else {
                             const data = await res.json();
@@ -485,18 +486,16 @@ export default function CaseDetailPage() {
                             <div className="mt-1.5 flex gap-1">
                               <button onClick={async (e) => {
                                 e.stopPropagation();
-                                // Advance status
                                 await fetch(`/api/cases/${caseData.id}/test-orders`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ testOrderId: test.id, testStatus: "results_released" }) });
-                                // Create draft for review
                                 await fetch(`/api/cases/${caseData.id}/compose-results`, { method: "POST" });
+                                window.dispatchEvent(new Event("refreshReminders"));
                                 loadCase();
                               }} className="flex-1 text-[10px] px-2 py-1.5 rounded bg-blue-700 text-white hover:bg-blue-800 font-semibold">Release Results</button>
                               <button onClick={async (e) => {
                                 e.stopPropagation();
-                                // Advance status to MRO
                                 await fetch(`/api/cases/${caseData.id}/test-orders`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ testOrderId: test.id, testStatus: "at_mro" }) });
-                                // Create MRO draft for review
                                 await fetch(`/api/cases/${caseData.id}/compose-results?mro=true`, { method: "POST" });
+                                window.dispatchEvent(new Event("refreshReminders"));
                                 loadCase();
                               }} className="flex-1 text-[10px] px-2 py-1.5 rounded bg-purple-700 text-white hover:bg-purple-800 font-semibold">Release → MRO</button>
                             </div>

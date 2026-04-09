@@ -158,20 +158,14 @@ export function TestProgressBar({ currentStatus, caseId, testOrderId, testDescri
           </span>
         </div>
       )}
-      {/* MRO decision prompt — shows when at results_released */}
+      {/* After results released — only option is to close the test (MRO decision was made earlier) */}
       {currentStatus === "results_released" && caseId && testOrderId && (
-        <div className="mt-2 flex gap-1.5">
+        <div className="mt-2">
           <button
             onClick={(e) => { e.stopPropagation(); advanceTo("closed"); }}
-            className="flex-1 px-2 py-1.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+            className="w-full px-2 py-1.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
           >
             Close Test
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); advanceTo("at_mro"); }}
-            className="flex-1 px-2 py-1.5 text-[10px] font-semibold rounded bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
-          >
-            Send to MRO →
           </button>
         </div>
       )}

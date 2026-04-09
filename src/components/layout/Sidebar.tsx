@@ -81,7 +81,10 @@ export function Sidebar() {
   useEffect(() => {
     loadReminders();
     const interval = setInterval(loadReminders, 5 * 60 * 1000); // poll every 5 min
-    return () => clearInterval(interval);
+    // Listen for immediate refresh from other components (e.g. draft created on case page)
+    const onRefresh = () => loadReminders();
+    window.addEventListener("refreshReminders", onRefresh);
+    return () => { clearInterval(interval); window.removeEventListener("refreshReminders", onRefresh); };
   }, [loadReminders]);
 
   function sendBooking() {
