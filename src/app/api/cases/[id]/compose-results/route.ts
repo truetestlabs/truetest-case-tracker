@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getEmailRecipients } from "@/lib/email";
+import { getEmailRecipients, sendMroReferralEmail } from "@/lib/email";
 
 /**
  * GET /api/cases/[id]/compose-results?mro=true|false
@@ -183,6 +183,15 @@ export async function POST(
         createdBy: "admin",
       },
     });
+
+    // Auto-send MRO referral email to Michael with PDFs attached
+    if (mroReview && testOrder?.id) {
+      try {
+        await sendMroReferralEmail(caseId, testOrder.id);
+      } catch (e) {
+        console.error("MRO referral email failed (non-blocking):", e);
+      }
+    }
 
     return NextResponse.json({ draftId: draft.id, to, subject });
   } catch (error) {

@@ -66,7 +66,101 @@ function calloutBox(opts: { bg: string; border: string; titleColor: string; text
   </div>`;
 }
 
+const MRO_INTERNAL_TO = "mgammel@mac.com";
+
 type Recipient = { email: string; name: string };
+
+/** Auto-send MRO referral email to Michael with result + COC PDFs attached */
+export async function sendMroReferralEmail(
+  caseId: string,
+  testOrderId: string
+): Promise<void> {
+  if (!process.env.RESEND_API_KEY) return;
+
+  const [caseData, testOrder] = await Promise.all([
+    prisma.case.findUnique({
+      where: { id: caseId },
+      select: {
+        caseNumber: true,
+        donor: { select: { firstName: true, lastName: true, email: true, phone: true } },
+      },
+    }),
+    prisma.testOrder.findUnique({
+      where: { id: testOrderId },
+      select: { specimenId: true, testDescription: true },
+    }),
+  ]);
+
+  if (!caseData || !testOrder) return;
+
+  const donorName = caseData.donor
+    ? `${caseData.donor.firstName} ${caseData.donor.lastName}`
+    : "Unknown Donor";
+  const specimenId = testOrder.specimenId || "N/A";
+  const donorPhone = caseData.donor?.phone;
+  const donorEmail = caseData.donor?.email || "N/A";
+
+  const subject = `Specimen ID: ${specimenId}`;
+
+  const phoneLine = donorPhone ? `Phone: ${donorPhone}` : "";
+  const bodyLines = [
+    `Please review the attached result for ${donorName}`,
+    "",
+    ...(phoneLine ? [phoneLine] : []),
+    `Email: ${donorEmail}`,
+  ];
+
+  const html = emailLayout({
+    headerBg: "#5b21b6",
+    headerTitle: "MRO Referral",
+    body: `
+      <p style="font-size:15px;margin:0 0 16px;font-family:${FONT};">Please review the attached result for <strong>${donorName}</strong></p>
+      ${donorPhone ? `<p style="font-size:14px;margin:0 0 4px;color:#334155;font-family:${FONT};">Phone: ${donorPhone}</p>` : ""}
+      <p style="font-size:14px;margin:0 0 4px;color:#334155;font-family:${FONT};">Email: ${donorEmail}</p>
+      <p style="font-size:13px;margin:16px 0 0;color:#64748b;font-family:${FONT};">Specimen ID: ${specimenId} &bull; Case ${caseData.caseNumber}</p>`,
+  });
+
+  // Attach both result PDF and COC PDF
+  type Attachment = { filename: string; content: Buffer };
+  const attachments: Attachment[] = [];
+
+  const docs = await prisma.document.findMany({
+    where: {
+      caseId,
+      testOrderId,
+      documentType: { in: ["result_report", "chain_of_custody"] },
+    },
+    orderBy: { uploadedAt: "desc" },
+    select: { documentType: true, filePath: true, fileName: true },
+  });
+
+  for (const doc of docs) {
+    if (doc.filePath && doc.fileName) {
+      try {
+        const { buffer } = await downloadFile(doc.filePath);
+        attachments.push({ filename: doc.fileName, content: buffer });
+      } catch (e) {
+        console.warn(`[Email] Could not attach ${doc.documentType}:`, e);
+      }
+    }
+  }
+
+  const { error: sendError } = await getResend().emails.send({
+    from: FROM_EMAIL,
+    replyTo: REPLY_TO,
+    to: [MRO_INTERNAL_TO],
+    subject,
+    html,
+    text: bodyLines.join("\n"),
+    ...(attachments.length > 0 ? { attachments } : {}),
+  });
+
+  if (sendError) {
+    console.error("[Email] MRO referral send error:", sendError);
+    throw new Error(sendError.message);
+  }
+  console.log("[Email] MRO referral sent to", MRO_INTERNAL_TO);
+}
 
 /** Fetch email recipients for a case based on notification type */
 export async function getEmailRecipients(
