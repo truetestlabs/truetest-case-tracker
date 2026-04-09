@@ -219,6 +219,28 @@ Monitoring Recommendation: Given these results, ongoing monitoring is recommende
 
 The test was processed at Quest Diagnostics' DHHS-certified laboratory in Lenexa, Kansas.
 
+---
+
+EXAMPLE J — Dilute Positive Urine with partial MRO verification (one substance cleared, one stands):
+
+John Ritchie — Urine Drug Test Summary
+Collected: March 24, 2026 | Reported: March 29, 2026 | MRO Verification Date: April 3, 2026 | Type: Urine
+
+Result: POSITIVE — Marijuana (Delta-9-THC Metabolite) | DILUTE POSITIVE | MRO VERIFIED
+Amphetamine: MRO VERIFIED NEGATIVE
+
+John Ritchie's urine drug test returned positive for both amphetamine and marijuana on a dilute specimen. Following Medical Review Officer (MRO) evaluation, this report has been revised as of April 3, 2026. The amphetamine finding has been downgraded to negative by the MRO. The marijuana positive has been verified and stands as reported.
+
+Specimen Validity — Dilute: Creatinine was 12.2 mg/dL (below the >=20 mg/dL threshold) and specific gravity was 1.0027 (below the acceptable range of 1.003-1.020).
+
+A dilute result occurs when a large amount of water has been consumed prior to testing. When creatinine falls below the 20 mg/dL cutoff, the laboratory performs a secondary validity test called Specific Gravity. If that value is outside the acceptable range, the specimen is formally designated as dilute. This result is classified as a Dilute Positive — meaning the validity parameters were outside acceptable ranges, but the laboratory was still able to produce a confirmed positive result for marijuana above the cutoff threshold.
+
+There are three types of dilute results: a Dilute Rejected specimen is predominantly water and cannot be tested; a Dilute Positive or Dilute Negative is one where validity parameters are out of range but a result was still obtainable. Donors may consume large quantities of water prior to testing either in an attempt to dilute substances below detection thresholds, or inadvertently in an effort to produce a sample. It is recommended that the donor repeat the test as soon as possible and be advised to moderate their fluid intake prior to testing.
+
+Important Limitation: As with all drug tests, this result cannot determine the exact time of use, the dose consumed, or the frequency of consumption. The result confirms the presence of the marijuana metabolite above the confirmed threshold at the time of collection. THC metabolites can remain detectable in urine for a wide range of time depending on individual factors such as metabolism, body fat, and pattern of use.
+
+The test was processed at Quest Diagnostics' DHHS-certified laboratory in Lenexa, Kansas, and verified by Donald S. Freedman, M.D., C.M.R.O. of American Medical Review Officer Inc.
+
 ================================================================
 RULES — follow these constraints
 ================================================================
