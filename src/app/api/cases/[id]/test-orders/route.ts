@@ -118,7 +118,7 @@ export async function PATCH(
     // Allow manual field updates too
     const manualFields = [
       "collectionSite", "collectionSiteType", "schedulingType",
-      "paymentMethod", "appointmentDate", "labAccessionNumber",
+      "paymentMethod", "appointmentDate", "collectionDate", "labAccessionNumber",
       "invoiceNumber", "notes", "collectionType", "specimenId",
       "testCatalogId", "testDescription", "specimenType", "lab", "clientPrice"
     ];

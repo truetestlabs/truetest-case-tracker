@@ -20,6 +20,7 @@ type TestOrderData = {
   invoiceNumber: string | null;
   labAccessionNumber: string | null;
   appointmentDate: string | null;
+  collectionDate: string | null;
   notes: string | null;
 };
 
@@ -89,6 +90,10 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
 
     const apptDate = form.get("appointmentDate") as string;
     if (apptDate) data.appointmentDate = new Date(apptDate).toISOString();
+
+    const collDate = form.get("collectionDate") as string;
+    if (collDate) data.collectionDate = new Date(collDate + "T12:00:00").toISOString();
+    else data.collectionDate = null;
 
     try {
       const res = await fetch(`/api/cases/${caseId}/test-orders`, {
@@ -193,10 +198,18 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
             })()}
           </div>
 
-          {/* Specimen ID */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Specimen ID</label>
-            <input type="text" name="specimenId" defaultValue={testOrder.specimenId || ""} placeholder="e.g., TTL-2026-04-001" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
+          {/* Specimen ID + Collection Date */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Specimen ID</label>
+              <input type="text" name="specimenId" defaultValue={testOrder.specimenId || ""} placeholder="e.g., TTL-2026-04-001" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {testOrder.testDescription?.toLowerCase().includes("sweat patch") ? "Application Date" : "Collection Date"}
+              </label>
+              <input type="date" name="collectionDate" defaultValue={testOrder.collectionDate ? new Date(testOrder.collectionDate).toISOString().split("T")[0] : ""} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
+            </div>
           </div>
 
           {/* Collection details */}
