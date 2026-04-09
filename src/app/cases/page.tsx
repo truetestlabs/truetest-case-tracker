@@ -220,9 +220,8 @@ export default function CasesPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       {c.testOrders.length > 0 ? (
-                        <div>
-                          {(() => {
-                            const test = c.testOrders[0];
+                        <div className="flex flex-col gap-1">
+                          {c.testOrders.map((test, ti) => {
                             const preCollectionStatuses = ["order_created", "awaiting_payment", "payment_received"];
                             const isPreCollection = preCollectionStatuses.includes(test.testStatus);
                             const hasAppt = test.appointmentDate;
@@ -232,14 +231,14 @@ export default function CasesPage() {
                               : test.collectionSite || null;
                             if (hasAppt && isPreCollection) {
                               return (
-                                <>
+                                <div key={ti}>
                                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                                     Scheduled{site ? ` @ ${site}` : ""}
                                   </span>
-                                  <p className="text-xs text-slate-500 mt-1">
+                                  <p className="text-xs text-slate-500 mt-0.5">
                                     {new Date(test.appointmentDate!).toLocaleDateString()} {new Date(test.appointmentDate!).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                                   </p>
-                                </>
+                                </div>
                               );
                             }
                             const isSweatPatch = test.testDescription?.toLowerCase().includes("sweat patch");
@@ -247,12 +246,12 @@ export default function CasesPage() {
                               : isSweatPatch && test.testStatus === "specimen_collected" ? "Patch Removed"
                               : undefined;
                             return (
-                              <>
-                                {site && <p className="text-xs text-slate-500 mb-1">{site}</p>}
+                              <div key={ti}>
+                                {site && <p className="text-[10px] text-slate-400 leading-tight">{site}</p>}
                                 <StatusBadge status={test.testStatus} type="test" label={testLabel} />
-                              </>
+                              </div>
                             );
-                          })()}
+                          })}
                         </div>
                       ) : (
                         <span className="text-xs text-slate-400">No tests</span>
