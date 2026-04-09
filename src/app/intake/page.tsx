@@ -136,12 +136,27 @@ export default function QuickIntakePage() {
           testCatalogId: form.testCatalogId || null,
         }),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to create case");
+
+      const data = await res.json();
+
+      // Case was reopened — redirect to existing case
+      if (data.reopened) {
+        window.location.href = `/cases/${data.caseId}`;
+        return;
       }
-      const data: CreatedCase = await res.json();
-      setCreatedCase(data);
+
+      // Donor already has an active case — show link
+      if (res.status === 409) {
+        const caseId = data.existingCaseId || data.duplicates?.[0]?.id;
+        const caseNum = data.existingCaseNumber || data.duplicates?.[0]?.caseNumber || "";
+        throw new Error(`This donor already has an active case (${caseNum}). Go to: /cases/${caseId}`);
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to create case");
+      }
+
+      setCreatedCase(data as CreatedCase);
       setPhase("success");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

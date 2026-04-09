@@ -17,7 +17,7 @@ export default function NewCasePage() {
   const [error, setError] = useState("");
   const [duplicates, setDuplicates] = useState<DuplicateCase[]>([]);
   const [dupChecked, setDupChecked] = useState(false);
-  const [bypassDup, setBypassDup] = useState(false);
+  // bypassDup removed — one case per donor, no bypass allowed
 
   // Check for existing cases with same donor name
   const checkDuplicates = useCallback(async (firstName: string, lastName: string) => {
@@ -32,7 +32,6 @@ export default function NewCasePage() {
         const data = await res.json();
         setDuplicates(data.cases || []);
         setDupChecked(true);
-        setBypassDup(false);
       }
     } catch {
       // Silently fail — don't block case creation
@@ -42,9 +41,9 @@ export default function NewCasePage() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    // If duplicates found and user hasn't acknowledged, block submission
-    if (duplicates.length > 0 && !bypassDup) {
-      setError("This donor already has an existing case. Check the warning below, then confirm if you still want to create a new one.");
+    // If duplicates found, block submission — one case per donor
+    if (duplicates.length > 0) {
+      setError("This donor already has an existing case. Use the buttons below to go to it.");
       return;
     }
 
@@ -59,10 +58,10 @@ export default function NewCasePage() {
       const res = await fetch(`/api/cases/check-duplicate?firstName=${encodeURIComponent(firstNameVal)}&lastName=${encodeURIComponent(lastNameVal)}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.cases?.length > 0 && !bypassDup) {
+        if (data.cases?.length > 0) {
           setDuplicates(data.cases);
           setDupChecked(true);
-          setError("This donor already has an existing case. Check the warning below, then confirm if you still want to create a new one.");
+          setError("This donor already has an existing case. Use the buttons below to go to it.");
           return;
         }
       }
@@ -77,7 +76,7 @@ export default function NewCasePage() {
       county: form.get("county") || null,
       judgeName: form.get("judgeName") || null,
       notes: form.get("notes") || null,
-      confirmDuplicate: bypassDup,
+      // confirmDuplicate removed — one case per donor, no bypass
       donor: {
         firstName: form.get("donorFirstName"),
         lastName: form.get("donorLastName"),
@@ -93,21 +92,26 @@ export default function NewCasePage() {
         body: JSON.stringify(data),
       });
 
+      const result = await res.json();
+
+      // Case was reopened instead of created — redirect to existing case
+      if (result.reopened) {
+        router.push(`/cases/${result.caseId}`);
+        return;
+      }
+
       if (res.status === 409) {
-        const err = await res.json();
-        setDuplicates(err.duplicates || []);
+        setDuplicates(result.duplicates || []);
         setDupChecked(true);
-        setError(err.message || "This donor already has an active case.");
+        setError(result.message || "This donor already has an active case.");
         setLoading(false);
         return;
       }
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to create case");
+        throw new Error(result.error || "Failed to create case");
       }
 
-      const result = await res.json();
       router.push(`/cases/${result.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -245,7 +249,7 @@ export default function NewCasePage() {
                   <span className="text-amber-600 text-xl mt-0.5">⚠️</span>
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-amber-800">
-                      This donor already has {duplicates.length} existing case{duplicates.length > 1 ? "s" : ""}:
+                      This donor already has a case — one case per donor:
                     </p>
                     <ul className="mt-2 space-y-2">
                       {duplicates.map((c) => (
@@ -265,7 +269,6 @@ export default function NewCasePage() {
                             <button
                               type="button"
                               onClick={async () => {
-                                if (!confirm(`Reopen case ${c.caseNumber}?`)) return;
                                 const res = await fetch(`/api/cases/${c.id}`, {
                                   method: "PATCH",
                                   headers: { "Content-Type": "application/json" },
@@ -276,10 +279,10 @@ export default function NewCasePage() {
                               }}
                               className="text-xs px-2 py-0.5 bg-blue-600 text-white rounded font-medium hover:bg-blue-700"
                             >
-                              Reopen
+                              Reopen & Add Test
                             </button>
                           )}
-                          {c.caseStatus === "active" && (
+                          {c.caseStatus !== "closed" && (
                             <Link
                               href={`/cases/${c.id}`}
                               className="text-xs px-2 py-0.5 bg-green-600 text-white rounded font-medium hover:bg-green-700 no-underline"
@@ -290,17 +293,7 @@ export default function NewCasePage() {
                         </li>
                       ))}
                     </ul>
-                    <label className="inline-flex items-center gap-2 mt-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={bypassDup}
-                        onChange={(e) => setBypassDup(e.target.checked)}
-                        className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
-                      />
-                      <span className="text-sm text-amber-800 font-medium">
-                        I understand — create a new case anyway
-                      </span>
-                    </label>
+                    <p className="text-xs text-amber-700 mt-3">If this is a different person with the same name, contact admin.</p>
                   </div>
                 </div>
               </div>

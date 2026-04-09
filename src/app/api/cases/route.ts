@@ -47,28 +47,58 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Server-side duplicate protection: block if donor already has an active case
-    // unless caller explicitly confirms (confirmDuplicate: true)
-    if (body.donor?.firstName && body.donor?.lastName && !body.confirmDuplicate) {
+    // One case per donor: check ALL cases (active and closed)
+    if (body.donor?.firstName && body.donor?.lastName) {
       const existing = await prisma.case.findMany({
         where: {
-          caseStatus: { not: "closed" },
           donor: {
             firstName: { equals: body.donor.firstName.trim(), mode: "insensitive" },
             lastName: { equals: body.donor.lastName.trim(), mode: "insensitive" },
           },
         },
         select: { id: true, caseNumber: true, caseStatus: true, caseType: true },
+        orderBy: { updatedAt: "desc" },
       });
+
       if (existing.length > 0) {
-        return NextResponse.json(
-          {
-            error: "DUPLICATE",
-            message: `${body.donor.firstName} ${body.donor.lastName} already has an active case.`,
-            duplicates: existing,
-          },
-          { status: 409 }
-        );
+        const activeCase = existing.find((c) => c.caseStatus !== "closed");
+        const closedCase = existing.find((c) => c.caseStatus === "closed");
+
+        if (activeCase) {
+          // Active case exists — block creation, direct to existing case
+          return NextResponse.json(
+            {
+              error: "DUPLICATE",
+              message: `${body.donor.firstName} ${body.donor.lastName} already has an active case.`,
+              existingCaseId: activeCase.id,
+              existingCaseNumber: activeCase.caseNumber,
+              duplicates: existing,
+            },
+            { status: 409 }
+          );
+        }
+
+        if (closedCase) {
+          // Closed case exists — reopen it instead of creating a new one
+          await prisma.case.update({
+            where: { id: closedCase.id },
+            data: { caseStatus: "active" },
+          });
+          await prisma.statusLog.create({
+            data: {
+              caseId: closedCase.id,
+              oldStatus: "closed",
+              newStatus: "active",
+              changedBy: "admin",
+              note: "Case reopened — new test order needed for this donor",
+            },
+          });
+          return NextResponse.json({
+            reopened: true,
+            caseId: closedCase.id,
+            caseNumber: closedCase.caseNumber,
+          });
+        }
       }
     }
 

@@ -72,20 +72,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── Generate case number ──
-    const currentYear = new Date().getFullYear();
-    const lastCase = await prisma.case.findFirst({
-      where: { caseNumber: { startsWith: `TTL-FL-${currentYear}` } },
-      orderBy: { caseNumber: "desc" },
+    // ── One case per donor: find existing case or create new ──
+    const existingCase = await prisma.case.findFirst({
+      where: { donorId: donor.id },
+      orderBy: { updatedAt: "desc" },
     });
-    let sequence = 1;
-    if (lastCase) {
-      const lastNum = parseInt(lastCase.caseNumber.split("-").pop() || "0");
-      sequence = lastNum + 1;
-    }
-    const caseNumber = generateCaseNumber(sequence);
 
-    // ── Build case notes from form fields ──
+    // Build notes from form fields (used for both new and existing cases)
     const noteParts: string[] = [];
     if (body.reason) noteParts.push(`Reason: ${body.reason}`);
     if (body.zipLoc) noteParts.push(`Location ZIP: ${body.zipLoc}`);
@@ -98,33 +91,78 @@ export async function POST(request: NextRequest) {
     if (body.otherText) noteParts.push(`Other: ${body.otherText}`);
     noteParts.push("Source: Website order form");
 
-    // ── Create the case ──
-    const newCase = await prisma.case.create({
-      data: {
-        caseNumber,
-        caseType,
-        caseStatus: "active",
-        hasCourtOrder: false,
-        isMonitored: false,
-        notes: noteParts.join("\n"),
-        donorId: donor.id,
-        createdBy: "website",
-      },
-    });
+    let caseId: string;
+    let caseNumber: string;
 
-    // ── Add donor as case contact ──
-    await prisma.caseContact.create({
-      data: {
-        caseId: newCase.id,
-        contactId: donor.id,
-        roleInCase: "donor",
-        receivesResults: false,
-        receivesStatus: true,
-        receivesInvoices: false,
-        canOrderTests: false,
-        isPrimaryContact: false,
-      },
-    });
+    if (existingCase) {
+      // Reuse existing case — reopen if closed
+      caseId = existingCase.id;
+      caseNumber = existingCase.caseNumber;
+      if (existingCase.caseStatus === "closed") {
+        await prisma.case.update({
+          where: { id: existingCase.id },
+          data: { caseStatus: "active" },
+        });
+        await prisma.statusLog.create({
+          data: {
+            caseId: existingCase.id,
+            oldStatus: "closed",
+            newStatus: "active",
+            changedBy: "website",
+            note: "Case reopened — new order from website",
+          },
+        });
+      }
+      // Append order notes to existing case
+      const existingNotes = existingCase.notes || "";
+      const separator = existingNotes ? "\n---\n" : "";
+      await prisma.case.update({
+        where: { id: existingCase.id },
+        data: { notes: existingNotes + separator + noteParts.join("\n") },
+      });
+    } else {
+      // Generate new case number
+      const currentYear = new Date().getFullYear();
+      const lastCase = await prisma.case.findFirst({
+        where: { caseNumber: { startsWith: `TTL-FL-${currentYear}` } },
+        orderBy: { caseNumber: "desc" },
+      });
+      let sequence = 1;
+      if (lastCase) {
+        const lastNum = parseInt(lastCase.caseNumber.split("-").pop() || "0");
+        sequence = lastNum + 1;
+      }
+      caseNumber = generateCaseNumber(sequence);
+
+      // Create the case
+      const newCase = await prisma.case.create({
+        data: {
+          caseNumber,
+          caseType,
+          caseStatus: "active",
+          hasCourtOrder: false,
+          isMonitored: false,
+          notes: noteParts.join("\n"),
+          donorId: donor.id,
+          createdBy: "website",
+        },
+      });
+      caseId = newCase.id;
+
+      // Add donor as case contact
+      await prisma.caseContact.create({
+        data: {
+          caseId,
+          contactId: donor.id,
+          roleInCase: "donor",
+          receivesResults: false,
+          receivesStatus: true,
+          receivesInvoices: false,
+          canOrderTests: false,
+          isPrimaryContact: false,
+        },
+      });
+    }
 
     // ── Add attorney contact if provided ──
     if (body.attorneyEmail?.trim()) {
@@ -140,7 +178,7 @@ export async function POST(request: NextRequest) {
       });
       await prisma.caseContact.create({
         data: {
-          caseId: newCase.id,
+          caseId: caseId,
           contactId: attorney.id,
           roleInCase: "referring_party",
           receivesResults: true,
@@ -161,7 +199,7 @@ export async function POST(request: NextRequest) {
       for (const t of resolved) {
         await prisma.testOrder.create({
           data: {
-            caseId: newCase.id,
+            caseId: caseId,
             testCatalogId: t.testCatalogId,
             testDescription: t.testDescription,
             specimenType: t.specimenType as SpecimenType,
@@ -177,7 +215,7 @@ export async function POST(request: NextRequest) {
     // ── Log creation ──
     await prisma.statusLog.create({
       data: {
-        caseId: newCase.id,
+        caseId: caseId,
         oldStatus: "—",
         newStatus: "active",
         changedBy: "website",
@@ -188,7 +226,7 @@ export async function POST(request: NextRequest) {
     console.log(`[Order] Website order → case ${caseNumber} created with ${tests.length} test(s)`);
 
     return NextResponse.json(
-      { caseId: newCase.id, caseNumber },
+      { caseId: caseId, caseNumber },
       { status: 201, headers: CORS_HEADERS }
     );
   } catch (error) {
