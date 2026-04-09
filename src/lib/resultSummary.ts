@@ -198,6 +198,27 @@ The results were confirmed by LC-MS/MS and certified by the laboratory director 
 
 Monitoring Recommendation: Given these results, ongoing monitoring is recommended. The sweat patch is worn on the skin for approximately one week and detects drug use cumulatively over the wear period, providing ongoing surveillance rather than a single point-in-time snapshot. Random urine testing is also available as an alternative. Both options can be tailored to the specific needs of the case. Please feel free to reach out to discuss the best fit for this monitoring program.
 
+EXAMPLE I — Positive Urine (Cocaine + Marijuana, no MRO needed):
+
+Chris Bartlett — Urine Drug Test Summary
+Collected: April 2, 2026 | Reported: April 6, 2026 | Type: Urine
+
+Result: POSITIVE — Cocaine Metabolite (BZE) and Marijuana (Delta-9-THC Metabolite)
+
+Quantitative Values:
+Cocaine Metabolite (BZE): 617 ng/mL (Initial cutoff: 300 ng/mL | MS Confirm cutoff: 150 ng/mL)
+Marijuana Metabolite: 107 ng/mL (Initial cutoff: 20 ng/mL | MS Confirm cutoff: 15 ng/mL)
+
+Chris Bartlett's urine drug test returned positive for both cocaine metabolite (benzoylecgonine) and marijuana (Delta-9-THC metabolite). All other substances tested were negative, including amphetamine/methamphetamine, barbiturates, benzodiazepines, methadone, opiates, oxycodone/oxymorphone, phencyclidine (PCP), propoxyphene, meperidine, tramadol, fentanyl, zolpidem, and zolpidem metabolite.
+
+Specimen Validity: The specimen was confirmed valid — creatinine was 29.4 mg/dL (within the acceptable range of >=20 mg/dL), pH was 5.6 (within the 4.5-8.9 range), and no oxidizing adulterants were detected. There is no indication of dilution, substitution, or tampering.
+
+Important Limitation: As with all drug tests, this result cannot determine the exact time of use, the dose consumed, or the frequency of consumption. The result confirms the presence of both substances above the confirmed thresholds at the time of collection. Cocaine metabolite is detectable in urine for approximately 2-4 days following use. THC metabolites can remain detectable for a wide range of time depending on individual factors such as metabolism, body fat, and pattern of use.
+
+Monitoring Recommendation: Given these results, ongoing monitoring is recommended. The sweat patch is a particularly effective tool for continuous surveillance — it is worn on the skin and detects drug use cumulatively over the wear period (typically 1-2 weeks), providing a broader window of detection than a single urine test. Random urine testing can be used alongside the patch to provide comprehensive, ongoing oversight. Please feel free to reach out to discuss a monitoring program tailored to the needs of this case.
+
+The test was processed at Quest Diagnostics' DHHS-certified laboratory in Lenexa, Kansas.
+
 ================================================================
 RULES — follow these constraints
 ================================================================
@@ -206,6 +227,8 @@ STYLE:
 - Use donor's FULL NAME in the header line and LAST NAME in the narrative (e.g., "Markani's 5-panel hair drug test returned...")
 - Include panel name when identifiable (e.g., "5-panel", "10-panel", "14-panel")
 - Be concise like the examples — no redundant paragraphs
+- For POSITIVE urine results: put Quantitative Values IMMEDIATELY after the Result line (before the narrative paragraph) — see Examples B and I
+- For positive results, include approximate detection window context per substance (e.g., "Cocaine metabolite is detectable in urine for approximately 2-4 days following use. THC metabolites can remain detectable for a wide range of time depending on individual factors such as metabolism, body fat, and pattern of use.")
 - Lab attribution goes near the end, one sentence
 - Closing disclaimer is one short sentence for negatives
 - Plain text only — no markdown, no asterisks, no bold
