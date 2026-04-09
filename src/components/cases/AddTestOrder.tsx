@@ -258,6 +258,7 @@ export function AddTestOrder({ caseId, onAdded }: Props) {
                   <select name="payment" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm">
                     <option value="not_paid">Not Paid</option>
                     <option value="square">Square</option>
+                    <option value="stripe">Stripe</option>
                     <option value="cash">Cash</option>
                     <option value="check">Check</option>
                     <option value="credit_card">Credit Card</option>

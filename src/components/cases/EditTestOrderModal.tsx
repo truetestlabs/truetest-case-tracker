@@ -89,7 +89,7 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
     };
 
     const apptDate = form.get("appointmentDate") as string;
-    if (apptDate) data.appointmentDate = new Date(apptDate).toISOString();
+    if (apptDate) data.appointmentDate = new Date(apptDate + "T12:00:00").toISOString();
 
     const collDate = form.get("collectionDate") as string;
     if (collDate) data.collectionDate = new Date(collDate + "T12:00:00").toISOString();
@@ -232,8 +232,8 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Collection Date</label>
-              <input type="datetime-local" name="appointmentDate" defaultValue={testOrder.appointmentDate ? testOrder.appointmentDate.slice(0, 16) : ""} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
+              <label className="block text-xs font-medium text-gray-600 mb-1">Appointment Date</label>
+              <input type="date" name="appointmentDate" defaultValue={testOrder.appointmentDate ? new Date(testOrder.appointmentDate).toISOString().split("T")[0] : ""} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
             </div>
           </div>
 
@@ -245,6 +245,7 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
               <select name="payment" defaultValue={testOrder.paymentMethod || "not_paid"} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm">
                 <option value="not_paid">Not Paid</option>
                 <option value="square">Square</option>
+                <option value="stripe">Stripe</option>
                 <option value="cash">Cash</option>
                 <option value="check">Check</option>
                 <option value="credit_card">Credit Card</option>
