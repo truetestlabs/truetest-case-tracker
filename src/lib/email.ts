@@ -12,6 +12,60 @@ const REPLY_TO = process.env.REPLY_TO_EMAIL || "Mgammel@truetestlabs.com";
 const OFFICE_PHONE = "(847) 258-3966";
 const OFFICE_ADDRESS = "2256 Landmeier Rd Ste A, Elk Grove Village, IL 60007";
 
+// Shared professional email font stack — web-safe with modern fallbacks
+const FONT = "'Helvetica Neue', Helvetica, Arial, sans-serif";
+
+/** Shared email shell — wraps content in a professional layout */
+function emailLayout(opts: {
+  headerBg?: string; // header background color (default: navy)
+  headerTitle: string;
+  body: string; // inner HTML for the body section
+  footerNote?: string;
+}) {
+  const bg = opts.headerBg || "#1e3a5f";
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:${FONT};-webkit-font-smoothing:antialiased;">
+  <div style="max-width:620px;margin:32px auto;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+    <!-- Header -->
+    <div style="background:${bg};padding:28px 36px;">
+      <p style="margin:0;color:rgba(255,255,255,0.6);font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;font-family:${FONT};">TrueTest Labs</p>
+      <h1 style="margin:6px 0 0;color:#ffffff;font-size:21px;font-weight:600;font-family:${FONT};line-height:1.3;">${opts.headerTitle}</h1>
+    </div>
+    <!-- Body -->
+    <div style="padding:32px 36px;font-family:${FONT};color:#334155;font-size:15px;line-height:1.6;">
+      ${opts.body}
+      <!-- Contact -->
+      <div style="border-top:1px solid #e2e8f0;margin-top:28px;padding-top:20px;">
+        <p style="color:#64748b;font-size:13px;margin:0 0 6px;font-family:${FONT};">Questions? Contact our office:</p>
+        <p style="color:#1e3a5f;font-size:14px;font-weight:600;margin:0;font-family:${FONT};">${OFFICE_PHONE}</p>
+        <p style="color:#64748b;font-size:13px;margin:4px 0 0;font-family:${FONT};">${OFFICE_ADDRESS}</p>
+      </div>
+    </div>
+    <!-- Footer -->
+    <div style="background:#f8fafc;padding:16px 36px;border-top:1px solid #e2e8f0;">
+      <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;font-family:${FONT};">${opts.footerNote || "This notification was sent by TrueTest Labs. Do not reply to this email."}</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+/** Format a summary block — clean proportional font, not monospace */
+function summaryBlock(text: string) {
+  const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:24px;margin:20px 0;font-family:${FONT};font-size:14px;line-height:1.75;color:#1e293b;white-space:pre-wrap;">${escaped}</div>`;
+}
+
+/** Colored callout box */
+function calloutBox(opts: { bg: string; border: string; titleColor: string; textColor: string; title: string; text: string }) {
+  return `<div style="background:${opts.bg};border:1px solid ${opts.border};border-radius:6px;padding:16px 20px;margin:20px 0;">
+    <p style="color:${opts.titleColor};font-size:13px;font-weight:600;margin:0 0 6px;font-family:${FONT};">${opts.title}</p>
+    <p style="color:${opts.textColor};font-size:14px;margin:0;line-height:1.6;font-family:${FONT};">${opts.text}</p>
+  </div>`;
+}
+
 type Recipient = { email: string; name: string };
 
 /** Fetch email recipients for a case based on notification type */
@@ -84,34 +138,11 @@ export async function sendDraftEmail(draftId: string): Promise<string[]> {
     ? `${draft.case.donor.firstName} ${draft.case.donor.lastName}`
     : "the donor";
 
-  // Build HTML from the editable plain-text body
-  const escapedBody = draft.body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const summaryHtml = `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:20px 0;font-family:monospace;font-size:13px;line-height:1.7;white-space:pre-wrap;">${escapedBody}</div>`;
-
-  const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;">
-  <div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
-    <div style="background:${isMro ? "#5b21b6" : "#1e3a5f"};padding:24px 32px;">
-      <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">TrueTest Labs</p>
-      <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;">${isMro ? "Test Results — MRO Review" : "Test Results Available"}</h1>
-    </div>
-    <div style="padding:28px 32px;">
-      ${summaryHtml}
-      <div style="border-top:1px solid #e2e8f0;margin-top:24px;padding-top:20px;">
-        <p style="color:#475569;font-size:13px;margin:0 0 8px;">Questions? Contact our office:</p>
-        <p style="color:#1e3a5f;font-size:14px;font-weight:600;margin:0;">${OFFICE_PHONE}</p>
-        <p style="color:#64748b;font-size:13px;margin:4px 0 0;">${OFFICE_ADDRESS}</p>
-      </div>
-    </div>
-    <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
-      <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;">This notification was sent by TrueTest Labs Case Management System.</p>
-    </div>
-  </div>
-</body>
-</html>`;
+  const html = emailLayout({
+    headerBg: isMro ? "#5b21b6" : "#1e3a5f",
+    headerTitle: isMro ? "Test Results \u2014 MRO Review" : "Test Results Available",
+    body: summaryBlock(draft.body),
+  });
 
   const emailList = (draft.recipients as string[]) || [];
   if (emailList.length === 0) return [];
@@ -204,47 +235,23 @@ export async function sendResultsReleasedEmail(
     ? `${caseData.donor.firstName} ${caseData.donor.lastName}`
     : "the donor";
 
-  const summaryHtml = summary
-    ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:20px 0;font-family:monospace;font-size:13px;line-height:1.7;white-space:pre-wrap;">${summary.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>`
-    : `<p style="color:#64748b;">Results are now available. Please contact our office to obtain a copy.</p>`;
+  const summaryContent = summary
+    ? summaryBlock(summary)
+    : `<p style="color:#64748b;font-family:${FONT};">Results are now available. Please contact our office to obtain a copy.</p>`;
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;">
-  <div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
-    <!-- Header -->
-    <div style="background:#1e3a5f;padding:24px 32px;">
-      <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">TrueTest Labs</p>
-      <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;">Test Results Available</h1>
-    </div>
-    <!-- Body -->
-    <div style="padding:28px 32px;">
-      <p style="color:#334155;font-size:15px;margin:0 0 4px;">Results are now available for:</p>
-      <p style="color:#0f172a;font-size:18px;font-weight:700;margin:0 0 4px;">${donorName}</p>
+  const mroBlock = options?.mroReview
+    ? calloutBox({ bg: "#f5f3ff", border: "#c4b5fd", titleColor: "#5b21b6", textColor: "#4c1d95", title: "Medical Review Officer (MRO) Review", text: "Please note: These results are being forwarded to a Medical Review Officer (MRO) for additional review. If the MRO determines that a valid prescription explains the test result, the final report may differ from the laboratory findings above. You will be notified once the MRO review is complete." })
+    : "";
+
+  const html = emailLayout({
+    headerTitle: "Test Results Available",
+    body: `
+      <p style="margin:0 0 4px;">Results are now available for:</p>
+      <p style="color:#0f172a;font-size:18px;font-weight:600;margin:0 0 4px;font-family:${FONT};">${donorName}</p>
       <p style="color:#64748b;font-size:13px;margin:0 0 24px;">Case No. ${caseData.caseNumber}${testOrder ? ` &bull; ${testOrder.testDescription}` : ""}</p>
-
-      ${summaryHtml}
-
-      ${options?.mroReview ? `<div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:16px;margin:20px 0;">
-        <p style="color:#5b21b6;font-size:13px;font-weight:600;margin:0 0 6px;">Medical Review Officer (MRO) Review</p>
-        <p style="color:#4c1d95;font-size:13px;margin:0;">Please note: These results are being forwarded to a Medical Review Officer (MRO) for additional review. If the MRO determines that a valid prescription explains the test result, the final report may differ from the laboratory findings above. You will be notified once the MRO review is complete.</p>
-      </div>` : ""}
-
-      <div style="border-top:1px solid #e2e8f0;margin-top:24px;padding-top:20px;">
-        <p style="color:#475569;font-size:13px;margin:0 0 8px;">Questions? Contact our office:</p>
-        <p style="color:#1e3a5f;font-size:14px;font-weight:600;margin:0;">${OFFICE_PHONE}</p>
-        <p style="color:#64748b;font-size:13px;margin:4px 0 0;">${OFFICE_ADDRESS}</p>
-      </div>
-    </div>
-    <!-- Footer -->
-    <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
-      <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;">This notification was sent by TrueTest Labs Case Management System. Do not reply to this email.</p>
-    </div>
-  </div>
-</body>
-</html>`;
+      ${summaryContent}
+      ${mroBlock}`,
+  });
 
   const emailList = recipients.map((r) => r.email);
 
@@ -324,26 +331,14 @@ export async function sendSampleCollectedEmail(
     ? `<p style="color:#64748b;font-size:13px;margin:0 0 20px;">Collection date: <strong>${new Date(firstDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</strong></p>`
     : "";
 
-  // Render a list of tests
-  const testList = `
-    <ul style="margin:0 0 20px;padding-left:20px;color:#334155;font-size:14px;line-height:1.8;">
-      ${testOrders.map((t) => `<li>${t.testDescription}</li>`).join("")}
-    </ul>`;
-
   const unpaidMessage = collectedAtTTL
     ? "Your specimens have been collected and are currently being held at TrueTest Labs pending payment. Once payment is received, your samples will be sent to the lab for processing and results will be released promptly. Please contact our office at your earliest convenience to arrange payment."
     : "Your specimens have been collected at the collection site. Please note that results will be delayed until payment is received. Please contact our office at your earliest convenience to arrange payment so we can process your samples without further delay.";
 
   const paymentBlock = anyUnpaid
-    ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px;margin:20px 0;">
-        <p style="color:#92400e;font-size:13px;font-weight:600;margin:0 0 6px;">Payment Required</p>
-        <p style="color:#78350f;font-size:13px;margin:0;">${unpaidMessage}</p>
-      </div>`
+    ? calloutBox({ bg: "#fffbeb", border: "#fde68a", titleColor: "#92400e", textColor: "#78350f", title: "Payment Required", text: unpaidMessage })
     : allInvoiced
-    ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;margin:20px 0;">
-        <p style="color:#1e40af;font-size:13px;font-weight:600;margin:0 0 6px;">Invoice on File</p>
-        <p style="color:#1e3a8a;font-size:13px;margin:0;">An invoice has been issued. Your specimens will be processed and results released once payment is confirmed.</p>
-      </div>`
+    ? calloutBox({ bg: "#eff6ff", border: "#bfdbfe", titleColor: "#1e40af", textColor: "#1e3a8a", title: "Invoice on File", text: "An invoice has been issued. Your specimens will be processed and results released once payment is confirmed." })
     : "";
   // (allPaid → no payment block)
   void allPaid;
@@ -353,35 +348,19 @@ export async function sendSampleCollectedEmail(
     ? `A ${specimenWord} has been collected for:`
     : `The following ${specimenWord} have been collected for:`;
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;">
-  <div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
-    <div style="background:#059669;padding:24px 32px;">
-      <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">TrueTest Labs</p>
-      <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;">Specimen${testOrders.length === 1 ? "" : "s"} Collected</h1>
-    </div>
-    <div style="padding:28px 32px;">
-      <p style="color:#334155;font-size:15px;margin:0 0 4px;">${intro}</p>
-      <p style="color:#0f172a;font-size:18px;font-weight:700;margin:0 0 4px;">${donorName}</p>
+  const testListHtml = `<ul style="margin:0 0 20px;padding-left:20px;color:#334155;font-size:14px;line-height:1.8;font-family:${FONT};">${testOrders.map((t) => `<li>${t.testDescription}</li>`).join("")}</ul>`;
+
+  const html = emailLayout({
+    headerBg: "#059669",
+    headerTitle: `Specimen${testOrders.length === 1 ? "" : "s"} Collected`,
+    body: `
+      <p style="margin:0 0 4px;">${intro}</p>
+      <p style="color:#0f172a;font-size:18px;font-weight:600;margin:0 0 4px;font-family:${FONT};">${donorName}</p>
       <p style="color:#64748b;font-size:13px;margin:0 0 16px;">Case No. ${caseData.caseNumber}</p>
-      ${testList}
+      ${testListHtml}
       ${collectionLine}
-      ${paymentBlock}
-      <div style="border-top:1px solid #e2e8f0;margin-top:${paymentBlock ? "4px" : "20px"};padding-top:20px;">
-        <p style="color:#475569;font-size:13px;margin:0 0 8px;">Questions? Contact our office:</p>
-        <p style="color:#1e3a5f;font-size:14px;font-weight:600;margin:0;">${OFFICE_PHONE}</p>
-        <p style="color:#64748b;font-size:13px;margin:4px 0 0;">${OFFICE_ADDRESS}</p>
-      </div>
-    </div>
-    <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
-      <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;">This notification was sent by TrueTest Labs Case Management System. Do not reply to this email.</p>
-    </div>
-  </div>
-</body>
-</html>`;
+      ${paymentBlock}`,
+  });
 
   const emailList = recipients.map((r) => r.email);
 
@@ -430,47 +409,27 @@ export async function sendNoShowEmail(
     ? `<p style="color:#64748b;font-size:13px;margin:0 0 24px;">Scheduled appointment: <strong>${new Date(testOrder.appointmentDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</strong></p>`
     : "";
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;">
-  <div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
-    <!-- Header -->
-    <div style="background:#991b1b;padding:24px 32px;">
-      <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">TrueTest Labs</p>
-      <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;">No Show — Missed Appointment</h1>
-    </div>
-    <!-- Body -->
-    <div style="padding:28px 32px;">
-      <p style="color:#334155;font-size:15px;margin:0 0 4px;">The following donor did not appear for their scheduled drug test:</p>
-      <p style="color:#0f172a;font-size:18px;font-weight:700;margin:0 0 4px;">${donorName}</p>
-      <p style="color:#64748b;font-size:13px;margin:0 0 16px;">Case No. ${caseData.caseNumber}${testOrder ? ` &bull; ${testOrder.testDescription}` : ""}</p>
+  const html = emailLayout({
+    headerBg: "#991b1b",
+    headerTitle: "No Show — Missed Appointment",
+    body: `
+      <p style="color:#334155;font-size:15px;margin:0 0 4px;font-family:${FONT};">The following donor did not appear for their scheduled drug test:</p>
+      <p style="color:#0f172a;font-size:18px;font-weight:700;margin:0 0 4px;font-family:${FONT};">${donorName}</p>
+      <p style="color:#64748b;font-size:13px;margin:0 0 16px;font-family:${FONT};">Case No. ${caseData.caseNumber}${testOrder ? ` &bull; ${testOrder.testDescription}` : ""}</p>
       ${apptLine}
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-bottom:24px;">
-        <p style="color:#991b1b;font-size:13px;font-weight:600;margin:0 0 4px;">Action Required</p>
-        <p style="color:#7f1d1d;font-size:13px;margin:0 0 12px;">Please contact TrueTest Labs to reschedule or to discuss next steps regarding compliance.</p>
+        <p style="color:#991b1b;font-size:13px;font-weight:600;margin:0 0 4px;font-family:${FONT};">Action Required</p>
+        <p style="color:#7f1d1d;font-size:13px;margin:0 0 12px;font-family:${FONT};">Please contact TrueTest Labs to reschedule or to discuss next steps regarding compliance.</p>
         <a href="https://book.squareup.com/appointments/vktpg026o844b6/location/NRHN4SKCVGFSD/services/362SUMWGC5H55J2MCVTJF4FK"
-           style="display:inline-block;background:#1e3a5f;color:#ffffff;font-size:13px;font-weight:600;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px;">
+           style="display:inline-block;background:#1e3a5f;color:#ffffff;font-size:13px;font-weight:600;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px;font-family:${FONT};">
           Schedule Online
         </a>
         <a href="tel:+18472583966"
-           style="display:inline-block;background:#ffffff;border:1px solid #fecaca;color:#991b1b;font-size:13px;font-weight:600;padding:10px 20px;border-radius:6px;text-decoration:none;">
+           style="display:inline-block;background:#ffffff;border:1px solid #fecaca;color:#991b1b;font-size:13px;font-weight:600;padding:10px 20px;border-radius:6px;text-decoration:none;font-family:${FONT};">
           Call (847) 258-3966
         </a>
-      </div>
-      <div style="border-top:1px solid #e2e8f0;padding-top:20px;">
-        <p style="color:#475569;font-size:13px;margin:0 0 8px;">Contact our office:</p>
-        <p style="color:#1e3a5f;font-size:14px;font-weight:600;margin:0;">${OFFICE_PHONE}</p>
-        <p style="color:#64748b;font-size:13px;margin:4px 0 0;">${OFFICE_ADDRESS}</p>
-      </div>
-    </div>
-    <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
-      <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;">This notification was sent by TrueTest Labs Case Management System. Do not reply to this email.</p>
-    </div>
-  </div>
-</body>
-</html>`;
+      </div>`,
+  });
 
   const emailList = recipients.map((r) => r.email);
 
@@ -529,43 +488,27 @@ export async function sendRefusalToTestEmail(
   });
 
   const replacementBlock = replacementDate
-    ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-bottom:24px;">
-        <p style="color:#991b1b;font-size:13px;font-weight:600;margin:0 0 4px;">Replacement Test Scheduled</p>
-        <p style="color:#7f1d1d;font-size:13px;margin:0;">A replacement test has been scheduled for <strong>${new Date(replacementDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</strong>. The donor must report to TrueTest Labs on that day by 5:00 PM.</p>
-      </div>`
-    : `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-bottom:24px;">
-        <p style="color:#991b1b;font-size:13px;font-weight:600;margin:0 0 4px;">No Replacement Scheduled</p>
-        <p style="color:#7f1d1d;font-size:13px;margin:0;">No replacement test has been scheduled. Please contact TrueTest Labs to discuss next steps.</p>
-      </div>`;
+    ? calloutBox({
+        bg: "#fef2f2", border: "#fecaca", titleColor: "#991b1b", textColor: "#7f1d1d",
+        title: "Replacement Test Scheduled",
+        text: `A replacement test has been scheduled for <strong>${new Date(replacementDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</strong>. The donor must report to TrueTest Labs on that day by 5:00 PM.`,
+      })
+    : calloutBox({
+        bg: "#fef2f2", border: "#fecaca", titleColor: "#991b1b", textColor: "#7f1d1d",
+        title: "No Replacement Scheduled",
+        text: "No replacement test has been scheduled. Please contact TrueTest Labs to discuss next steps.",
+      });
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;">
-  <div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
-    <div style="background:#991b1b;padding:24px 32px;">
-      <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">TrueTest Labs</p>
-      <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;">Refusal to Test</h1>
-    </div>
-    <div style="padding:28px 32px;">
-      <p style="color:#334155;font-size:15px;margin:0 0 4px;">The following donor did not appear for their randomly selected drug test:</p>
-      <p style="color:#0f172a;font-size:18px;font-weight:700;margin:0 0 4px;">${donorName}</p>
-      <p style="color:#64748b;font-size:13px;margin:0 0 16px;">Case No. ${caseData.caseNumber} &bull; ${selection.schedule.testCatalog.testName}</p>
-      <p style="color:#64748b;font-size:13px;margin:0 0 20px;">Selected date: <strong>${missedDate}</strong></p>
-      ${replacementBlock}
-      <div style="border-top:1px solid #e2e8f0;padding-top:20px;">
-        <p style="color:#475569;font-size:13px;margin:0 0 8px;">Contact our office:</p>
-        <p style="color:#1e3a5f;font-size:14px;font-weight:600;margin:0;">${OFFICE_PHONE}</p>
-        <p style="color:#64748b;font-size:13px;margin:4px 0 0;">${OFFICE_ADDRESS}</p>
-      </div>
-    </div>
-    <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
-      <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;">This notification was sent by TrueTest Labs Case Management System. Do not reply to this email.</p>
-    </div>
-  </div>
-</body>
-</html>`;
+  const html = emailLayout({
+    headerBg: "#991b1b",
+    headerTitle: "Refusal to Test",
+    body: `
+      <p style="color:#334155;font-size:15px;margin:0 0 4px;font-family:${FONT};">The following donor did not appear for their randomly selected drug test:</p>
+      <p style="color:#0f172a;font-size:18px;font-weight:700;margin:0 0 4px;font-family:${FONT};">${donorName}</p>
+      <p style="color:#64748b;font-size:13px;margin:0 0 16px;font-family:${FONT};">Case No. ${caseData.caseNumber} &bull; ${selection.schedule.testCatalog.testName}</p>
+      <p style="color:#64748b;font-size:13px;margin:0 0 20px;font-family:${FONT};">Selected date: <strong>${missedDate}</strong></p>
+      ${replacementBlock}`,
+  });
 
   const emailList = recipients.map((r) => r.email);
   const lastName = caseData.donor?.lastName ?? donorName;
@@ -614,31 +557,23 @@ export async function sendDonorInstructionsEmail(scheduleId: string): Promise<st
     : schedule.patternType === "per_month" ? `${schedule.targetCount} random test${schedule.targetCount === 1 ? "" : "s"} per month`
     : `${schedule.targetCount} random test${schedule.targetCount === 1 ? "" : "s"} per week`;
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;">
-  <div style="max-width:640px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
-    <div style="background:#1e3a5f;padding:24px 32px;">
-      <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">TrueTest Labs</p>
-      <h1 style="margin:4px 0 0;color:#ffffff;font-size:22px;font-weight:700;">Random Testing — Compliance Instructions</h1>
-    </div>
-    <div style="padding:28px 32px;">
-      <p style="color:#334155;font-size:15px;margin:0 0 4px;">Hello ${donor.firstName},</p>
-      <p style="color:#475569;font-size:14px;margin:0 0 20px;line-height:1.6;">You have been enrolled in a random drug testing schedule. Please read these instructions carefully and save this email — you will need your PIN every weekday.</p>
+  const html = emailLayout({
+    headerTitle: "Random Testing — Compliance Instructions",
+    body: `
+      <p style="color:#334155;font-size:15px;margin:0 0 4px;font-family:${FONT};">Hello ${donor.firstName},</p>
+      <p style="color:#475569;font-size:14px;margin:0 0 20px;line-height:1.6;font-family:${FONT};">You have been enrolled in a random drug testing schedule. Please read these instructions carefully and save this email — you will need your PIN every weekday.</p>
 
       <!-- PIN + Case info -->
       <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:20px;margin-bottom:24px;">
-        <p style="color:#64748b;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin:0 0 6px;">Your Check-In PIN</p>
+        <p style="color:#64748b;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin:0 0 6px;font-family:${FONT};">Your Check-In PIN</p>
         <p style="color:#0f172a;font-size:36px;font-weight:700;font-family:monospace;letter-spacing:4px;margin:0 0 12px;">${schedule.checkInPin}</p>
-        <p style="color:#475569;font-size:13px;margin:0;">Case: <strong>${schedule.case.caseNumber}</strong> &bull; Test: <strong>${schedule.testCatalog.testName}</strong></p>
-        <p style="color:#475569;font-size:13px;margin:4px 0 0;">Schedule: <strong>${patternSummary}</strong></p>
+        <p style="color:#475569;font-size:13px;margin:0;font-family:${FONT};">Case: <strong>${schedule.case.caseNumber}</strong> &bull; Test: <strong>${schedule.testCatalog.testName}</strong></p>
+        <p style="color:#475569;font-size:13px;margin:4px 0 0;font-family:${FONT};">Schedule: <strong>${patternSummary}</strong></p>
       </div>
 
       <!-- How it works -->
-      <h2 style="color:#0f172a;font-size:16px;font-weight:700;margin:0 0 12px;">How It Works</h2>
-      <ol style="color:#334155;font-size:14px;line-height:1.8;margin:0 0 24px;padding-left:20px;">
+      <h2 style="color:#0f172a;font-size:16px;font-weight:700;margin:0 0 12px;font-family:${FONT};">How It Works</h2>
+      <ol style="color:#334155;font-size:14px;line-height:1.8;margin:0 0 24px;padding-left:20px;font-family:${FONT};">
         <li><strong>Call in EVERY weekday (Monday–Friday)</strong> between 6:00 AM and 12:00 PM.</li>
         <li>Visit <a href="${checkinUrl}" style="color:#2563eb;text-decoration:underline;">${checkinUrl}</a> and enter your PIN.</li>
         <li>The system will tell you one of two things:
@@ -650,41 +585,31 @@ export async function sendDonorInstructionsEmail(scheduleId: string): Promise<st
       </ol>
 
       <!-- Compliance -->
-      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-bottom:24px;">
-        <p style="color:#991b1b;font-size:13px;font-weight:700;margin:0 0 8px;">⚠️ IMPORTANT — Failure to Comply</p>
-        <p style="color:#7f1d1d;font-size:13px;margin:0 0 6px;line-height:1.6;">If you are selected and do not report to TrueTest Labs by 5:00 PM that same day, it will be recorded as a <strong>Refusal to Test</strong>.</p>
-        <p style="color:#7f1d1d;font-size:13px;margin:0;line-height:1.6;">A Refusal to Test notification will be sent to your case contacts, which may include your attorney, the court, and other parties. This may have the same legal consequences as a positive test result.</p>
-      </div>
+      ${calloutBox({
+        bg: "#fef2f2", border: "#fecaca", titleColor: "#991b1b", textColor: "#7f1d1d",
+        title: "IMPORTANT — Failure to Comply",
+        text: "If you are selected and do not report to TrueTest Labs by 5:00 PM that same day, it will be recorded as a <strong>Refusal to Test</strong>. A Refusal to Test notification will be sent to your case contacts, which may include your attorney, the court, and other parties. This may have the same legal consequences as a positive test result.",
+      })}
 
       <!-- Address -->
-      <h2 style="color:#0f172a;font-size:16px;font-weight:700;margin:0 0 12px;">Report To</h2>
+      <h2 style="color:#0f172a;font-size:16px;font-weight:700;margin:0 0 12px;font-family:${FONT};">Report To</h2>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:24px;">
-        <p style="color:#0f172a;font-size:14px;font-weight:600;margin:0 0 4px;">TrueTest Labs</p>
-        <p style="color:#475569;font-size:13px;margin:0 0 2px;">${OFFICE_ADDRESS}</p>
-        <p style="color:#475569;font-size:13px;margin:0;">Phone: ${OFFICE_PHONE}</p>
-        <p style="color:#64748b;font-size:12px;margin:8px 0 0;">Hours: Mon–Fri 9:00 AM – 5:00 PM</p>
+        <p style="color:#0f172a;font-size:14px;font-weight:600;margin:0 0 4px;font-family:${FONT};">TrueTest Labs</p>
+        <p style="color:#475569;font-size:13px;margin:0 0 2px;font-family:${FONT};">${OFFICE_ADDRESS}</p>
+        <p style="color:#475569;font-size:13px;margin:0;font-family:${FONT};">Phone: ${OFFICE_PHONE}</p>
+        <p style="color:#64748b;font-size:12px;margin:8px 0 0;font-family:${FONT};">Hours: Mon–Fri 9:00 AM – 5:00 PM</p>
       </div>
 
       <!-- FAQ -->
-      <h2 style="color:#0f172a;font-size:16px;font-weight:700;margin:0 0 12px;">Common Questions</h2>
-      <div style="color:#334155;font-size:13px;line-height:1.7;">
+      <h2 style="color:#0f172a;font-size:16px;font-weight:700;margin:0 0 12px;font-family:${FONT};">Common Questions</h2>
+      <div style="color:#334155;font-size:13px;line-height:1.7;font-family:${FONT};">
         <p style="margin:0 0 10px;"><strong>What if I forget to call in?</strong><br>You must call in every weekday, even if you think you won't be selected. Missing a call-in on a day you were selected counts as a Refusal to Test.</p>
         <p style="margin:0 0 10px;"><strong>What about weekends and holidays?</strong><br>You do not need to call in on Saturdays, Sundays, or federal holidays. Tests are only scheduled on weekdays.</p>
         <p style="margin:0 0 10px;"><strong>What if I'm traveling or sick?</strong><br>Contact our office at ${OFFICE_PHONE} immediately to discuss. Unexcused absences from selected tests will be reported.</p>
         <p style="margin:0;"><strong>Can I share my PIN with anyone?</strong><br>No. Your PIN is unique to you. Keep it confidential.</p>
-      </div>
-
-      <div style="border-top:1px solid #e2e8f0;margin-top:24px;padding-top:20px;">
-        <p style="color:#475569;font-size:13px;margin:0 0 8px;">Questions? Contact our office:</p>
-        <p style="color:#1e3a5f;font-size:14px;font-weight:600;margin:0;">${OFFICE_PHONE}</p>
-      </div>
-    </div>
-    <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
-      <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;">This notification was sent by TrueTest Labs Case Management System. Please save this email for reference.</p>
-    </div>
-  </div>
-</body>
-</html>`;
+      </div>`,
+    footerNote: "This notification was sent by TrueTest Labs. Please save this email for reference.",
+  });
 
   const { data: sendData, error: sendError } = await getResend().emails.send({
     from: FROM_EMAIL,
@@ -732,40 +657,23 @@ export async function sendResultsHeldEmail(
     ? `<p style="color:#64748b;font-size:13px;margin:0 0 20px;">${testOrders[0].testDescription}</p>`
     : `<ul style="margin:0 0 20px;padding-left:20px;color:#334155;font-size:14px;line-height:1.8;">${testOrders.map(t => `<li>${t.testDescription}</li>`).join("")}</ul>`;
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;">
-  <div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
-    <div style="background:#b45309;padding:24px 32px;">
-      <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">TrueTest Labs</p>
-      <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;">Results Available — Payment Required</h1>
-    </div>
-    <div style="padding:28px 32px;">
-      <p style="color:#334155;font-size:15px;margin:0 0 4px;">Lab results have been received for:</p>
-      <p style="color:#0f172a;font-size:18px;font-weight:700;margin:0 0 4px;">${donorName}</p>
-      <p style="color:#64748b;font-size:13px;margin:0 0 16px;">Case No. ${caseData.caseNumber}</p>
+  const html = emailLayout({
+    headerBg: "#b45309",
+    headerTitle: "Results Available — Payment Required",
+    body: `
+      <p style="color:#334155;font-size:15px;margin:0 0 4px;font-family:${FONT};">Lab results have been received for:</p>
+      <p style="color:#0f172a;font-size:18px;font-weight:700;margin:0 0 4px;font-family:${FONT};">${donorName}</p>
+      <p style="color:#64748b;font-size:13px;margin:0 0 16px;font-family:${FONT};">Case No. ${caseData.caseNumber}</p>
       ${testList}
-      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px;margin:20px 0;">
-        <p style="color:#92400e;font-size:13px;font-weight:600;margin:0 0 6px;">Payment Required Before Release</p>
-        <p style="color:#78350f;font-size:13px;margin:0;">Your test results have been received by TrueTest Labs and are ready for review. However, results cannot be released until outstanding payment has been received. Please contact our office at your earliest convenience to arrange payment so we can release your results promptly.</p>
-      </div>
+      ${calloutBox({
+        bg: "#fffbeb", border: "#fde68a", titleColor: "#92400e", textColor: "#78350f",
+        title: "Payment Required Before Release",
+        text: "Your test results have been received by TrueTest Labs and are ready for review. However, results cannot be released until outstanding payment has been received. Please contact our office at your earliest convenience to arrange payment so we can release your results promptly.",
+      })}
       <div style="text-align:center;margin:24px 0;">
-        <a href="tel:+18472583966" style="display:inline-block;background:#1e3a5f;color:#ffffff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px;text-decoration:none;">Call (847) 258-3966</a>
-      </div>
-      <div style="border-top:1px solid #e2e8f0;padding-top:20px;">
-        <p style="color:#475569;font-size:13px;margin:0 0 8px;">Questions? Contact our office:</p>
-        <p style="color:#1e3a5f;font-size:14px;font-weight:600;margin:0;">${OFFICE_PHONE}</p>
-        <p style="color:#64748b;font-size:13px;margin:4px 0 0;">${OFFICE_ADDRESS}</p>
-      </div>
-    </div>
-    <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
-      <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;">This notification was sent by TrueTest Labs Case Management System. Do not reply to this email.</p>
-    </div>
-  </div>
-</body>
-</html>`;
+        <a href="tel:+18472583966" style="display:inline-block;background:#1e3a5f;color:#ffffff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px;text-decoration:none;font-family:${FONT};">Call (847) 258-3966</a>
+      </div>`,
+  });
 
   const emailList = recipients.map((r) => r.email);
 
@@ -814,37 +722,20 @@ export async function sendPaymentReceivedEmail(
     ? `<p style="color:#64748b;font-size:13px;margin:0 0 20px;">${testOrders[0].testDescription}</p>`
     : `<ul style="margin:0 0 20px;padding-left:20px;color:#334155;font-size:14px;line-height:1.8;">${testOrders.map(t => `<li>${t.testDescription}</li>`).join("")}</ul>`;
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;">
-  <div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
-    <div style="background:#059669;padding:24px 32px;">
-      <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">TrueTest Labs</p>
-      <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:700;">Payment Received — Sample Sent to Lab</h1>
-    </div>
-    <div style="padding:28px 32px;">
-      <p style="color:#334155;font-size:15px;margin:0 0 4px;">Payment has been received for:</p>
-      <p style="color:#0f172a;font-size:18px;font-weight:700;margin:0 0 4px;">${donorName}</p>
-      <p style="color:#64748b;font-size:13px;margin:0 0 16px;">Case No. ${caseData.caseNumber}</p>
+  const html = emailLayout({
+    headerBg: "#059669",
+    headerTitle: "Payment Received — Sample Sent to Lab",
+    body: `
+      <p style="color:#334155;font-size:15px;margin:0 0 4px;font-family:${FONT};">Payment has been received for:</p>
+      <p style="color:#0f172a;font-size:18px;font-weight:700;margin:0 0 4px;font-family:${FONT};">${donorName}</p>
+      <p style="color:#64748b;font-size:13px;margin:0 0 16px;font-family:${FONT};">Case No. ${caseData.caseNumber}</p>
       ${testList}
-      <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:16px;margin:20px 0;">
-        <p style="color:#065f46;font-size:13px;font-weight:600;margin:0 0 6px;">Sample Being Processed</p>
-        <p style="color:#064e3b;font-size:13px;margin:0;">Your payment has been received and your specimen is now being sent to the lab for processing. Results will be released once testing is complete.</p>
-      </div>
-      <div style="border-top:1px solid #e2e8f0;padding-top:20px;">
-        <p style="color:#475569;font-size:13px;margin:0 0 8px;">Questions? Contact our office:</p>
-        <p style="color:#1e3a5f;font-size:14px;font-weight:600;margin:0;">${OFFICE_PHONE}</p>
-        <p style="color:#64748b;font-size:13px;margin:4px 0 0;">${OFFICE_ADDRESS}</p>
-      </div>
-    </div>
-    <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;">
-      <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;">This notification was sent by TrueTest Labs Case Management System. Do not reply to this email.</p>
-    </div>
-  </div>
-</body>
-</html>`;
+      ${calloutBox({
+        bg: "#ecfdf5", border: "#a7f3d0", titleColor: "#065f46", textColor: "#064e3b",
+        title: "Sample Being Processed",
+        text: "Your payment has been received and your specimen is now being sent to the lab for processing. Results will be released once testing is complete.",
+      })}`,
+  });
 
   const emailList = recipients.map((r) => r.email);
 
