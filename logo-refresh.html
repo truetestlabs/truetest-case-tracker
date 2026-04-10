@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TrueTest Labs — Logo Refresh v3</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,700;1,800&display=swap" rel="stylesheet">
+  <script>
+    // Generate evenly spaced circle positions using trigonometry
+    // 7 circles at 360/7 ≈ 51.43 degrees apart, starting from top (270 degrees in math coords)
+    function circlePositions(count, outerRadius, startAngleDeg) {
+      const positions = [];
+      const step = 360 / count;
+      for (let i = 0; i < count; i++) {
+        const angleDeg = startAngleDeg + i * step;
+        const angleRad = (angleDeg * Math.PI) / 180;
+        positions.push({
+          x: Math.round(Math.cos(angleRad) * outerRadius * 10) / 10,
+          y: Math.round(Math.sin(angleRad) * outerRadius * 10) / 10,
+        });
+      }
+      return positions;
+    }
+    // Log for reference
+    const pos = circlePositions(7, 120, -90);
+    console.log("Circle positions:", pos);
+    // Expected: top center, then clockwise
+  </script>
+</head>
+<body class="bg-gray-100 min-h-screen py-16 px-8">
+
+  <div class="max-w-5xl mx-auto">
+    <h1 class="text-2xl font-bold text-gray-800 mb-2">TrueTest Labs — Logo Refresh v3</h1>
+    <p class="text-gray-500 mb-12">Precise trigonometry for circle placement + matching original proportions</p>
+
+    <!-- Large Preview — Light Background -->
+    <div class="bg-white rounded-2xl shadow-lg p-16 mb-8 flex items-center justify-center">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 520" width="420" height="520">
+        <g transform="translate(210, 185)">
+          <!--
+            7 circles evenly spaced at 51.43 degrees apart
+            Starting from top (angle = -90 degrees in standard coords)
+            Outer radius for small circles: 125
+            Ring radius for spokes to connect to: 82 (center of the thick ring)
+
+            Positions at r=125:
+            0: (0, -125)         top
+            1: (93.3, -83.3)    top-right
+            2: (122.2, 18.8)    right
+            3: (57.7, 110.9)    bottom-right
+            4: (-57.7, 110.9)   bottom-left
+            5: (-122.2, 18.8)   left
+            6: (-93.3, -83.3)   top-left
+
+            Spoke inner endpoints at r=82 (edge of outer ring):
+            0: (0, -82)
+            1: (61.2, -54.7)
+            2: (80.2, 12.3)
+            3: (37.9, 72.8)
+            4: (-37.9, 72.8)
+            5: (-80.2, 12.3)
+            6: (-61.2, -54.7)
+          -->
+
+          <!-- Spokes (from ring edge to small circle center) -->
+          <line x1="0" y1="-82" x2="0" y2="-125" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+          <line x1="61.2" y1="-54.7" x2="93.3" y2="-83.3" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+          <line x1="80.2" y1="12.3" x2="122.2" y2="18.8" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+          <line x1="37.9" y1="72.8" x2="57.7" y2="110.9" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+          <line x1="-37.9" y1="72.8" x2="-57.7" y2="110.9" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+          <line x1="-80.2" y1="12.3" x2="-122.2" y2="18.8" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+          <line x1="-61.2" y1="-54.7" x2="-93.3" y2="-83.3" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+
+          <!-- Outer gray ring (thick) -->
+          <circle cx="0" cy="0" r="82" fill="none" stroke="#4A4A4A" stroke-width="20"/>
+
+          <!-- White gap between ring and green circle -->
+          <circle cx="0" cy="0" r="67" fill="white"/>
+
+          <!-- Inner green circle -->
+          <circle cx="0" cy="0" r="60" fill="#7AB928"/>
+
+          <!-- T letterform — wider, bolder, matching original -->
+          <text x="0" y="22" text-anchor="middle" fill="white" font-family="Georgia, 'Times New Roman', serif" font-weight="bold" font-size="76">T</text>
+
+          <!-- 7 small circles — evenly spaced, empty -->
+          <circle cx="0" cy="-125" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+          <circle cx="93.3" cy="-83.3" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+          <circle cx="122.2" cy="18.8" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+          <circle cx="57.7" cy="110.9" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+          <circle cx="-57.7" cy="110.9" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+          <circle cx="-122.2" cy="18.8" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+          <circle cx="-93.3" cy="-83.3" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+        </g>
+
+        <!-- TEXT — Playfair Display matching website -->
+        <text x="210" y="400" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="52">
+          <tspan fill="#4A4A4A" font-weight="800" font-style="normal">True</tspan><tspan fill="#4A4A4A" font-weight="800" font-style="italic">Test</tspan><tspan fill="#7AB928" font-size="16" dx="6" dy="-4">&#9670;</tspan><tspan dx="6" dy="4" fill="#4A4A4A" font-weight="800" font-style="normal">Labs</tspan>
+        </text>
+      </svg>
+    </div>
+
+    <!-- Size Comparison Row -->
+    <div class="grid grid-cols-3 gap-6 mb-8">
+
+      <!-- Sidebar -->
+      <div class="bg-white rounded-xl shadow p-8 flex flex-col items-center">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-6">Sidebar</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 520" width="140" height="173">
+          <g transform="translate(210, 185)">
+            <line x1="0" y1="-82" x2="0" y2="-125" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+            <line x1="61.2" y1="-54.7" x2="93.3" y2="-83.3" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+            <line x1="80.2" y1="12.3" x2="122.2" y2="18.8" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+            <line x1="37.9" y1="72.8" x2="57.7" y2="110.9" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+            <line x1="-37.9" y1="72.8" x2="-57.7" y2="110.9" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+            <line x1="-80.2" y1="12.3" x2="-122.2" y2="18.8" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+            <line x1="-61.2" y1="-54.7" x2="-93.3" y2="-83.3" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+            <circle cx="0" cy="0" r="82" fill="none" stroke="#4A4A4A" stroke-width="20"/>
+            <circle cx="0" cy="0" r="67" fill="white"/>
+            <circle cx="0" cy="0" r="60" fill="#7AB928"/>
+            <text x="0" y="22" text-anchor="middle" fill="white" font-family="Georgia, 'Times New Roman', serif" font-weight="bold" font-size="76">T</text>
+            <circle cx="0" cy="-125" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+            <circle cx="93.3" cy="-83.3" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+            <circle cx="122.2" cy="18.8" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+            <circle cx="57.7" cy="110.9" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+            <circle cx="-57.7" cy="110.9" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+            <circle cx="-122.2" cy="18.8" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+            <circle cx="-93.3" cy="-83.3" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+          </g>
+          <text x="210" y="400" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="52">
+            <tspan fill="#4A4A4A" font-weight="800" font-style="normal">True</tspan><tspan fill="#4A4A4A" font-weight="800" font-style="italic">Test</tspan><tspan fill="#7AB928" font-size="16" dx="6" dy="-4">&#9670;</tspan><tspan dx="6" dy="4" fill="#4A4A4A" font-weight="800" font-style="normal">Labs</tspan>
+          </text>
+        </svg>
+      </div>
+
+      <!-- Icon only -->
+      <div class="bg-white rounded-xl shadow p-8 flex flex-col items-center">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-6">Icon Only</p>
+        <div class="flex gap-8 items-end">
+          <div class="text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="-145 -145 290 290" width="72" height="72">
+              <line x1="0" y1="-82" x2="0" y2="-125" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <line x1="61.2" y1="-54.7" x2="93.3" y2="-83.3" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <line x1="80.2" y1="12.3" x2="122.2" y2="18.8" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <line x1="37.9" y1="72.8" x2="57.7" y2="110.9" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <line x1="-37.9" y1="72.8" x2="-57.7" y2="110.9" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <line x1="-80.2" y1="12.3" x2="-122.2" y2="18.8" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <line x1="-61.2" y1="-54.7" x2="-93.3" y2="-83.3" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <circle cx="0" cy="0" r="82" fill="none" stroke="#4A4A4A" stroke-width="20"/>
+              <circle cx="0" cy="0" r="67" fill="white"/>
+              <circle cx="0" cy="0" r="60" fill="#7AB928"/>
+              <text x="0" y="22" text-anchor="middle" fill="white" font-family="Georgia, serif" font-weight="bold" font-size="76">T</text>
+              <circle cx="0" cy="-125" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+              <circle cx="93.3" cy="-83.3" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+              <circle cx="122.2" cy="18.8" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+              <circle cx="57.7" cy="110.9" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+              <circle cx="-57.7" cy="110.9" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+              <circle cx="-122.2" cy="18.8" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+              <circle cx="-93.3" cy="-83.3" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+            </svg>
+            <p class="text-xs text-gray-400 mt-2">72px</p>
+          </div>
+          <div class="text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="-145 -145 290 290" width="40" height="40">
+              <circle cx="0" cy="0" r="82" fill="none" stroke="#4A4A4A" stroke-width="22"/>
+              <circle cx="0" cy="0" r="67" fill="white"/>
+              <circle cx="0" cy="0" r="60" fill="#7AB928"/>
+              <text x="0" y="22" text-anchor="middle" fill="white" font-family="Georgia, serif" font-weight="bold" font-size="76">T</text>
+              <circle cx="0" cy="-125" r="18" fill="white" stroke="#4A4A4A" stroke-width="6"/>
+              <circle cx="93.3" cy="-83.3" r="18" fill="white" stroke="#4A4A4A" stroke-width="6"/>
+              <circle cx="122.2" cy="18.8" r="18" fill="white" stroke="#4A4A4A" stroke-width="6"/>
+              <circle cx="57.7" cy="110.9" r="18" fill="white" stroke="#4A4A4A" stroke-width="6"/>
+              <circle cx="-57.7" cy="110.9" r="18" fill="white" stroke="#4A4A4A" stroke-width="6"/>
+              <circle cx="-122.2" cy="18.8" r="18" fill="white" stroke="#4A4A4A" stroke-width="6"/>
+              <circle cx="-93.3" cy="-83.3" r="18" fill="white" stroke="#4A4A4A" stroke-width="6"/>
+            </svg>
+            <p class="text-xs text-gray-400 mt-2">40px</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dark background -->
+      <div class="rounded-xl shadow p-8 flex flex-col items-center" style="background: linear-gradient(180deg, #1a3352 0%, #162c47 100%)">
+        <p class="text-xs font-semibold text-white/40 uppercase tracking-wider mb-6">Dark (Sidebar)</p>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 520" width="180" height="223">
+          <g transform="translate(210, 185)">
+            <line x1="0" y1="-82" x2="0" y2="-125" stroke="#6B7B8D" stroke-width="7" stroke-linecap="round"/>
+            <line x1="61.2" y1="-54.7" x2="93.3" y2="-83.3" stroke="#6B7B8D" stroke-width="7" stroke-linecap="round"/>
+            <line x1="80.2" y1="12.3" x2="122.2" y2="18.8" stroke="#6B7B8D" stroke-width="7" stroke-linecap="round"/>
+            <line x1="37.9" y1="72.8" x2="57.7" y2="110.9" stroke="#6B7B8D" stroke-width="7" stroke-linecap="round"/>
+            <line x1="-37.9" y1="72.8" x2="-57.7" y2="110.9" stroke="#6B7B8D" stroke-width="7" stroke-linecap="round"/>
+            <line x1="-80.2" y1="12.3" x2="-122.2" y2="18.8" stroke="#6B7B8D" stroke-width="7" stroke-linecap="round"/>
+            <line x1="-61.2" y1="-54.7" x2="-93.3" y2="-83.3" stroke="#6B7B8D" stroke-width="7" stroke-linecap="round"/>
+            <circle cx="0" cy="0" r="82" fill="none" stroke="#6B7B8D" stroke-width="20"/>
+            <circle cx="0" cy="0" r="67" fill="#1a3352"/>
+            <circle cx="0" cy="0" r="60" fill="#7AB928"/>
+            <text x="0" y="22" text-anchor="middle" fill="white" font-family="Georgia, serif" font-weight="bold" font-size="76">T</text>
+            <circle cx="0" cy="-125" r="17" fill="#1e3a5f" stroke="#6B7B8D" stroke-width="4.5"/>
+            <circle cx="93.3" cy="-83.3" r="17" fill="#1e3a5f" stroke="#6B7B8D" stroke-width="4.5"/>
+            <circle cx="122.2" cy="18.8" r="17" fill="#1e3a5f" stroke="#6B7B8D" stroke-width="4.5"/>
+            <circle cx="57.7" cy="110.9" r="17" fill="#1e3a5f" stroke="#6B7B8D" stroke-width="4.5"/>
+            <circle cx="-57.7" cy="110.9" r="17" fill="#1e3a5f" stroke="#6B7B8D" stroke-width="4.5"/>
+            <circle cx="-122.2" cy="18.8" r="17" fill="#1e3a5f" stroke="#6B7B8D" stroke-width="4.5"/>
+            <circle cx="-93.3" cy="-83.3" r="17" fill="#1e3a5f" stroke="#6B7B8D" stroke-width="4.5"/>
+          </g>
+          <text x="210" y="400" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="52">
+            <tspan fill="white" font-weight="800" font-style="normal">True</tspan><tspan fill="white" font-weight="800" font-style="italic">Test</tspan><tspan fill="#7AB928" font-size="16" dx="6" dy="-4">&#9670;</tspan><tspan dx="6" dy="4" fill="white" font-weight="800" font-style="normal">Labs</tspan>
+          </text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Side by side with original -->
+    <div class="bg-white rounded-xl shadow p-10">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-8">Original vs Refreshed</p>
+      <div class="flex items-center justify-center gap-20">
+        <div class="text-center">
+          <img src="public/logo.png" alt="Original" class="h-32 mx-auto mb-3">
+          <p class="text-sm text-gray-400">Original</p>
+        </div>
+        <div class="text-5xl text-gray-200">&rarr;</div>
+        <div class="text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 520" width="130" height="161" class="mx-auto mb-3">
+            <g transform="translate(210, 185)">
+              <line x1="0" y1="-82" x2="0" y2="-125" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <line x1="61.2" y1="-54.7" x2="93.3" y2="-83.3" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <line x1="80.2" y1="12.3" x2="122.2" y2="18.8" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <line x1="37.9" y1="72.8" x2="57.7" y2="110.9" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <line x1="-37.9" y1="72.8" x2="-57.7" y2="110.9" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <line x1="-80.2" y1="12.3" x2="-122.2" y2="18.8" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <line x1="-61.2" y1="-54.7" x2="-93.3" y2="-83.3" stroke="#4A4A4A" stroke-width="7" stroke-linecap="round"/>
+              <circle cx="0" cy="0" r="82" fill="none" stroke="#4A4A4A" stroke-width="20"/>
+              <circle cx="0" cy="0" r="67" fill="white"/>
+              <circle cx="0" cy="0" r="60" fill="#7AB928"/>
+              <text x="0" y="22" text-anchor="middle" fill="white" font-family="Georgia, serif" font-weight="bold" font-size="76">T</text>
+              <circle cx="0" cy="-125" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+              <circle cx="93.3" cy="-83.3" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+              <circle cx="122.2" cy="18.8" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+              <circle cx="57.7" cy="110.9" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+              <circle cx="-57.7" cy="110.9" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+              <circle cx="-122.2" cy="18.8" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+              <circle cx="-93.3" cy="-83.3" r="17" fill="white" stroke="#4A4A4A" stroke-width="4.5"/>
+            </g>
+            <text x="210" y="400" text-anchor="middle" font-family="Playfair Display, Georgia, serif" font-size="52">
+              <tspan fill="#4A4A4A" font-weight="800" font-style="normal">True</tspan><tspan fill="#4A4A4A" font-weight="800" font-style="italic">Test</tspan><tspan fill="#7AB928" font-size="16" dx="6" dy="-4">&#9670;</tspan><tspan dx="6" dy="4" fill="#4A4A4A" font-weight="800" font-style="normal">Labs</tspan>
+            </text>
+          </svg>
+          <p class="text-sm text-gray-400">Refreshed</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

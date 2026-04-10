@@ -12,6 +12,7 @@ const navigation = [
   { name: "Monitored", href: "/cases/monitored", icon: MonitorIcon },
   { name: "Closed Cases", href: "/cases/closed", icon: ArchiveIcon },
   { name: "Upload Order", href: "/cases/upload-order", icon: UploadIcon },
+  { name: "Kiosk Intakes", href: "/dashboard/intakes", icon: ClipboardIcon },
   { name: "Contacts", href: "/contacts", icon: UsersIcon },
 ];
 
@@ -567,6 +568,15 @@ function MailIcon({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
       <polyline points="22,6 12,13 2,6" />
+    </svg>
+  );
+}
+
+function ClipboardIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
     </svg>
   );
 }

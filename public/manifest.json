@@ -1,0 +1,15 @@
+{
+  "name": "TrueTest Labs Intake",
+  "short_name": "Intake",
+  "start_url": "/kiosk",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#7AB928",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "121x100",
+      "type": "image/png"
+    }
+  ]
+}

@@ -40,6 +40,7 @@ export async function GET() {
       noTestOrders,
       noSchedule,
       pendingDrafts,
+      pendingIntakes,
     ] = await Promise.all([
       // 1. Collection notice not sent (1 hour grace)
       prisma.testOrder.findMany({
@@ -138,6 +139,14 @@ export async function GET() {
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
+
+      // 8. Pending kiosk intakes (no grace period)
+      prisma.intakeDraft.findMany({
+        where: { status: "pending_review" },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, firstName: true, lastName: true, createdAt: true },
+        take: 20,
+      }),
     ]);
 
     // Build reminder list — email drafts first (highest priority)
@@ -153,6 +162,17 @@ export async function GET() {
         caseNumber: d.case.caseNumber,
         age: timeAgo(d.createdAt),
         draftId: d.id,
+      });
+    }
+
+    for (const intake of pendingIntakes) {
+      reminders.push({
+        id: `intake-${intake.id}`,
+        type: "pending_intake",
+        message: `Kiosk intake awaiting review — ${intake.lastName}, ${intake.firstName}`,
+        caseId: intake.id, // link to intakes page
+        caseNumber: "Kiosk",
+        age: timeAgo(intake.createdAt),
       });
     }
 

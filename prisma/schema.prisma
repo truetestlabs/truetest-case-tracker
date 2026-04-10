@@ -413,6 +413,39 @@ model EmailDraft {
 }
 
 // ============================================================
+// KIOSK INTAKE DRAFTS
+// ============================================================
+
+model IntakeDraft {
+  id                    String   @id @default(cuid())
+  status                String   @default("pending_review") // pending_review | approved | rejected
+  firstName             String
+  lastName              String
+  phone                 String?
+  email                 String?
+  existingDonorId       String?
+  caseType              String   // court_ordered | voluntary | by_agreement
+  courtCaseNumber       String?
+  county                String?
+  judgeName             String?
+  hasCourtOrder         Boolean  @default(false)
+  courtOrderPath        String?  // Supabase storage path
+  attorneys             Json?    // [{ name, firm, email, phone, role, contactId? }]
+  galInfo               Json?    // { name, firm, email, phone, contactId? }
+  orderedBy             String?  // attorney | judge | self | other
+  paymentResponsibility String?  // self | attorney | other
+  notes                 String?
+  communicationConsent  Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  reviewedAt            DateTime?
+  reviewedBy            String?
+  caseId                String?  // set when approved → case created
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================
 // RANDOM MONITORING SCHEDULER
 // ============================================================
 

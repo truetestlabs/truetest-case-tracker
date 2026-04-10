@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import sys,json; d=json.load(sys.stdin); f=d.get('tool_input',{}).get('file_path',''); exit(0 if any(f.endswith(e) for e in ['.ts','.tsx','.js','.jsx']) else 1)\" && cd /Users/michaelgammel/playground/truetest-case-tracker && npx tsc --noEmit 2>&1 | head -20 || true",
+            "timeout": 30,
+            "statusMessage": "Type-checking..."
+          }
+        ]
+      }
+    ]
+  }
+}
