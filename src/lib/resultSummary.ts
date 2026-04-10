@@ -134,6 +134,8 @@ Important Limitation: As with all drug and alcohol tests, this result cannot det
 
 The test was confirmed via LC-MS/MS and certified by Laboratory Corporation of America, Research Triangle Park, NC (Accession #0623417594).
 
+Monitoring Recommendation: Given these results, ongoing monitoring is recommended. For alcohol, repeat PEth testing every 3-4 weeks provides a cumulative picture of consumption over time and is the gold-standard biomarker for tracking alcohol use patterns. EtG/EtS urine testing is also available for shorter-term detection (approximately 24-80 hours) and can be used for more frequent spot checks. Both options can be tailored to the specific needs of the case. Please feel free to reach out to discuss the best fit for this monitoring program.
+
 ---
 
 EXAMPLE F — Negative Sweat Patch:
@@ -241,6 +243,25 @@ Important Limitation: As with all drug tests, this result cannot determine the e
 
 The test was processed at Quest Diagnostics' DHHS-certified laboratory in Lenexa, Kansas, and verified by Donald S. Freedman, M.D., C.M.R.O. of American Medical Review Officer Inc.
 
+---
+
+EXAMPLE K — Negative Hair Drug Test WITH EtG Alcohol Add-On (combined panel):
+
+Ameet Patel — Hair Drug Test with EtG Alcohol Summary
+Collected: April 7, 2026 | Reported: April 10, 2026 | Type: Head Hair + EtG Add-On
+
+Result: NEGATIVE — All Substances (including EtG alcohol)
+
+Ameet Patel's 5-panel hair drug test with Ethyl Glucuronide (EtG) alcohol add-on returned negative for all substances tested, including amphetamines, cocaine, opiates, phencyclidine (PCP), and cannabinoids. The EtG alcohol biomarker also returned negative at a cutoff of 20 pg/mg, indicating no detectable alcohol exposure above the threshold during the testing window.
+
+This specimen was collected from head hair, providing a detection window of approximately 3 months prior to the April 7th collection date — covering roughly early January through early April 2026.
+
+A negative EtG result in hair indicates no detectable alcohol biomarker above the 20 pg/mg threshold, which is consistent with abstinence or alcohol use below the level of detection over that period.
+
+The test was processed and certified by the laboratory director at United States Drug Testing Laboratories (CLIA #14D0712964).
+
+A negative test result does not confirm abstinence.
+
 ================================================================
 RULES — follow these constraints
 ================================================================
@@ -280,6 +301,7 @@ PEth RANGES (Ulwelling & Smith, 2018):
 - >200 ng/mL = Heavy Consumption
 - >500 ng/mL = note upper limit, actual value requested from lab
 - Negative PEth closing: "should not be interpreted as evidence of abstinence" — do NOT include "cannot determine time/dose/frequency" on negatives
+- POSITIVE PEth monitoring recommendation: PEth is an ALCOHOL test. Do NOT recommend sweat patch (sweat patches only test for drugs, not alcohol). Use the alcohol-specific monitoring language instead (see below).
 
 HAIR:
 - Head hair: ~3 months. State calendar period: "covering roughly [start] through [collection month]"
@@ -287,6 +309,12 @@ HAIR:
 - Not specified: flag it
 - Cocaine + norcocaine present: note norcocaine = biological metabolism, consistent with ingestion. Calculate ratio vs 3% threshold
 - Hydrocodone positive in hair: include MRO referral
+- Hair + EtG alcohol add-on (combined panel, see Example K):
+    * Header: "Hair Drug Test with EtG Alcohol Summary" / Type: "Head Hair + EtG Add-On"
+    * Result line includes "(including EtG alcohol)" when negative
+    * Call out the EtG as an ADD-ON in the first narrative sentence
+    * EtG hair cutoff is 20 pg/mg (NOT ng/mL — that's urine EtG)
+    * Separate paragraph explaining what negative EtG in hair means: "A negative EtG result in hair indicates no detectable alcohol biomarker above the 20 pg/mg threshold, which is consistent with abstinence or alcohol use below the level of detection over that period."
 
 SWEAT PATCH:
 - Negative closing: "continuous, cumulative detection... no detectable substances found during the wear period" — NOT the abstinence disclaimer
@@ -295,8 +323,13 @@ SWEAT PATCH:
 DILUTE SPECIMENS:
 - Only if formally designated. Include the three-type explanation (Rejected/Positive/Negative) and recommend immediate retest
 
-POSITIVE ILLICIT DRUGS — add monitoring recommendation (except in sweat patch summaries):
+POSITIVE ILLICIT DRUGS (NOT alcohol) — add monitoring recommendation (except in sweat patch summaries):
 "Given these results, ongoing monitoring is recommended. The sweat patch is worn on the skin for approximately one week and detects drug use cumulatively over the wear period, providing ongoing surveillance rather than a single point-in-time snapshot. Random urine testing is also available as an alternative. Both options can be tailored to the specific needs of the case. Please feel free to reach out to discuss the best fit for this monitoring program."
+
+POSITIVE ALCOHOL RESULTS (PEth, EtG, EtS) — use this alcohol-specific monitoring recommendation instead:
+"Given these results, ongoing monitoring is recommended. For alcohol, repeat PEth testing every 3-4 weeks provides a cumulative picture of consumption over time and is the gold-standard biomarker for tracking alcohol use patterns. EtG/EtS urine testing is also available for shorter-term detection (approximately 24-80 hours) and can be used for more frequent spot checks. Both options can be tailored to the specific needs of the case. Please feel free to reach out to discuss the best fit for this monitoring program."
+
+CRITICAL: Never recommend sweat patch in an alcohol test summary (PEth, EtG, EtS). Sweat patches detect drugs only — they do not detect alcohol.
 
 CLINICAL (non-chain-of-custody) RESULTS:
 Flag as not forensically defensible.
