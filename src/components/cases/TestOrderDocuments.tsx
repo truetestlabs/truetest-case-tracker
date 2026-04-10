@@ -47,14 +47,32 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
       const { uploadUrl, storagePath, headers } = await urlRes.json();
 
       // Step 2: Upload file directly to Supabase Storage (bypasses Vercel size limit)
-      const uploadRes = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { ...headers, "x-upsert": "true" },
-        body: file,
-      });
-      if (!uploadRes.ok) {
-        const err = await uploadRes.text();
-        throw new Error(`Storage upload failed: ${uploadRes.status} — ${err}`);
+      // Retry on transient 5xx errors (Supabase occasionally returns 502/503/504)
+      let uploadRes: Response | null = null;
+      let lastError = "";
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          uploadRes = await fetch(uploadUrl, {
+            method: "POST",
+            headers: { ...headers, "x-upsert": "true" },
+            body: file,
+          });
+          if (uploadRes.ok) break;
+          // 5xx = retry; 4xx = don't retry (bad request)
+          if (uploadRes.status < 500) {
+            const err = await uploadRes.text();
+            throw new Error(`Storage upload failed: ${uploadRes.status} — ${err.slice(0, 200)}`);
+          }
+          lastError = `${uploadRes.status} (attempt ${attempt}/3)`;
+          if (attempt < 3) await new Promise((r) => setTimeout(r, 1000 * attempt));
+        } catch (e) {
+          if (attempt === 3) throw e;
+          lastError = e instanceof Error ? e.message : String(e);
+          await new Promise((r) => setTimeout(r, 1000 * attempt));
+        }
+      }
+      if (!uploadRes?.ok) {
+        throw new Error(`Storage upload failed after 3 attempts — ${lastError}. Please try again.`);
       }
 
       // Step 3: Tell the API to process the uploaded file (COC parsing, AI summary, DB record, auto-advance)
