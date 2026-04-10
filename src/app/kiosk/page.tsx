@@ -13,6 +13,7 @@ type FormData = {
   // Step 2
   caseType: string; // court_ordered | voluntary | by_agreement
   testTypes: string[]; // urine | hair | blood_peth | sweat_patch
+  additionalRecipients: Array<{ name: string; email: string }>;
   // Step 3
   hasAttorney: boolean;
   attorneyName: string;
@@ -24,7 +25,6 @@ type FormData = {
   galContactId: string | null;
   // Step 4
   communicationConsent: boolean;
-  infoInterest: string; // "" | "results_timeline" | "test_info" | "both"
   notes: string;
 };
 
@@ -36,6 +36,7 @@ const INITIAL_FORM: FormData = {
   existingDonorId: null,
   caseType: "",
   testTypes: [],
+  additionalRecipients: [],
   hasAttorney: false,
   attorneyName: "",
   attorneyEmail: "",
@@ -45,7 +46,6 @@ const INITIAL_FORM: FormData = {
   galEmail: "",
   galContactId: null,
   communicationConsent: false,
-  infoInterest: "",
   notes: "",
 };
 
@@ -195,43 +195,46 @@ export default function KioskPage() {
           <p className="text-lg text-gray-600 mb-8">A technician will be with you shortly.</p>
 
           {/* Communication opt-in */}
-          <div className="bg-gray-50 rounded-2xl p-6 mb-8 text-left">
-            <p className="text-base font-semibold text-gray-800 mb-4 text-center">
-              Would you like us to send you more information?
+          <div className="bg-gray-50 rounded-2xl p-6 mb-8">
+            <p className="text-xl font-bold text-gray-900 mb-2">Want to learn more about your test?</p>
+            <p className="text-sm text-gray-600 mb-5">
+              We&apos;ll send you easy-to-understand info about how long your results take, what drugs the test screens for, and what to expect — tailored to the test you took today.
             </p>
-            <div className="space-y-3">
-              {[
-                { value: "results_timeline", label: "When my test results will be available", desc: "We'll notify you as soon as results come in" },
-                { value: "test_info", label: "More information about the test I took", desc: "Detection windows, what it screens for, and more" },
-                { value: "both", label: "Both — send me everything", desc: "Results updates plus educational info" },
-                { value: "none", label: "No thanks", desc: "" },
-              ].map((opt) => {
-                const selected = form.infoInterest === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => {
-                      const newConsent = opt.value !== "none";
-                      updateForm({ infoInterest: opt.value, communicationConsent: newConsent });
-                      // Fire update to backend
-                      fetch("/api/kiosk/intake", {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          firstName: form.firstName,
-                          lastName: form.lastName,
-                          communicationConsent: newConsent,
-                          infoInterest: opt.value,
-                        }),
-                      }).catch(() => {});
-                    }}
-                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${selected ? "border-[#7AB928] bg-green-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
-                  >
-                    <p className={`font-bold ${selected ? "text-[#7AB928]" : "text-gray-800"}`}>{opt.label}</p>
-                    {opt.desc && <p className="text-sm text-gray-500 mt-0.5">{opt.desc}</p>}
-                  </button>
-                );
-              })}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  updateForm({ communicationConsent: true });
+                  fetch("/api/kiosk/intake", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      firstName: form.firstName,
+                      lastName: form.lastName,
+                      communicationConsent: true,
+                    }),
+                  }).catch(() => {});
+                }}
+                className={`flex-1 py-5 rounded-xl text-lg font-bold transition-all ${form.communicationConsent ? "bg-[#7AB928] text-white shadow-md" : "bg-white border-2 border-gray-300 text-gray-700 hover:border-[#7AB928]"}`}
+              >
+                Yes, keep me informed
+              </button>
+              <button
+                onClick={() => {
+                  updateForm({ communicationConsent: false });
+                  fetch("/api/kiosk/intake", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      firstName: form.firstName,
+                      lastName: form.lastName,
+                      communicationConsent: false,
+                    }),
+                  }).catch(() => {});
+                }}
+                className={`flex-1 py-5 rounded-xl text-lg font-bold transition-all ${!form.communicationConsent && form.communicationConsent !== undefined ? "bg-gray-300 text-gray-700" : "bg-white border-2 border-gray-300 text-gray-700 hover:border-gray-400"}`}
+              >
+                No thanks
+              </button>
             </div>
           </div>
 
@@ -377,8 +380,8 @@ export default function KioskPage() {
                 ))}
               </div>
 
-              {/* Court order forward notice */}
-              {form.caseType === "court_ordered" && (
+              {/* Court order / agreement forward notice */}
+              {(form.caseType === "court_ordered" || form.caseType === "by_agreement") && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
                   <p className="text-sm text-blue-900">
                     <strong>Please forward a copy of the court order or any agreement to:</strong>
@@ -423,6 +426,61 @@ export default function KioskPage() {
                   })}
                 </div>
               </div>
+
+              {/* Additional result recipients — only for Personal visits */}
+              {form.caseType === "voluntary" && (
+                <div className="border-t border-gray-100 pt-6 mt-6">
+                  <p className="text-base font-semibold text-gray-700 mb-1">Should we send results to anyone else?</p>
+                  <p className="text-sm text-gray-500 mb-4">Optional — add any additional email addresses that should receive your results.</p>
+                  <div className="space-y-3">
+                    {form.additionalRecipients.map((r, i) => (
+                      <div key={i} className="flex gap-2 items-start">
+                        <input
+                          type="text"
+                          value={r.name}
+                          onChange={(e) => {
+                            const next = [...form.additionalRecipients];
+                            next[i] = { ...next[i], name: e.target.value };
+                            updateForm({ additionalRecipients: next });
+                          }}
+                          placeholder="Name (optional)"
+                          className="flex-1 text-base p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7AB928] focus:border-transparent outline-none"
+                        />
+                        <input
+                          type="email"
+                          value={r.email}
+                          onChange={(e) => {
+                            const next = [...form.additionalRecipients];
+                            next[i] = { ...next[i], email: e.target.value };
+                            updateForm({ additionalRecipients: next });
+                          }}
+                          placeholder="email@example.com"
+                          className="flex-[2] text-base p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7AB928] focus:border-transparent outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = form.additionalRecipients.filter((_, j) => j !== i);
+                            updateForm({ additionalRecipients: next });
+                          }}
+                          className="p-3 text-gray-400 hover:text-red-500 transition-colors"
+                          aria-label="Remove recipient"
+                        >
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => updateForm({ additionalRecipients: [...form.additionalRecipients, { name: "", email: "" }] })}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed border-gray-300 text-sm font-medium text-gray-600 hover:border-[#7AB928] hover:text-[#7AB928] transition-colors"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                      Add recipient
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

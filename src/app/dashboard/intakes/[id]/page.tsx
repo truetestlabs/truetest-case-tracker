@@ -22,6 +22,7 @@ type Draft = {
   attorneys: Array<{ name: string; firm: string; email: string; phone: string; contactId?: string }> | null;
   galInfo: { name: string; firm: string; email: string; phone: string; contactId?: string } | null;
   testTypes: string[] | null;
+  additionalRecipients: Array<{ name?: string; email: string }> | null;
   orderedBy: string | null;
   paymentResponsibility: string | null;
   notes: string | null;
@@ -134,6 +135,19 @@ export default function IntakeDetailPage() {
                 </div>
               )}
             </div>
+            {draft.additionalRecipients && draft.additionalRecipients.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Additional Result Recipients</p>
+                <div className="space-y-1">
+                  {draft.additionalRecipients.map((r, i) => (
+                    <div key={i} className="text-sm text-gray-700 bg-blue-50 rounded-lg px-3 py-2">
+                      {r.name && <span className="font-medium">{r.name} — </span>}
+                      <span>{r.email}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Legal Contacts */}

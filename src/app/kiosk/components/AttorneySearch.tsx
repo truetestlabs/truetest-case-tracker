@@ -18,12 +18,14 @@ type Props = {
   onChange: (contact: ContactResult | null) => void;
 };
 
-export function AttorneySearch({ type, label, value, onChange }: Props) {
+export function AttorneySearch({ label, value, onChange }: Props) {
   const [query, setQuery] = useState(value?.name || "");
   const [results, setResults] = useState<ContactResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showManual, setShowManual] = useState(false);
-  const [manual, setManual] = useState<ContactResult>({ name: "", firm: "", email: "", phone: "" });
+  const [manualFirstName, setManualFirstName] = useState("");
+  const [manualLastName, setManualLastName] = useState("");
+  const [manualEmail, setManualEmail] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
 
   useEffect(() => {
@@ -32,22 +34,24 @@ export function AttorneySearch({ type, label, value, onChange }: Props) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/contacts?type=${type}&q=${encodeURIComponent(query)}`);
+        // Search across both attorney and gal — the same person may play either role across cases
+        const res = await fetch(`/api/contacts?type=attorney,gal&q=${encodeURIComponent(query)}`);
         if (res.ok) {
           const data = await res.json();
-          const mapped = (data || []).slice(0, 8).map((c: { id: string; firstName: string; lastName: string; firmName?: string; email?: string; phone?: string }) => ({
+          const mapped = (data || []).slice(0, 8).map((c: { id: string; firstName: string; lastName: string; firmName?: string; email?: string; phone?: string; contactType?: string }) => ({
             name: `${c.firstName} ${c.lastName}`,
             firm: c.firmName || "",
             email: c.email || "",
             phone: c.phone || "",
             contactId: c.id,
+            role: c.contactType,
           }));
           setResults(mapped);
           setShowDropdown(mapped.length > 0);
         }
       } catch { /* silent */ }
     }, 300);
-  }, [query, type]);
+  }, [query]);
 
   if (value && !showManual) {
     return (
@@ -71,49 +75,58 @@ export function AttorneySearch({ type, label, value, onChange }: Props) {
   }
 
   if (showManual) {
+    const canSave = manualFirstName.trim() && manualLastName.trim();
     return (
       <div className="space-y-3 bg-gray-50 rounded-xl p-4">
         <p className="text-sm font-medium text-gray-600">Enter {label} info manually:</p>
-        <input
-          type="text"
-          placeholder={`${label} full name`}
-          value={manual.name}
-          onChange={(e) => setManual({ ...manual, name: e.target.value })}
-          className="w-full text-base p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-[#7AB928]"
-        />
-        <input
-          type="text"
-          placeholder="Firm / Organization"
-          value={manual.firm}
-          onChange={(e) => setManual({ ...manual, firm: e.target.value })}
-          className="w-full text-base p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-[#7AB928]"
-        />
         <div className="grid grid-cols-2 gap-3">
           <input
-            type="email"
-            placeholder="Email"
-            value={manual.email}
-            onChange={(e) => setManual({ ...manual, email: e.target.value })}
+            type="text"
+            placeholder="First Name"
+            value={manualFirstName}
+            onChange={(e) => setManualFirstName(e.target.value)}
             className="w-full text-base p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-[#7AB928]"
           />
           <input
-            type="tel"
-            placeholder="Phone"
-            value={manual.phone}
-            onChange={(e) => setManual({ ...manual, phone: e.target.value })}
+            type="text"
+            placeholder="Last Name"
+            value={manualLastName}
+            onChange={(e) => setManualLastName(e.target.value)}
             className="w-full text-base p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-[#7AB928]"
           />
         </div>
+        <input
+          type="email"
+          placeholder="Email"
+          value={manualEmail}
+          onChange={(e) => setManualEmail(e.target.value)}
+          className="w-full text-base p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-[#7AB928]"
+        />
         <div className="flex gap-2">
           <button
-            onClick={() => { if (manual.name.trim()) { onChange(manual); setShowManual(false); } }}
-            disabled={!manual.name.trim()}
+            onClick={() => {
+              if (canSave) {
+                onChange({
+                  name: `${manualFirstName.trim()} ${manualLastName.trim()}`,
+                  firm: "",
+                  email: manualEmail.trim(),
+                  phone: "",
+                });
+                setShowManual(false);
+              }
+            }}
+            disabled={!canSave}
             className="px-4 py-2 bg-[#7AB928] text-white rounded-lg text-sm font-semibold disabled:opacity-40"
           >
             Save
           </button>
           <button
-            onClick={() => setShowManual(false)}
+            onClick={() => {
+              setShowManual(false);
+              setManualFirstName("");
+              setManualLastName("");
+              setManualEmail("");
+            }}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
           >
             Cancel

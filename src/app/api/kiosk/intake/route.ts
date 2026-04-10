@@ -42,6 +42,9 @@ export async function POST(request: NextRequest) {
         existingDonorId,
         caseType: body.caseType,
         testTypes: body.testTypes?.length > 0 ? body.testTypes : undefined,
+        additionalRecipients: body.additionalRecipients?.length > 0
+          ? body.additionalRecipients.filter((r: { email?: string }) => r.email?.trim())
+          : undefined,
         attorneys: attorneysJson,
         galInfo: galJson,
         notes: body.notes?.trim() || null,

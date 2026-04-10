@@ -7,7 +7,11 @@ export async function GET(request: NextRequest) {
   const q = searchParams.get("q");
 
   const where: Record<string, unknown> = {};
-  if (type) where.contactType = type;
+  if (type) {
+    // Support comma-separated list (e.g. "attorney,gal") for cross-type search
+    const types = type.split(",").map((t) => t.trim()).filter(Boolean);
+    where.contactType = types.length > 1 ? { in: types } : types[0];
+  }
   if (q) {
     where.OR = [
       { firstName: { contains: q, mode: "insensitive" } },

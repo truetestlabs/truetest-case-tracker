@@ -234,6 +234,50 @@ export async function PATCH(
         }
       }
 
+      // Add additional result recipients as CaseContacts (for Personal visits)
+      const additionalRecipients = (draft.additionalRecipients as Array<{ name?: string; email: string }>) || [];
+      for (const recipient of additionalRecipients) {
+        if (!recipient.email?.trim()) continue;
+        const email = recipient.email.trim();
+        const [firstName, ...rest] = (recipient.name?.trim() || email.split("@")[0]).split(" ");
+        const lastName = rest.join(" ") || "";
+
+        // Find existing contact by email
+        let existing = await prisma.contact.findFirst({
+          where: { email: { equals: email, mode: "insensitive" } },
+        });
+        if (!existing) {
+          existing = await prisma.contact.create({
+            data: {
+              contactType: "other",
+              firstName: firstName || "Unknown",
+              lastName: lastName || "",
+              email,
+              preferredContact: "email",
+              represents: "na",
+            },
+          });
+        }
+        // Link to case if not already linked
+        const alreadyLinked = await prisma.caseContact.findFirst({
+          where: { caseId, contactId: existing.id },
+        });
+        if (!alreadyLinked) {
+          await prisma.caseContact.create({
+            data: {
+              caseId,
+              contactId: existing.id,
+              roleInCase: "other",
+              receivesResults: true,
+              receivesStatus: false,
+              receivesInvoices: false,
+              canOrderTests: false,
+              isPrimaryContact: false,
+            },
+          });
+        }
+      }
+
       // Create placeholder test orders for each test type the client selected
       const testTypes = (draft.testTypes as string[]) || [];
       const testTypeLabels: Record<string, { description: string; specimenType: "urine" | "hair" | "blood" | "sweat_patch" }> = {
