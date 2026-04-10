@@ -66,6 +66,7 @@ export default function KioskPage() {
   const [donorChecked, setDonorChecked] = useState(false);
   const [donorFound, setDonorFound] = useState(false);
   const [donorEditing, setDonorEditing] = useState(false);
+  const [donorConfirmed, setDonorConfirmed] = useState(false);
 
   // Activity tracking
   const touch = useCallback(() => {
@@ -90,6 +91,7 @@ export default function KioskPage() {
         setSubmitted(false);
         setDonorChecked(false);
         setDonorFound(false);
+        setDonorConfirmed(false);
         setShowTimeout(false);
         try { localStorage.removeItem("kiosk-draft"); } catch { /* */ }
       } else if (elapsed > INACTIVITY_TIMEOUT - WARNING_BEFORE) {
@@ -162,6 +164,7 @@ export default function KioskPage() {
         setSubmitted(false);
         setDonorChecked(false);
         setDonorFound(false);
+        setDonorConfirmed(false);
       }, 60000);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -285,7 +288,7 @@ export default function KioskPage() {
                     <input
                       type="text"
                       value={form.firstName}
-                      onChange={(e) => { updateForm({ firstName: e.target.value }); setDonorChecked(false); setDonorFound(false); }}
+                      onChange={(e) => { updateForm({ firstName: e.target.value }); setDonorChecked(false); setDonorFound(false); setDonorConfirmed(false); }}
                       className="w-full text-lg p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7AB928] focus:border-transparent outline-none"
                       placeholder="First name"
                       autoComplete="off"
@@ -296,7 +299,7 @@ export default function KioskPage() {
                     <input
                       type="text"
                       value={form.lastName}
-                      onChange={(e) => { updateForm({ lastName: e.target.value }); setDonorChecked(false); setDonorFound(false); }}
+                      onChange={(e) => { updateForm({ lastName: e.target.value }); setDonorChecked(false); setDonorFound(false); setDonorConfirmed(false); }}
                       onBlur={checkDonor}
                       className="w-full text-lg p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7AB928] focus:border-transparent outline-none"
                       placeholder="Last name"
@@ -306,7 +309,7 @@ export default function KioskPage() {
                 </div>
 
                 {/* Returning donor banner */}
-                {donorChecked && donorFound && !donorEditing && (
+                {donorChecked && donorFound && !donorEditing && !donorConfirmed && (
                   <div className="bg-green-50 border border-green-200 rounded-xl p-4">
                     <p className="text-green-800 font-semibold mb-1">Welcome back!</p>
                     <p className="text-green-700 text-sm mb-3">We found your info on file. Is everything still correct?</p>
@@ -315,7 +318,7 @@ export default function KioskPage() {
                       {form.email && <p>Email: {form.email}</p>}
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => setDonorEditing(false)} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold">Looks good</button>
+                      <button onClick={() => setDonorConfirmed(true)} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold">Looks good</button>
                       <button onClick={() => setDonorEditing(true)} className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700">Update my info</button>
                     </div>
                   </div>
