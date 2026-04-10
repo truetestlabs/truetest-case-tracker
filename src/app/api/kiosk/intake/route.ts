@@ -24,6 +24,15 @@ export async function POST(request: NextRequest) {
       if (donor) existingDonorId = donor.id;
     }
 
+    // Convert flat attorney/gal fields to JSON shape expected by approval flow
+    const attorneysJson = body.attorneyName?.trim()
+      ? [{ name: body.attorneyName.trim(), firm: "", email: body.attorneyEmail?.trim() || "", phone: "", contactId: body.attorneyContactId || undefined }]
+      : undefined;
+
+    const galJson = body.galName?.trim()
+      ? { name: body.galName.trim(), firm: "", email: body.galEmail?.trim() || "", phone: "", contactId: body.galContactId || undefined }
+      : undefined;
+
     const draft = await prisma.intakeDraft.create({
       data: {
         firstName: body.firstName.trim(),
@@ -32,15 +41,9 @@ export async function POST(request: NextRequest) {
         email: body.email?.trim() || null,
         existingDonorId,
         caseType: body.caseType,
-        courtCaseNumber: body.courtCaseNumber?.trim() || null,
-        county: body.county?.trim() || null,
-        judgeName: body.judgeName?.trim() || null,
-        hasCourtOrder: !!body.courtOrderPath,
-        courtOrderPath: body.courtOrderPath || null,
-        attorneys: body.attorneys?.length > 0 ? body.attorneys : undefined,
-        galInfo: body.galInfo || undefined,
-        orderedBy: body.orderedBy || null,
-        paymentResponsibility: body.paymentResponsibility || null,
+        testTypes: body.testTypes?.length > 0 ? body.testTypes : undefined,
+        attorneys: attorneysJson,
+        galInfo: galJson,
         notes: body.notes?.trim() || null,
         communicationConsent: body.communicationConsent || false,
         status: "pending_review",

@@ -434,6 +434,7 @@ model IntakeDraft {
   galInfo               Json?    // { name, firm, email, phone, contactId? }
   orderedBy             String?  // attorney | judge | self | other
   paymentResponsibility String?  // self | attorney | other
+  testTypes             Json?    // ["urine", "hair", "blood_peth", "sweat_patch"]
   notes                 String?
   communicationConsent  Boolean  @default(false)
   createdAt             DateTime @default(now())

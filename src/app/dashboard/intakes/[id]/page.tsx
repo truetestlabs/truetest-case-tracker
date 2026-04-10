@@ -21,6 +21,7 @@ type Draft = {
   courtOrderPath: string | null;
   attorneys: Array<{ name: string; firm: string; email: string; phone: string; contactId?: string }> | null;
   galInfo: { name: string; firm: string; email: string; phone: string; contactId?: string } | null;
+  testTypes: string[] | null;
   orderedBy: string | null;
   paymentResponsibility: string | null;
   notes: string | null;
@@ -126,6 +127,12 @@ export default function IntakeDetailPage() {
               {draft.county && <div><span className="text-gray-500">County:</span> <span className="text-gray-900 font-medium">{draft.county}</span></div>}
               {draft.judgeName && <div><span className="text-gray-500">Judge:</span> <span className="text-gray-900 font-medium">{draft.judgeName}</span></div>}
               {draft.hasCourtOrder && <div><span className="text-green-600 text-xs font-medium">Court order uploaded</span></div>}
+              {draft.testTypes && draft.testTypes.length > 0 && (
+                <div className="col-span-2">
+                  <span className="text-gray-500">Tests requested:</span>{" "}
+                  <span className="text-gray-900 font-medium">{draft.testTypes.map((t) => t.replace(/_/g, " ")).join(", ")}</span>
+                </div>
+              )}
             </div>
           </section>
 

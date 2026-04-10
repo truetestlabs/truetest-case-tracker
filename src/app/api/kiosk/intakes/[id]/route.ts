@@ -234,6 +234,31 @@ export async function PATCH(
         }
       }
 
+      // Create placeholder test orders for each test type the client selected
+      const testTypes = (draft.testTypes as string[]) || [];
+      const testTypeLabels: Record<string, { description: string; specimenType: "urine" | "hair" | "blood" | "sweat_patch" }> = {
+        urine: { description: "Urine Drug Test (pending staff selection)", specimenType: "urine" },
+        hair: { description: "Hair Drug Test (pending staff selection)", specimenType: "hair" },
+        blood_peth: { description: "PEth Blood Alcohol Test (pending staff selection)", specimenType: "blood" },
+        sweat_patch: { description: "Sweat Patch Test (pending staff selection)", specimenType: "sweat_patch" },
+      };
+      for (const tt of testTypes) {
+        const meta = testTypeLabels[tt];
+        if (meta) {
+          await prisma.testOrder.create({
+            data: {
+              caseId,
+              testDescription: meta.description,
+              specimenType: meta.specimenType,
+              lab: "usdtl",
+              testStatus: "order_created",
+              collectionType: "unobserved",
+              schedulingType: "walk_in",
+            },
+          });
+        }
+      }
+
       // Upload court order document if present
       if (draft.courtOrderPath) {
         await prisma.document.create({

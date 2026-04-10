@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { AttorneySearch } from "./components/AttorneySearch";
-import { CourtOrderUpload } from "./components/CourtOrderUpload";
 
 type FormData = {
   // Step 1
@@ -13,20 +12,19 @@ type FormData = {
   existingDonorId: string | null;
   // Step 2
   caseType: string; // court_ordered | voluntary | by_agreement
-  courtCaseNumber: string;
-  county: string;
-  judgeName: string;
-  hasCourtOrder: boolean;
-  courtOrderPath: string | null;
+  testTypes: string[]; // urine | hair | blood_peth | sweat_patch
   // Step 3
   hasAttorney: boolean;
-  attorneys: Array<{ name: string; firm: string; email: string; phone: string; role?: string; contactId?: string }>;
+  attorneyName: string;
+  attorneyEmail: string;
+  attorneyContactId: string | null;
   hasGal: boolean;
-  galInfo: { name: string; firm: string; email: string; phone: string; contactId?: string } | null;
-  orderedBy: string;
-  paymentResponsibility: string;
+  galName: string;
+  galEmail: string;
+  galContactId: string | null;
   // Step 4
   communicationConsent: boolean;
+  infoInterest: string; // "" | "results_timeline" | "test_info" | "both"
   notes: string;
 };
 
@@ -37,18 +35,17 @@ const INITIAL_FORM: FormData = {
   email: "",
   existingDonorId: null,
   caseType: "",
-  courtCaseNumber: "",
-  county: "",
-  judgeName: "",
-  hasCourtOrder: false,
-  courtOrderPath: null,
+  testTypes: [],
   hasAttorney: false,
-  attorneys: [],
+  attorneyName: "",
+  attorneyEmail: "",
+  attorneyContactId: null,
   hasGal: false,
-  galInfo: null,
-  orderedBy: "",
-  paymentResponsibility: "",
+  galName: "",
+  galEmail: "",
+  galContactId: null,
   communicationConsent: false,
+  infoInterest: "",
   notes: "",
 };
 
@@ -196,30 +193,42 @@ export default function KioskPage() {
 
           {/* Communication opt-in */}
           <div className="bg-gray-50 rounded-2xl p-6 mb-8 text-left">
-            <p className="text-base text-gray-700 mb-4">
-              We&apos;d like to text/email you helpful information about your test and your case. Do you consent?
+            <p className="text-base font-semibold text-gray-800 mb-4 text-center">
+              Would you like us to send you more information?
             </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  updateForm({ communicationConsent: true });
-                  // Fire update to backend
-                  fetch("/api/kiosk/intake", {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ firstName: form.firstName, lastName: form.lastName, communicationConsent: true }),
-                  }).catch(() => {});
-                }}
-                className={`flex-1 py-4 rounded-xl text-lg font-bold transition-all ${form.communicationConsent ? "bg-green-600 text-white" : "bg-white border-2 border-gray-200 text-gray-700 hover:border-green-500"}`}
-              >
-                Yes, please
-              </button>
-              <button
-                onClick={() => updateForm({ communicationConsent: false })}
-                className={`flex-1 py-4 rounded-xl text-lg font-bold transition-all ${!form.communicationConsent ? "bg-gray-200 text-gray-600" : "bg-white border-2 border-gray-200 text-gray-700"}`}
-              >
-                No thanks
-              </button>
+            <div className="space-y-3">
+              {[
+                { value: "results_timeline", label: "When my test results will be available", desc: "We'll notify you as soon as results come in" },
+                { value: "test_info", label: "More information about the test I took", desc: "Detection windows, what it screens for, and more" },
+                { value: "both", label: "Both — send me everything", desc: "Results updates plus educational info" },
+                { value: "none", label: "No thanks", desc: "" },
+              ].map((opt) => {
+                const selected = form.infoInterest === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => {
+                      const newConsent = opt.value !== "none";
+                      updateForm({ infoInterest: opt.value, communicationConsent: newConsent });
+                      // Fire update to backend
+                      fetch("/api/kiosk/intake", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          firstName: form.firstName,
+                          lastName: form.lastName,
+                          communicationConsent: newConsent,
+                          infoInterest: opt.value,
+                        }),
+                      }).catch(() => {});
+                    }}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${selected ? "border-[#7AB928] bg-green-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                  >
+                    <p className={`font-bold ${selected ? "text-[#7AB928]" : "text-gray-800"}`}>{opt.label}</p>
+                    {opt.desc && <p className="text-sm text-gray-500 mt-0.5">{opt.desc}</p>}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -346,9 +355,9 @@ export default function KioskPage() {
           {step === 2 && (
             <div>
               <h2 className="text-2xl font-bold text-[#4A4A4A] mb-1">Type of Visit</h2>
-              <p className="text-gray-500 mb-8">Please select one.</p>
+              <p className="text-gray-500 mb-6">Please select one.</p>
 
-              <div className="grid grid-cols-3 gap-4 mb-8">
+              <div className="grid grid-cols-3 gap-4 mb-6">
                 {[
                   { value: "court_ordered", label: "Court Ordered", desc: "Required by a judge or court" },
                   { value: "voluntary", label: "Personal", desc: "Your own decision to test" },
@@ -365,50 +374,52 @@ export default function KioskPage() {
                 ))}
               </div>
 
-              {/* Court order fields */}
+              {/* Court order forward notice */}
               {form.caseType === "court_ordered" && (
-                <div className="space-y-5 border-t border-gray-100 pt-6">
-                  <p className="text-base font-semibold text-gray-700">Court Order Details (optional)</p>
-
-                  <CourtOrderUpload
-                    onUploaded={(path) => updateForm({ courtOrderPath: path, hasCourtOrder: true })}
-                    uploadedPath={form.courtOrderPath}
-                  />
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1.5">Court Case #</label>
-                      <input
-                        type="text"
-                        value={form.courtCaseNumber}
-                        onChange={(e) => updateForm({ courtCaseNumber: e.target.value })}
-                        className="w-full text-base p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7AB928] focus:border-transparent outline-none"
-                        placeholder="e.g., 2024 D 080196"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1.5">County</label>
-                      <input
-                        type="text"
-                        value={form.county}
-                        onChange={(e) => updateForm({ county: e.target.value })}
-                        className="w-full text-base p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7AB928] focus:border-transparent outline-none"
-                        placeholder="e.g., Cook"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1.5">Judge Name</label>
-                      <input
-                        type="text"
-                        value={form.judgeName}
-                        onChange={(e) => updateForm({ judgeName: e.target.value })}
-                        className="w-full text-base p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7AB928] focus:border-transparent outline-none"
-                        placeholder="e.g., Hon. Mitchell Goldberg"
-                      />
-                    </div>
-                  </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                  <p className="text-sm text-blue-900">
+                    <strong>Please forward a copy of the court order or any agreement to:</strong>
+                  </p>
+                  <p className="text-base font-semibold text-blue-800 mt-1">colleen.truetestlabs@gmail.com</p>
                 </div>
               )}
+
+              {/* Test type selection */}
+              <div className="border-t border-gray-100 pt-6">
+                <p className="text-base font-semibold text-gray-700 mb-3">What type of test(s) do you need to do?</p>
+                <p className="text-sm text-gray-500 mb-4">Select all that apply. Not sure? Skip this — our staff will confirm.</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { value: "urine", label: "Urine Drug Test" },
+                    { value: "hair", label: "Hair Drug Test" },
+                    { value: "blood_peth", label: "Blood / PEth (Alcohol)" },
+                    { value: "sweat_patch", label: "Sweat Patch" },
+                  ].map((opt) => {
+                    const selected = form.testTypes.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => {
+                          const next = selected
+                            ? form.testTypes.filter((t) => t !== opt.value)
+                            : [...form.testTypes, opt.value];
+                          updateForm({ testTypes: next });
+                        }}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${selected ? "border-[#7AB928] bg-green-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${selected ? "bg-[#7AB928] border-[#7AB928]" : "border-gray-300"}`}>
+                            {selected && (
+                              <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20,6 9,17 4,12" /></svg>
+                            )}
+                          </div>
+                          <span className={`font-semibold ${selected ? "text-[#7AB928]" : "text-gray-800"}`}>{opt.label}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
@@ -429,7 +440,7 @@ export default function KioskPage() {
                     Yes
                   </button>
                   <button
-                    onClick={() => updateForm({ hasAttorney: false, attorneys: [] })}
+                    onClick={() => updateForm({ hasAttorney: false, attorneyName: "", attorneyEmail: "", attorneyContactId: null })}
                     className={`flex-1 py-4 rounded-xl text-lg font-bold border-2 transition-all ${!form.hasAttorney ? "border-gray-400 bg-gray-50 text-gray-600" : "border-gray-200 text-gray-700"}`}
                   >
                     No
@@ -439,8 +450,12 @@ export default function KioskPage() {
                   <AttorneySearch
                     type="attorney"
                     label="Attorney"
-                    value={form.attorneys[0] || null}
-                    onChange={(atty) => updateForm({ attorneys: atty ? [atty] : [] })}
+                    value={form.attorneyName ? { name: form.attorneyName, firm: "", email: form.attorneyEmail, phone: "", contactId: form.attorneyContactId || undefined } : null}
+                    onChange={(atty) => updateForm({
+                      attorneyName: atty?.name || "",
+                      attorneyEmail: atty?.email || "",
+                      attorneyContactId: atty?.contactId || null,
+                    })}
                   />
                 )}
               </div>
@@ -456,7 +471,7 @@ export default function KioskPage() {
                     Yes
                   </button>
                   <button
-                    onClick={() => updateForm({ hasGal: false, galInfo: null })}
+                    onClick={() => updateForm({ hasGal: false, galName: "", galEmail: "", galContactId: null })}
                     className={`flex-1 py-4 rounded-xl text-lg font-bold border-2 transition-all ${!form.hasGal ? "border-gray-400 bg-gray-50 text-gray-600" : "border-gray-200 text-gray-700"}`}
                   >
                     No
@@ -466,46 +481,18 @@ export default function KioskPage() {
                   <AttorneySearch
                     type="gal"
                     label="GAL"
-                    value={form.galInfo || null}
-                    onChange={(gal) => updateForm({ galInfo: gal })}
+                    value={form.galName ? { name: form.galName, firm: "", email: form.galEmail, phone: "", contactId: form.galContactId || undefined } : null}
+                    onChange={(gal) => updateForm({
+                      galName: gal?.name || "",
+                      galEmail: gal?.email || "",
+                      galContactId: gal?.contactId || null,
+                    })}
                   />
                 )}
               </div>
 
-              {/* Who ordered / who pays */}
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <p className="text-base font-semibold text-gray-700 mb-3">Who ordered this test?</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {["Attorney", "Judge", "Self", "Other"].map((opt) => (
-                      <button
-                        key={opt}
-                        onClick={() => updateForm({ orderedBy: opt.toLowerCase() })}
-                        className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${form.orderedBy === opt.toLowerCase() ? "border-[#7AB928] bg-green-50 text-[#7AB928]" : "border-gray-200 text-gray-700"}`}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-base font-semibold text-gray-700 mb-3">Who is responsible for payment?</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {["Self", "Attorney", "Other Party", "Unknown"].map((opt) => (
-                      <button
-                        key={opt}
-                        onClick={() => updateForm({ paymentResponsibility: opt.toLowerCase().replace(/ /g, "_") })}
-                        className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${form.paymentResponsibility === opt.toLowerCase().replace(/ /g, "_") ? "border-[#7AB928] bg-green-50 text-[#7AB928]" : "border-gray-200 text-gray-700"}`}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
               {/* Notes */}
-              <div className="mt-6">
+              <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1.5">Anything else we should know?</label>
                 <textarea
                   value={form.notes}
