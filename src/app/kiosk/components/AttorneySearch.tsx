@@ -136,6 +136,9 @@ export function AttorneySearch({ label, value, onChange }: Props) {
     );
   }
 
+  const hasSearched = query.trim().length >= 2;
+  const noResults = hasSearched && results.length === 0;
+
   return (
     <div className="relative">
       <input
@@ -149,7 +152,7 @@ export function AttorneySearch({ label, value, onChange }: Props) {
         autoComplete="off"
       />
 
-      {showDropdown && (
+      {showDropdown && results.length > 0 && (
         <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 max-h-64 overflow-y-auto">
           {results.map((r, i) => (
             <button
@@ -165,11 +168,35 @@ export function AttorneySearch({ label, value, onChange }: Props) {
         </div>
       )}
 
+      {/* No-match banner — prominent manual entry prompt */}
+      {noResults && (
+        <div className="mt-3 bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
+          <p className="text-sm text-amber-900 font-semibold mb-2">No matches found for &ldquo;{query}&rdquo;</p>
+          <p className="text-sm text-amber-800 mb-3">Enter the {label.toLowerCase()}&apos;s info manually below.</p>
+          <button
+            onClick={() => {
+              // Pre-fill first name from query if possible
+              const parts = query.trim().split(" ");
+              if (parts.length >= 2) {
+                setManualFirstName(parts[0]);
+                setManualLastName(parts.slice(1).join(" "));
+              } else {
+                setManualFirstName(query.trim());
+              }
+              setShowManual(true);
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#7AB928] text-white rounded-lg text-sm font-bold hover:bg-[#6aa322]"
+          >
+            Enter {label} Manually
+          </button>
+        </div>
+      )}
+
       <button
         onClick={() => setShowManual(true)}
-        className="mt-2 text-sm text-[#7AB928] hover:text-[#6aa322] font-medium"
+        className="mt-2 text-sm text-[#7AB928] hover:text-[#6aa322] font-medium underline"
       >
-        Not listed? Enter manually
+        Or enter manually anyway
       </button>
     </div>
   );

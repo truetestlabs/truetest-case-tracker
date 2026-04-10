@@ -390,46 +390,9 @@ export default function KioskPage() {
                 </div>
               )}
 
-              {/* Test type selection */}
-              <div className="border-t border-gray-100 pt-6">
-                <p className="text-base font-semibold text-gray-700 mb-3">What type of test(s) do you need to do?</p>
-                <p className="text-sm text-gray-500 mb-4">Select all that apply. Not sure? Skip this — our staff will confirm.</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { value: "urine", label: "Urine Drug Test" },
-                    { value: "hair", label: "Hair Drug Test" },
-                    { value: "blood_peth", label: "Blood / PEth (Alcohol)" },
-                    { value: "sweat_patch", label: "Sweat Patch" },
-                  ].map((opt) => {
-                    const selected = form.testTypes.includes(opt.value);
-                    return (
-                      <button
-                        key={opt.value}
-                        onClick={() => {
-                          const next = selected
-                            ? form.testTypes.filter((t) => t !== opt.value)
-                            : [...form.testTypes, opt.value];
-                          updateForm({ testTypes: next });
-                        }}
-                        className={`p-4 rounded-xl border-2 text-left transition-all ${selected ? "border-[#7AB928] bg-green-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${selected ? "bg-[#7AB928] border-[#7AB928]" : "border-gray-300"}`}>
-                            {selected && (
-                              <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20,6 9,17 4,12" /></svg>
-                            )}
-                          </div>
-                          <span className={`font-semibold ${selected ? "text-[#7AB928]" : "text-gray-800"}`}>{opt.label}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Additional result recipients — only for Personal visits */}
+              {/* Additional result recipients — only for Personal visits. Shown ABOVE test type. */}
               {form.caseType === "voluntary" && (
-                <div className="border-t border-gray-100 pt-6 mt-6">
+                <div className="border-t border-gray-100 pt-6 mb-6">
                   <p className="text-base font-semibold text-gray-700 mb-1">Should we send results to anyone else?</p>
                   <p className="text-sm text-gray-500 mb-4">Optional — add any additional email addresses that should receive your results.</p>
                   <div className="space-y-3">
@@ -481,6 +444,43 @@ export default function KioskPage() {
                   </div>
                 </div>
               )}
+
+              {/* Test type selection */}
+              <div className="border-t border-gray-100 pt-6">
+                <p className="text-base font-semibold text-gray-700 mb-3">What type of test(s) do you need to do?</p>
+                <p className="text-sm text-gray-500 mb-4">Select all that apply. Not sure? Skip this — our staff will confirm.</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { value: "urine", label: "Urine Drug Test" },
+                    { value: "hair", label: "Hair Drug Test" },
+                    { value: "blood_peth", label: "Blood / PEth (Alcohol)" },
+                    { value: "sweat_patch", label: "Sweat Patch" },
+                  ].map((opt) => {
+                    const selected = form.testTypes.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => {
+                          const next = selected
+                            ? form.testTypes.filter((t) => t !== opt.value)
+                            : [...form.testTypes, opt.value];
+                          updateForm({ testTypes: next });
+                        }}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${selected ? "border-[#7AB928] bg-green-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${selected ? "bg-[#7AB928] border-[#7AB928]" : "border-gray-300"}`}>
+                            {selected && (
+                              <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20,6 9,17 4,12" /></svg>
+                            )}
+                          </div>
+                          <span className={`font-semibold ${selected ? "text-[#7AB928]" : "text-gray-800"}`}>{opt.label}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
