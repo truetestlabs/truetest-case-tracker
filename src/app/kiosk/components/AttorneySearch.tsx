@@ -37,8 +37,11 @@ export function AttorneySearch({ type, label, value, onChange }: Props) {
         // Attorneys and GALs share a search (the same person can play either role
         // across cases). Evaluators (court-ordered doctors) are distinct — they're
         // not lawyers and should have their own search space.
+        // Uses the kiosk-specific endpoint which HARD ENFORCES a type allowlist —
+        // donors and "other" contacts can NEVER be returned, even if a malicious
+        // caller tries to manipulate the type parameter.
         const searchTypes = type === "evaluator" ? "evaluator" : "attorney,gal";
-        const res = await fetch(`/api/contacts?type=${searchTypes}&q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/kiosk/contact-search?type=${searchTypes}&q=${encodeURIComponent(query)}`);
         if (res.ok) {
           const data = await res.json();
           const mapped = (data || []).slice(0, 8).map((c: { id: string; firstName: string; lastName: string; firmName?: string; email?: string; phone?: string; contactType?: string }) => ({
