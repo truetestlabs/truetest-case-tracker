@@ -24,13 +24,17 @@ export async function POST(request: NextRequest) {
       if (donor) existingDonorId = donor.id;
     }
 
-    // Convert flat attorney/gal fields to JSON shape expected by approval flow
+    // Convert flat attorney/gal/evaluator fields to JSON shape expected by approval flow
     const attorneysJson = body.attorneyName?.trim()
       ? [{ name: body.attorneyName.trim(), firm: "", email: body.attorneyEmail?.trim() || "", phone: "", contactId: body.attorneyContactId || undefined }]
       : undefined;
 
     const galJson = body.galName?.trim()
       ? { name: body.galName.trim(), firm: "", email: body.galEmail?.trim() || "", phone: "", contactId: body.galContactId || undefined }
+      : undefined;
+
+    const evaluatorsJson = body.evaluatorName?.trim()
+      ? [{ name: body.evaluatorName.trim(), firm: "", email: body.evaluatorEmail?.trim() || "", phone: "", contactId: body.evaluatorContactId || undefined }]
       : undefined;
 
     const draft = await prisma.intakeDraft.create({
@@ -47,6 +51,7 @@ export async function POST(request: NextRequest) {
           : undefined,
         attorneys: attorneysJson,
         galInfo: galJson,
+        evaluators: evaluatorsJson,
         notes: body.notes?.trim() || null,
         communicationConsent: body.communicationConsent || false,
         status: "pending_review",

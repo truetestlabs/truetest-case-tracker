@@ -234,6 +234,53 @@ export async function PATCH(
         }
       }
 
+      // Add court-ordered evaluator contacts (doctors appointed by the court)
+      const evaluators = (draft.evaluators as Array<{ name: string; firm: string; email: string; phone: string; contactId?: string }>) || [];
+      for (const ev of evaluators) {
+        if (!ev.name?.trim()) continue;
+        let evContactId = ev.contactId;
+        if (!evContactId) {
+          const [firstName, ...rest] = ev.name.split(" ");
+          const lastName = rest.join(" ") || firstName;
+          const existing = await prisma.contact.findFirst({
+            where: {
+              contactType: "evaluator",
+              firstName: { equals: firstName, mode: "insensitive" },
+              lastName: { equals: lastName, mode: "insensitive" },
+            },
+          });
+          if (existing) {
+            evContactId = existing.id;
+          } else {
+            const created = await prisma.contact.create({
+              data: {
+                contactType: "evaluator",
+                firstName,
+                lastName,
+                firmName: ev.firm || null,
+                email: ev.email || null,
+                phone: ev.phone || null,
+                preferredContact: "email",
+                represents: "na",
+              },
+            });
+            evContactId = created.id;
+          }
+        }
+        const existsEv = await prisma.caseContact.findFirst({ where: { caseId, contactId: evContactId } });
+        if (!existsEv) {
+          await prisma.caseContact.create({
+            data: {
+              caseId,
+              contactId: evContactId,
+              roleInCase: "evaluator",
+              receivesResults: true,
+              receivesStatus: true,
+            },
+          });
+        }
+      }
+
       // Add additional result recipients as CaseContacts (for Personal visits)
       const additionalRecipients = (draft.additionalRecipients as Array<{ name?: string; email: string }>) || [];
       for (const recipient of additionalRecipients) {

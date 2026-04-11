@@ -12,13 +12,13 @@ type ContactResult = {
 };
 
 type Props = {
-  type: "attorney" | "gal";
+  type: "attorney" | "gal" | "evaluator";
   label: string;
   value: ContactResult | null;
   onChange: (contact: ContactResult | null) => void;
 };
 
-export function AttorneySearch({ label, value, onChange }: Props) {
+export function AttorneySearch({ type, label, value, onChange }: Props) {
   const [query, setQuery] = useState(value?.name || "");
   const [results, setResults] = useState<ContactResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -34,8 +34,11 @@ export function AttorneySearch({ label, value, onChange }: Props) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
-        // Search across both attorney and gal — the same person may play either role across cases
-        const res = await fetch(`/api/contacts?type=attorney,gal&q=${encodeURIComponent(query)}`);
+        // Attorneys and GALs share a search (the same person can play either role
+        // across cases). Evaluators (court-ordered doctors) are distinct — they're
+        // not lawyers and should have their own search space.
+        const searchTypes = type === "evaluator" ? "evaluator" : "attorney,gal";
+        const res = await fetch(`/api/contacts?type=${searchTypes}&q=${encodeURIComponent(query)}`);
         if (res.ok) {
           const data = await res.json();
           const mapped = (data || []).slice(0, 8).map((c: { id: string; firstName: string; lastName: string; firmName?: string; email?: string; phone?: string; contactType?: string }) => ({
@@ -51,7 +54,7 @@ export function AttorneySearch({ label, value, onChange }: Props) {
         }
       } catch { /* silent */ }
     }, 300);
-  }, [query]);
+  }, [query, type]);
 
   if (value && !showManual) {
     return (

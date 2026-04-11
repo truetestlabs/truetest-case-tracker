@@ -21,6 +21,7 @@ type Draft = {
   courtOrderPath: string | null;
   attorneys: Array<{ name: string; firm: string; email: string; phone: string; contactId?: string }> | null;
   galInfo: { name: string; firm: string; email: string; phone: string; contactId?: string } | null;
+  evaluators: Array<{ name: string; firm: string; email: string; phone: string; contactId?: string }> | null;
   testTypes: string[] | null;
   additionalRecipients: Array<{ name?: string; email: string }> | null;
   orderedBy: string | null;
@@ -151,7 +152,7 @@ export default function IntakeDetailPage() {
           </section>
 
           {/* Legal Contacts */}
-          {((draft.attorneys && draft.attorneys.length > 0) || draft.galInfo) && (
+          {((draft.attorneys && draft.attorneys.length > 0) || draft.galInfo || (draft.evaluators && draft.evaluators.length > 0)) && (
             <section>
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Legal Contacts</h3>
               <div className="space-y-2 text-sm">
@@ -170,6 +171,14 @@ export default function IntakeDetailPage() {
                     {draft.galInfo.email && <p className="text-gray-500">{draft.galInfo.email}</p>}
                   </div>
                 )}
+                {draft.evaluators?.map((e, i) => (
+                  <div key={`ev-${i}`} className="bg-gray-50 rounded-lg p-3">
+                    <p className="font-medium text-gray-900">Evaluator: {e.name}</p>
+                    {e.firm && <p className="text-gray-500">{e.firm}</p>}
+                    {e.email && <p className="text-gray-500">{e.email}</p>}
+                    {e.phone && <p className="text-gray-500">{e.phone}</p>}
+                  </div>
+                ))}
               </div>
             </section>
           )}

@@ -27,11 +27,19 @@ type FormData = {
   galContactId: string | null;
   galFirm: string;
   galPhone: string;
+  hasEvaluator: boolean;
+  evaluatorName: string;
+  evaluatorEmail: string;
+  evaluatorContactId: string | null;
+  evaluatorFirm: string;
+  evaluatorPhone: string;
   // Returning-client pre-fill tracking
   prefilledFromCaseNumber: string | null;
   prefilledAttorney: boolean;
   prefilledGal: boolean;
+  prefilledEvaluator: boolean;
   hadMultipleAttorneysOnPreviousCase: boolean;
+  hadMultipleEvaluatorsOnPreviousCase: boolean;
   // Step 4
   communicationConsent: boolean;
   notes: string;
@@ -58,10 +66,18 @@ const INITIAL_FORM: FormData = {
   galContactId: null,
   galFirm: "",
   galPhone: "",
+  hasEvaluator: false,
+  evaluatorName: "",
+  evaluatorEmail: "",
+  evaluatorContactId: null,
+  evaluatorFirm: "",
+  evaluatorPhone: "",
   prefilledFromCaseNumber: null,
   prefilledAttorney: false,
   prefilledGal: false,
+  prefilledEvaluator: false,
   hadMultipleAttorneysOnPreviousCase: false,
+  hadMultipleEvaluatorsOnPreviousCase: false,
   communicationConsent: false,
   notes: "",
 };
@@ -147,6 +163,7 @@ export default function KioskPage() {
         if (data.found) {
           const firstAttorney = data.attorneys?.[0];
           const galInfo = data.gal;
+          const firstEvaluator = data.evaluators?.[0];
           setForm((prev) => ({
             ...prev,
             phone: data.phone || prev.phone,
@@ -154,6 +171,7 @@ export default function KioskPage() {
             existingDonorId: data.contactId,
             prefilledFromCaseNumber: data.mostRecentCaseNumber || null,
             hadMultipleAttorneysOnPreviousCase: !!data.hadMultipleAttorneys,
+            hadMultipleEvaluatorsOnPreviousCase: !!data.hadMultipleEvaluators,
             ...(firstAttorney && {
               hasAttorney: true,
               attorneyName: firstAttorney.name,
@@ -171,6 +189,15 @@ export default function KioskPage() {
               galFirm: galInfo.firm || "",
               galPhone: galInfo.phone || "",
               prefilledGal: true,
+            }),
+            ...(firstEvaluator && {
+              hasEvaluator: true,
+              evaluatorName: firstEvaluator.name,
+              evaluatorEmail: firstEvaluator.email || "",
+              evaluatorContactId: firstEvaluator.contactId,
+              evaluatorFirm: firstEvaluator.firm || "",
+              evaluatorPhone: firstEvaluator.phone || "",
+              prefilledEvaluator: true,
             }),
           }));
           setDonorFound(true);
@@ -356,13 +383,20 @@ export default function KioskPage() {
                     <p className="text-green-800 font-semibold mb-1">Welcome back!</p>
                     <p className="text-green-700 text-sm mb-3">
                       {(() => {
-                        const hasAtty = form.prefilledAttorney;
-                        const hasGal = form.prefilledGal;
+                        const parts: string[] = [];
+                        if (form.prefilledAttorney) parts.push("attorney");
+                        if (form.prefilledGal) parts.push("GAL");
+                        if (form.prefilledEvaluator) parts.push("court-ordered evaluator");
                         const caseNum = form.prefilledFromCaseNumber;
-                        if (hasAtty && hasGal && caseNum) return `We found your info on file, including your attorney and GAL from case ${caseNum}. You can review and update in a moment.`;
-                        if (hasAtty && caseNum) return `We found your info on file, including your attorney from case ${caseNum}. You can review and update in a moment.`;
-                        if (hasGal && caseNum) return `We found your info on file, including your GAL from case ${caseNum}. You can review and update in a moment.`;
-                        return "We found your info on file. Is everything still correct?";
+                        if (parts.length === 0 || !caseNum) {
+                          return "We found your info on file. Is everything still correct?";
+                        }
+                        // Join parts with commas + "and" for the last one
+                        let list: string;
+                        if (parts.length === 1) list = parts[0];
+                        else if (parts.length === 2) list = `${parts[0]} and ${parts[1]}`;
+                        else list = `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
+                        return `We found your info on file, including your ${list} from case ${caseNum}. You can review and update in a moment.`;
                       })()}
                     </p>
                     <div className="text-sm text-gray-700 space-y-1 mb-3">
@@ -627,6 +661,56 @@ export default function KioskPage() {
                       prefilledGal: false,
                     })}
                   />
+                )}
+              </div>
+
+              {/* Court-ordered evaluator / doctor */}
+              <div className="mb-8">
+                <p className="text-base font-semibold text-gray-700 mb-1">Is there a court-ordered evaluator or doctor on your case?</p>
+                <p className="text-sm text-gray-500 mb-3">Doctors the court has appointed to assess or treat the parties (they order and receive test results).</p>
+                <div className="flex gap-3 mb-4">
+                  <button
+                    onClick={() => updateForm({ hasEvaluator: true })}
+                    className={`flex-1 py-4 rounded-xl text-lg font-bold border-2 transition-all ${form.hasEvaluator ? "border-[#7AB928] bg-green-50 text-[#7AB928]" : "border-gray-200 text-gray-700"}`}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    onClick={() => updateForm({
+                      hasEvaluator: false,
+                      evaluatorName: "",
+                      evaluatorEmail: "",
+                      evaluatorContactId: null,
+                      evaluatorFirm: "",
+                      evaluatorPhone: "",
+                      prefilledEvaluator: false,
+                    })}
+                    className={`flex-1 py-4 rounded-xl text-lg font-bold border-2 transition-all ${!form.hasEvaluator ? "border-gray-400 bg-gray-50 text-gray-600" : "border-gray-200 text-gray-700"}`}
+                  >
+                    No
+                  </button>
+                </div>
+                {form.hasEvaluator && (
+                  <>
+                    {form.prefilledEvaluator && form.hadMultipleEvaluatorsOnPreviousCase && (
+                      <p className="text-xs text-gray-500 mb-2">
+                        Your previous case had more than one evaluator. Tap &ldquo;Change&rdquo; to switch if this isn&apos;t the right one.
+                      </p>
+                    )}
+                    <AttorneySearch
+                      type="evaluator"
+                      label="Evaluator"
+                      value={form.evaluatorName ? { name: form.evaluatorName, firm: form.evaluatorFirm, email: form.evaluatorEmail, phone: form.evaluatorPhone, contactId: form.evaluatorContactId || undefined } : null}
+                      onChange={(evalContact) => updateForm({
+                        evaluatorName: evalContact?.name || "",
+                        evaluatorEmail: evalContact?.email || "",
+                        evaluatorContactId: evalContact?.contactId || null,
+                        evaluatorFirm: evalContact?.firm || "",
+                        evaluatorPhone: evalContact?.phone || "",
+                        prefilledEvaluator: false,
+                      })}
+                    />
+                  </>
                 )}
               </div>
 

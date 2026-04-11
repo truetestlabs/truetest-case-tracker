@@ -29,14 +29,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ found: false });
     }
 
-    // Look up most recent case + its attorneys/GAL — wrapped in its own try/catch
-    // so a case-lookup failure still returns the basic donor info.
-    type AttorneyEntry = { name: string; firm: string; email: string; phone: string; contactId: string; roleInCase: string };
-    type GalEntry = { name: string; firm: string; email: string; phone: string; contactId: string };
+    // Look up most recent case + its attorneys/GAL/evaluators — wrapped in its own
+    // try/catch so a case-lookup failure still returns the basic donor info.
+    type LegalContactEntry = { name: string; firm: string; email: string; phone: string; contactId: string };
+    type AttorneyEntry = LegalContactEntry & { roleInCase: string };
     let mostRecentCaseId: string | null = null;
     let mostRecentCaseNumber: string | null = null;
-    let attorneys: AttorneyEntry[] = [];
-    let gal: GalEntry | null = null;
+    const attorneys: AttorneyEntry[] = [];
+    let gal: LegalContactEntry | null = null;
+    const evaluators: LegalContactEntry[] = [];
 
     try {
       const recentCase = await prisma.case.findFirst({
@@ -83,10 +84,16 @@ export async function GET(request: NextRequest) {
             contactId: c.id,
           };
           // Classify by the Contact's own type (source of truth), falling back to roleInCase
-          const isAttorney = c.contactType === "attorney" || cc.roleInCase === "petitioner_attorney" || cc.roleInCase === "respondent_attorney";
+          const isEvaluator = c.contactType === "evaluator" || cc.roleInCase === "evaluator";
           const isGal = c.contactType === "gal" || cc.roleInCase === "gal";
+          const isAttorney = c.contactType === "attorney" || cc.roleInCase === "petitioner_attorney" || cc.roleInCase === "respondent_attorney";
 
-          if (isGal) {
+          if (isEvaluator) {
+            // Dedup by contactId — same evaluator on multiple cases shouldn't duplicate
+            if (!evaluators.find((e) => e.contactId === base.contactId)) {
+              evaluators.push(base);
+            }
+          } else if (isGal) {
             if (!gal) gal = base;
           } else if (isAttorney) {
             attorneys.push({ ...base, roleInCase: cc.roleInCase });
@@ -109,7 +116,9 @@ export async function GET(request: NextRequest) {
       mostRecentCaseNumber,
       attorneys,
       gal,
+      evaluators,
       hadMultipleAttorneys: attorneys.length > 1,
+      hadMultipleEvaluators: evaluators.length > 1,
     });
   } catch {
     return NextResponse.json({ found: false });
