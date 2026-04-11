@@ -85,6 +85,8 @@ const INITIAL_FORM: FormData = {
 const STEPS = ["Your Info", "Visit Type", "Legal Contacts", "Complete"];
 const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 const WARNING_BEFORE = 60 * 1000; // show warning 60s before timeout
+// Bump whenever FormData shape changes so stale drafts get discarded on next load
+const KIOSK_DRAFT_VERSION = 2;
 
 export default function KioskPage() {
   const [step, setStep] = useState(1);
@@ -134,23 +136,99 @@ export default function KioskPage() {
     return () => clearInterval(interval);
   }, [lastActivity]);
 
-  // Auto-save to localStorage
+  // Auto-save to localStorage (versioned so stale drafts can be discarded)
   useEffect(() => {
     if (!submitted) {
-      try { localStorage.setItem("kiosk-draft", JSON.stringify({ step, form })); } catch { /* */ }
+      try {
+        localStorage.setItem("kiosk-draft", JSON.stringify({
+          version: KIOSK_DRAFT_VERSION,
+          step,
+          form,
+        }));
+      } catch { /* */ }
     }
   }, [step, form, submitted]);
 
-  // Load draft on mount
+  // Load draft on mount — with version gate, merge into INITIAL_FORM, and
+  // auto re-check returning-donor data so fresh attorney/GAL/evaluator pre-fill
+  // flows in even when the draft predates those features.
   useEffect(() => {
+    let restoredFirstName = "";
+    let restoredLastName = "";
     try {
       const saved = localStorage.getItem("kiosk-draft");
       if (saved) {
-        const { step: s, form: f } = JSON.parse(saved);
-        setStep(s);
-        setForm(f);
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.version === KIOSK_DRAFT_VERSION && parsed.form) {
+          setStep(parsed.step || 1);
+          // Merge into INITIAL_FORM so any new fields get their defaults
+          setForm({ ...INITIAL_FORM, ...parsed.form });
+          restoredFirstName = (parsed.form.firstName || "").trim();
+          restoredLastName = (parsed.form.lastName || "").trim();
+        } else {
+          // Schema mismatch or malformed — discard the stale draft
+          localStorage.removeItem("kiosk-draft");
+        }
       }
-    } catch { /* */ }
+    } catch {
+      localStorage.removeItem("kiosk-draft");
+    }
+
+    // If the restored draft already had a name, re-query the returning-donor API
+    // to pick up fresh attorney/GAL/evaluator data. We call the API directly here
+    // instead of checkDonor() because checkDonor() reads from the closure's `form`
+    // state, which hasn't been updated yet this render cycle.
+    if (restoredFirstName && restoredLastName) {
+      (async () => {
+        try {
+          const res = await fetch(`/api/kiosk/donor-check?firstName=${encodeURIComponent(restoredFirstName)}&lastName=${encodeURIComponent(restoredLastName)}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (!data.found) return;
+          const firstAttorney = data.attorneys?.[0];
+          const galInfo = data.gal;
+          const firstEvaluator = data.evaluators?.[0];
+          setForm((prev) => ({
+            ...prev,
+            phone: data.phone || prev.phone,
+            email: data.email || prev.email,
+            existingDonorId: data.contactId,
+            prefilledFromCaseNumber: data.mostRecentCaseNumber || null,
+            hadMultipleAttorneysOnPreviousCase: !!data.hadMultipleAttorneys,
+            hadMultipleEvaluatorsOnPreviousCase: !!data.hadMultipleEvaluators,
+            ...(firstAttorney && {
+              hasAttorney: true,
+              attorneyName: firstAttorney.name,
+              attorneyEmail: firstAttorney.email || "",
+              attorneyContactId: firstAttorney.contactId,
+              attorneyFirm: firstAttorney.firm || "",
+              attorneyPhone: firstAttorney.phone || "",
+              prefilledAttorney: true,
+            }),
+            ...(galInfo && {
+              hasGal: true,
+              galName: galInfo.name,
+              galEmail: galInfo.email || "",
+              galContactId: galInfo.contactId,
+              galFirm: galInfo.firm || "",
+              galPhone: galInfo.phone || "",
+              prefilledGal: true,
+            }),
+            ...(firstEvaluator && {
+              hasEvaluator: true,
+              evaluatorName: firstEvaluator.name,
+              evaluatorEmail: firstEvaluator.email || "",
+              evaluatorContactId: firstEvaluator.contactId,
+              evaluatorFirm: firstEvaluator.firm || "",
+              evaluatorPhone: firstEvaluator.phone || "",
+              prefilledEvaluator: true,
+            }),
+          }));
+          setDonorChecked(true);
+          setDonorFound(true);
+        } catch { /* silent */ }
+      })();
+    }
   }, []);
 
   // Check for returning donor
