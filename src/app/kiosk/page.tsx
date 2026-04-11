@@ -19,10 +19,19 @@ type FormData = {
   attorneyName: string;
   attorneyEmail: string;
   attorneyContactId: string | null;
+  attorneyFirm: string;
+  attorneyPhone: string;
   hasGal: boolean;
   galName: string;
   galEmail: string;
   galContactId: string | null;
+  galFirm: string;
+  galPhone: string;
+  // Returning-client pre-fill tracking
+  prefilledFromCaseNumber: string | null;
+  prefilledAttorney: boolean;
+  prefilledGal: boolean;
+  hadMultipleAttorneysOnPreviousCase: boolean;
   // Step 4
   communicationConsent: boolean;
   notes: string;
@@ -41,10 +50,18 @@ const INITIAL_FORM: FormData = {
   attorneyName: "",
   attorneyEmail: "",
   attorneyContactId: null,
+  attorneyFirm: "",
+  attorneyPhone: "",
   hasGal: false,
   galName: "",
   galEmail: "",
   galContactId: null,
+  galFirm: "",
+  galPhone: "",
+  prefilledFromCaseNumber: null,
+  prefilledAttorney: false,
+  prefilledGal: false,
+  hadMultipleAttorneysOnPreviousCase: false,
   communicationConsent: false,
   notes: "",
 };
@@ -128,11 +145,33 @@ export default function KioskPage() {
       if (res.ok) {
         const data = await res.json();
         if (data.found) {
+          const firstAttorney = data.attorneys?.[0];
+          const galInfo = data.gal;
           setForm((prev) => ({
             ...prev,
             phone: data.phone || prev.phone,
             email: data.email || prev.email,
             existingDonorId: data.contactId,
+            prefilledFromCaseNumber: data.mostRecentCaseNumber || null,
+            hadMultipleAttorneysOnPreviousCase: !!data.hadMultipleAttorneys,
+            ...(firstAttorney && {
+              hasAttorney: true,
+              attorneyName: firstAttorney.name,
+              attorneyEmail: firstAttorney.email || "",
+              attorneyContactId: firstAttorney.contactId,
+              attorneyFirm: firstAttorney.firm || "",
+              attorneyPhone: firstAttorney.phone || "",
+              prefilledAttorney: true,
+            }),
+            ...(galInfo && {
+              hasGal: true,
+              galName: galInfo.name,
+              galEmail: galInfo.email || "",
+              galContactId: galInfo.contactId,
+              galFirm: galInfo.firm || "",
+              galPhone: galInfo.phone || "",
+              prefilledGal: true,
+            }),
           }));
           setDonorFound(true);
         }
@@ -315,7 +354,17 @@ export default function KioskPage() {
                 {donorChecked && donorFound && !donorEditing && !donorConfirmed && (
                   <div className="bg-green-50 border border-green-200 rounded-xl p-4">
                     <p className="text-green-800 font-semibold mb-1">Welcome back!</p>
-                    <p className="text-green-700 text-sm mb-3">We found your info on file. Is everything still correct?</p>
+                    <p className="text-green-700 text-sm mb-3">
+                      {(() => {
+                        const hasAtty = form.prefilledAttorney;
+                        const hasGal = form.prefilledGal;
+                        const caseNum = form.prefilledFromCaseNumber;
+                        if (hasAtty && hasGal && caseNum) return `We found your info on file, including your attorney and GAL from case ${caseNum}. You can review and update in a moment.`;
+                        if (hasAtty && caseNum) return `We found your info on file, including your attorney from case ${caseNum}. You can review and update in a moment.`;
+                        if (hasGal && caseNum) return `We found your info on file, including your GAL from case ${caseNum}. You can review and update in a moment.`;
+                        return "We found your info on file. Is everything still correct?";
+                      })()}
+                    </p>
                     <div className="text-sm text-gray-700 space-y-1 mb-3">
                       {form.phone && <p>Phone: {form.phone}</p>}
                       {form.email && <p>Email: {form.email}</p>}
@@ -501,23 +550,41 @@ export default function KioskPage() {
                     Yes
                   </button>
                   <button
-                    onClick={() => updateForm({ hasAttorney: false, attorneyName: "", attorneyEmail: "", attorneyContactId: null })}
+                    onClick={() => updateForm({
+                      hasAttorney: false,
+                      attorneyName: "",
+                      attorneyEmail: "",
+                      attorneyContactId: null,
+                      attorneyFirm: "",
+                      attorneyPhone: "",
+                      prefilledAttorney: false,
+                    })}
                     className={`flex-1 py-4 rounded-xl text-lg font-bold border-2 transition-all ${!form.hasAttorney ? "border-gray-400 bg-gray-50 text-gray-600" : "border-gray-200 text-gray-700"}`}
                   >
                     No
                   </button>
                 </div>
                 {form.hasAttorney && (
-                  <AttorneySearch
-                    type="attorney"
-                    label="Attorney"
-                    value={form.attorneyName ? { name: form.attorneyName, firm: "", email: form.attorneyEmail, phone: "", contactId: form.attorneyContactId || undefined } : null}
-                    onChange={(atty) => updateForm({
-                      attorneyName: atty?.name || "",
-                      attorneyEmail: atty?.email || "",
-                      attorneyContactId: atty?.contactId || null,
-                    })}
-                  />
+                  <>
+                    {form.prefilledAttorney && form.hadMultipleAttorneysOnPreviousCase && (
+                      <p className="text-xs text-gray-500 mb-2">
+                        Your previous case had more than one attorney. Tap &ldquo;Change&rdquo; to switch if this isn&apos;t the right one.
+                      </p>
+                    )}
+                    <AttorneySearch
+                      type="attorney"
+                      label="Attorney"
+                      value={form.attorneyName ? { name: form.attorneyName, firm: form.attorneyFirm, email: form.attorneyEmail, phone: form.attorneyPhone, contactId: form.attorneyContactId || undefined } : null}
+                      onChange={(atty) => updateForm({
+                        attorneyName: atty?.name || "",
+                        attorneyEmail: atty?.email || "",
+                        attorneyContactId: atty?.contactId || null,
+                        attorneyFirm: atty?.firm || "",
+                        attorneyPhone: atty?.phone || "",
+                        prefilledAttorney: false,
+                      })}
+                    />
+                  </>
                 )}
               </div>
 
@@ -532,7 +599,15 @@ export default function KioskPage() {
                     Yes
                   </button>
                   <button
-                    onClick={() => updateForm({ hasGal: false, galName: "", galEmail: "", galContactId: null })}
+                    onClick={() => updateForm({
+                      hasGal: false,
+                      galName: "",
+                      galEmail: "",
+                      galContactId: null,
+                      galFirm: "",
+                      galPhone: "",
+                      prefilledGal: false,
+                    })}
                     className={`flex-1 py-4 rounded-xl text-lg font-bold border-2 transition-all ${!form.hasGal ? "border-gray-400 bg-gray-50 text-gray-600" : "border-gray-200 text-gray-700"}`}
                   >
                     No
@@ -542,11 +617,14 @@ export default function KioskPage() {
                   <AttorneySearch
                     type="gal"
                     label="GAL"
-                    value={form.galName ? { name: form.galName, firm: "", email: form.galEmail, phone: "", contactId: form.galContactId || undefined } : null}
+                    value={form.galName ? { name: form.galName, firm: form.galFirm, email: form.galEmail, phone: form.galPhone, contactId: form.galContactId || undefined } : null}
                     onChange={(gal) => updateForm({
                       galName: gal?.name || "",
                       galEmail: gal?.email || "",
                       galContactId: gal?.contactId || null,
+                      galFirm: gal?.firm || "",
+                      galPhone: gal?.phone || "",
+                      prefilledGal: false,
                     })}
                   />
                 )}
