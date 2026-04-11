@@ -49,14 +49,26 @@ export async function GET(request: NextRequest) {
         mostRecentCaseId = recentCase.id;
         mostRecentCaseNumber = recentCase.caseNumber;
 
+        // Fetch ALL case contacts (excluding donor) and classify by the Contact.contactType.
+        // We can't filter by roleInCase alone because attorneys/GALs are often stored with
+        // roleInCase="other" in the CaseContact table — the Contact.contactType is the
+        // source of truth for what role the person plays.
         const caseContacts = await prisma.caseContact.findMany({
           where: {
             caseId: recentCase.id,
-            roleInCase: { in: ["petitioner_attorney", "respondent_attorney", "gal"] },
+            roleInCase: { not: "donor" },
           },
           include: {
             contact: {
-              select: { id: true, firstName: true, lastName: true, firmName: true, email: true, phone: true },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                firmName: true,
+                email: true,
+                phone: true,
+                contactType: true,
+              },
             },
           },
         });
@@ -70,11 +82,17 @@ export async function GET(request: NextRequest) {
             phone: c.phone || "",
             contactId: c.id,
           };
-          if (cc.roleInCase === "gal") {
+          // Classify by the Contact's own type (source of truth), falling back to roleInCase
+          const isAttorney = c.contactType === "attorney" || cc.roleInCase === "petitioner_attorney" || cc.roleInCase === "respondent_attorney";
+          const isGal = c.contactType === "gal" || cc.roleInCase === "gal";
+
+          if (isGal) {
             if (!gal) gal = base;
-          } else {
+          } else if (isAttorney) {
             attorneys.push({ ...base, roleInCase: cc.roleInCase });
           }
+          // Contacts with contactType="other" are skipped — they're additional result
+          // recipients, not legal contacts the client should see pre-filled.
         }
       }
     } catch (e) {
