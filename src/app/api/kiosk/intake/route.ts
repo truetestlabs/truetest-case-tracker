@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { detectChanges } from "@/lib/kiosk-changes";
+import { approveDraft } from "@/lib/kiosk-approve";
 
 /** POST /api/kiosk/intake — create an IntakeDraft from the kiosk form */
 export async function POST(request: NextRequest) {
@@ -57,6 +59,42 @@ export async function POST(request: NextRequest) {
         status: "pending_review",
       },
     });
+
+    // Change detection for returning clients: if the donor already has a case
+    // and nothing differs from what's on file, auto-approve silently. Staff
+    // shouldn't have to babysit a re-test where nothing changed.
+    if (existingDonorId) {
+      const hasExistingCase = await prisma.case.findFirst({
+        where: { donorId: existingDonorId },
+        select: { id: true },
+      });
+
+      if (hasExistingCase) {
+        const changes = await detectChanges(draft, existingDonorId);
+        if (changes === null) {
+          // Nothing changed — auto-approve silently
+          try {
+            const result = await approveDraft(draft.id, "kiosk-auto");
+            return NextResponse.json({
+              success: true,
+              id: draft.id,
+              autoApproved: true,
+              caseId: result.caseId,
+              caseNumber: result.caseNumber,
+            }, { status: 201 });
+          } catch (e) {
+            console.error("[kiosk/intake] auto-approve failed, falling back to pending_review:", e);
+            // Fall through — leave draft as pending_review so staff sees it
+          }
+        } else {
+          // Stash the diff so staff sees it prominently on the review page
+          await prisma.intakeDraft.update({
+            where: { id: draft.id },
+            data: { changes },
+          });
+        }
+      }
+    }
 
     return NextResponse.json({ success: true, id: draft.id }, { status: 201 });
   } catch (error) {

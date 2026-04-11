@@ -441,6 +441,7 @@ model IntakeDraft {
   additionalRecipients  Json?    // [{ name?: string, email: string }] for Personal visits
   notes                 String?
   communicationConsent  Boolean  @default(false)
+  changes               Json?    // structured diff when returning client updated info; null = nothing changed
   createdAt             DateTime @default(now())
   reviewedAt            DateTime?
   reviewedBy            String?

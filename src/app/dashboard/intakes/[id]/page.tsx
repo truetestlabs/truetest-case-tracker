@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { properCase } from "@/lib/format";
+import type { DetectedChanges } from "@/lib/kiosk-changes";
 
 type Draft = {
   id: string;
@@ -28,6 +29,8 @@ type Draft = {
   paymentResponsibility: string | null;
   notes: string | null;
   communicationConsent: boolean;
+  changes: DetectedChanges | null;
+  reviewedBy: string | null;
   createdAt: string;
   reviewedAt: string | null;
   caseId: string | null;
@@ -98,14 +101,52 @@ export default function IntakeDetailPage() {
               Submitted {new Date(draft.createdAt).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} at {new Date(draft.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
             </p>
           </div>
-          <span className={`text-xs px-3 py-1 rounded-full font-semibold ${
-            draft.status === "pending_review" ? "bg-amber-100 text-amber-700" :
-            draft.status === "approved" ? "bg-green-100 text-green-700" :
-            "bg-red-100 text-red-700"
-          }`}>
-            {draft.status === "pending_review" ? "Pending Review" : draft.status === "approved" ? "Approved" : "Rejected"}
-          </span>
+          <div className="flex items-center gap-2">
+            {draft.reviewedBy === "kiosk-auto" && (
+              <span className="text-xs px-3 py-1 rounded-full font-semibold bg-green-50 text-green-700 border border-green-200">Auto-approved</span>
+            )}
+            <span className={`text-xs px-3 py-1 rounded-full font-semibold ${
+              draft.status === "pending_review" ? "bg-amber-100 text-amber-700" :
+              draft.status === "approved" ? "bg-green-100 text-green-700" :
+              "bg-red-100 text-red-700"
+            }`}>
+              {draft.status === "pending_review" ? "Pending Review" : draft.status === "approved" ? "Approved" : "Rejected"}
+            </span>
+          </div>
         </div>
+
+        {/* Changes banner — only shown when a returning client updated their info */}
+        {draft.changes && (
+          <div className="mx-6 mt-6 bg-amber-50 border-2 border-amber-300 rounded-xl p-4">
+            <p className="text-sm font-bold text-amber-900 mb-2">⚠ New info — please verify</p>
+            <p className="text-xs text-amber-800 mb-3">
+              This returning client updated some of their info. Review carefully before approving.
+            </p>
+            <ul className="space-y-1 text-sm text-amber-900 list-disc pl-5">
+              {draft.changes.phone && (
+                <li><strong>Phone:</strong> {draft.changes.phone.old || "(none)"} → {draft.changes.phone.new}</li>
+              )}
+              {draft.changes.email && (
+                <li><strong>Email:</strong> {draft.changes.email.old || "(none)"} → {draft.changes.email.new}</li>
+              )}
+              {draft.changes.caseType && (
+                <li><strong>Visit type:</strong> {draft.changes.caseType.old.replace(/_/g, " ")} → {draft.changes.caseType.new.replace(/_/g, " ")}</li>
+              )}
+              {draft.changes.attorneysAdded?.map((a, i) => (
+                <li key={`att-${i}`}><strong>New attorney:</strong> {a.name}{a.firm ? ` (${a.firm})` : ""}</li>
+              ))}
+              {draft.changes.galAdded && (
+                <li><strong>New GAL:</strong> {draft.changes.galAdded.name}{draft.changes.galAdded.firm ? ` (${draft.changes.galAdded.firm})` : ""}</li>
+              )}
+              {draft.changes.evaluatorsAdded?.map((e, i) => (
+                <li key={`ev-${i}`}><strong>New evaluator:</strong> {e.name}{e.firm ? ` (${e.firm})` : ""}</li>
+              ))}
+              {draft.changes.recipientsAdded?.map((r, i) => (
+                <li key={`rec-${i}`}><strong>New result recipient:</strong> {r.name ? `${r.name} — ` : ""}{r.email}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Details */}
         <div className="p-6 space-y-6">

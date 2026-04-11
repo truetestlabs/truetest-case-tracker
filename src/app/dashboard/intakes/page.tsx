@@ -14,7 +14,9 @@ type Draft = {
   caseType: string;
   createdAt: string;
   reviewedAt: string | null;
+  reviewedBy: string | null;
   caseId: string | null;
+  changes: Record<string, unknown> | null;
 };
 
 export default function IntakesPage() {
@@ -76,7 +78,15 @@ export default function IntakesPage() {
               {drafts.map((d, i) => (
                 <tr key={d.id} className={`border-b border-gray-100 hover:bg-blue-50/50 transition-colors ${i % 2 === 1 ? "bg-gray-50/50" : ""}`}>
                   <td className="px-5 py-3">
-                    <p className="text-sm font-semibold text-gray-900">{properCase(d.lastName)}, {properCase(d.firstName)}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-gray-900">{properCase(d.lastName)}, {properCase(d.firstName)}</p>
+                      {d.reviewedBy === "kiosk-auto" && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold uppercase tracking-wide">Auto-approved</span>
+                      )}
+                      {d.changes && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold uppercase tracking-wide">New info</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-5 py-3">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 capitalize">{d.caseType.replace(/_/g, " ")}</span>
