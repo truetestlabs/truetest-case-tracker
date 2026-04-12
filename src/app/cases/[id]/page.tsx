@@ -506,6 +506,26 @@ export default function CaseDetailPage() {
                             </div>
                           );
                         }
+                        // At MRO → button to release MRO results to parties
+                        if (test.testStatus === "at_mro") {
+                          return (
+                            <button onClick={async (e) => {
+                              e.stopPropagation();
+                              // Advance to mro_released → auto-close fires via PATCH handler
+                              await fetch(`/api/cases/${caseData.id}/test-orders`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ testOrderId: test.id, testStatus: "mro_released" }),
+                              });
+                              // Compose and queue the results email (includes MRO report)
+                              await fetch(`/api/cases/${caseData.id}/compose-results`, { method: "POST" });
+                              window.dispatchEvent(new Event("refreshReminders"));
+                              loadCase();
+                            }} className="mt-1.5 w-full text-[10px] px-2 py-1.5 rounded bg-purple-700 text-white hover:bg-purple-800 font-semibold">
+                              ✉ MRO Release Results to Parties
+                            </button>
+                          );
+                        }
                         // Results received/held + unpaid → results held notice
                         if ((test.testStatus === "results_received" || test.testStatus === "results_held") && !test.paymentMethod) {
                           const sent = hasSentNotification("results held");
