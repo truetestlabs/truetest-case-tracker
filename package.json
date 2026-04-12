@@ -21,6 +21,8 @@
     "archiver": "^7.0.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "google-auth-library": "^10.6.2",
+    "googleapis": "^171.4.0",
     "lucide-react": "^0.511.0",
     "next": "^15.3.0",
     "pdf-parse": "^2.4.5",
