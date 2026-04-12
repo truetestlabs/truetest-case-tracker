@@ -28,7 +28,21 @@ import { JWT } from "google-auth-library";
  * swallowed: a Google outage must never block a case-tracker booking.
  */
 
-const calendarId = process.env.GOOGLE_CALENDAR_ID;
+/**
+ * GOOGLE_CALENDAR_ID — the primary calendar where new events are WRITTEN.
+ * GOOGLE_CALENDAR_IDS — comma-separated list of ALL calendars to check for
+ * busy intervals (freebusy). If not set, falls back to just GOOGLE_CALENDAR_ID.
+ *
+ * Example:
+ *   GOOGLE_CALENDAR_ID="michael@truetestlabs.com"
+ *   GOOGLE_CALENDAR_IDS="michael@truetestlabs.com,ab990ea3d73b...@group.calendar.google.com"
+ */
+const primaryCalendarId = process.env.GOOGLE_CALENDAR_ID;
+const allCalendarIds = process.env.GOOGLE_CALENDAR_IDS
+  ? process.env.GOOGLE_CALENDAR_IDS.split(",").map((s) => s.trim()).filter(Boolean)
+  : primaryCalendarId
+  ? [primaryCalendarId]
+  : [];
 const serviceAccountKeyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
 
 let cachedClient: calendar_v3.Calendar | null = null;
@@ -38,7 +52,7 @@ function getClient(): calendar_v3.Calendar | null {
   if (cachedClient) return cachedClient;
   if (initAttempted) return null;
   initAttempted = true;
-  if (!calendarId || !serviceAccountKeyRaw) {
+  if (!primaryCalendarId || !serviceAccountKeyRaw) {
     console.warn("[gcal] env vars missing — Google Calendar sync disabled");
     return null;
   }
@@ -79,20 +93,28 @@ export async function getBusyIntervals(
   rangeEnd: Date
 ): Promise<BusyInterval[]> {
   const client = getClient();
-  if (!client || !calendarId) return [];
+  if (!client || allCalendarIds.length === 0) return [];
   try {
     const res = await client.freebusy.query({
       requestBody: {
         timeMin: rangeStart.toISOString(),
         timeMax: rangeEnd.toISOString(),
-        items: [{ id: calendarId }],
+        items: allCalendarIds.map((id) => ({ id })),
       },
     });
-    const busy = res.data.calendars?.[calendarId]?.busy ?? [];
-    return busy.map((b) => ({
-      start: new Date(b.start as string),
-      end: new Date(b.end as string),
-    }));
+    // Merge busy intervals from ALL calendars into one flat list
+    const allBusy: BusyInterval[] = [];
+    const calendars = res.data.calendars ?? {};
+    for (const calId of allCalendarIds) {
+      const busy = calendars[calId]?.busy ?? [];
+      for (const b of busy) {
+        allBusy.push({
+          start: new Date(b.start as string),
+          end: new Date(b.end as string),
+        });
+      }
+    }
+    return allBusy;
   } catch (e) {
     console.error("[gcal] freebusy query failed:", e);
     return [];
@@ -123,7 +145,7 @@ export type CreateEventParams = {
  */
 export async function createCalendarEvent(params: CreateEventParams): Promise<string | null> {
   const client = getClient();
-  if (!client || !calendarId) return null;
+  if (!client || !primaryCalendarId) return null;
   try {
     // Fold the donor email into the description instead of the attendees
     // list — service accounts aren't allowed to invite attendees.
@@ -135,7 +157,7 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<st
       .join("\n");
 
     const res = await client.events.insert({
-      calendarId,
+      calendarId: primaryCalendarId!,
       sendUpdates: "none", // internal-only; client gets the SMS instead
       requestBody: {
         summary: params.summary,
@@ -166,9 +188,9 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<st
  */
 export async function deleteCalendarEvent(eventId: string): Promise<void> {
   const client = getClient();
-  if (!client || !calendarId) return;
+  if (!client || !primaryCalendarId) return;
   try {
-    await client.events.delete({ calendarId, eventId, sendUpdates: "none" });
+    await client.events.delete({ calendarId: primaryCalendarId!, eventId, sendUpdates: "none" });
   } catch (e) {
     console.error("[gcal] event delete failed:", e);
   }
