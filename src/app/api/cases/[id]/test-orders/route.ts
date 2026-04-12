@@ -189,11 +189,66 @@ export async function PATCH(
       }
     }
 
+    // Auto-close test orders when they reach their terminal pre-close status:
+    //  - results_released (non-MRO path) → auto-advance to closed
+    //  - mro_released (MRO path) → auto-advance to closed
+    // For MRO tests at results_released, we DON'T auto-close — wait for mro_released.
+    const autoCloseStatuses = ["results_released", "mro_released"];
+    if (autoCloseStatuses.includes(updated.testStatus)) {
+      let shouldAutoClose = true;
+
+      if (updated.testStatus === "results_released") {
+        // Check if this test has MRO involvement — look for at_mro in status
+        // history or an MRO email draft on the case
+        const mroLog = await prisma.statusLog.findFirst({
+          where: {
+            testOrderId,
+            OR: [
+              { newStatus: "at_mro" },
+              { oldStatus: "at_mro" },
+            ],
+          },
+        });
+        const mroDraft = await prisma.emailDraft.findFirst({
+          where: {
+            caseId,
+            draftType: "results_mro",
+          },
+        });
+        if (mroLog || mroDraft) {
+          // MRO involved — don't close yet, wait for mro_released
+          shouldAutoClose = false;
+        }
+      }
+
+      if (shouldAutoClose) {
+        const prevStatus = updated.testStatus;
+        await prisma.testOrder.update({
+          where: { id: testOrderId },
+          data: { testStatus: "closed" },
+        });
+        updated.testStatus = "closed";
+
+        await prisma.statusLog.create({
+          data: {
+            caseId,
+            testOrderId,
+            oldStatus: prevStatus,
+            newStatus: "closed",
+            changedBy: "auto",
+            note: prevStatus === "mro_released"
+              ? "Test auto-closed after MRO report released"
+              : "Test auto-closed after results released",
+          },
+        });
+      }
+    }
+
     // Check if all tests on this case are now closed — prompt to close case
     let promptCloseCase = false;
-    if (updateData.testStatus === "closed") {
+    if (updated.testStatus === "closed") {
       const openTests = await prisma.testOrder.count({
-        where: { caseId, testStatus: { not: "closed" }, id: { not: testOrderId } },
+        where: { caseId, testStatus: { notIn: ["closed", "cancelled"] }, id: { not: testOrderId } },
       });
       if (openTests === 0) {
         promptCloseCase = true;
