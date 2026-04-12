@@ -119,6 +119,13 @@ enum SchedulingType {
   walk_in
 }
 
+enum AppointmentStatus {
+  booked
+  completed
+  cancelled
+  no_show
+}
+
 enum DocumentType {
   court_order
   chain_of_custody
@@ -173,6 +180,7 @@ model Case {
   messages              Message[]
   emailDrafts           EmailDraft[]
   monitoringSchedules   MonitoringSchedule[]
+  appointments          Appointment[]
 
   @@index([caseStatus])
   @@index([caseType])
@@ -200,6 +208,7 @@ model Contact {
   donorCases        Case[]            @relation("CaseDonor")
   caseContacts      CaseContact[]
   sentMessages      Message[]         @relation("MessageSender")
+  appointments      Appointment[]     @relation("DonorAppointments")
 
   @@index([contactType])
   @@index([lastName, firstName])
@@ -449,6 +458,30 @@ model IntakeDraft {
 
   @@index([status])
   @@index([createdAt])
+}
+
+// ============================================================
+// APPOINTMENTS — case tracker owns availability (v1)
+// ============================================================
+
+model Appointment {
+  id         String            @id @default(cuid())
+  startTime  DateTime
+  endTime    DateTime
+  status     AppointmentStatus @default(booked)
+  caseId     String?
+  case       Case?             @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  donorId    String?
+  donor      Contact?          @relation("DonorAppointments", fields: [donorId], references: [id], onDelete: SetNull)
+  notes      String?
+  createdBy  String?           // "phone-intake" | "kiosk" | staff name
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@index([startTime])
+  @@index([caseId])
+  @@index([donorId])
+  @@index([status])
 }
 
 // ============================================================
