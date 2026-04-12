@@ -46,12 +46,15 @@ const allCalendarIds = process.env.GOOGLE_CALENDAR_IDS
 const serviceAccountKeyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
 
 let cachedClient: calendar_v3.Calendar | null = null;
-let initAttempted = false;
 
 function getClient(): calendar_v3.Calendar | null {
   if (cachedClient) return cachedClient;
-  if (initAttempted) return null;
-  initAttempted = true;
+  // No initAttempted guard — retry on every request until success.
+  // Init is fast (~1ms for JSON parse + JWT construction). Once
+  // successful, cachedClient is set and subsequent calls skip init.
+  // The old initAttempted flag caused a permanent failure mode on
+  // Vercel: if the first request hit before env vars were set, the
+  // serverless instance would never retry.
   if (!primaryCalendarId || !serviceAccountKeyRaw) {
     console.warn("[gcal] env vars missing — Google Calendar sync disabled");
     return null;
