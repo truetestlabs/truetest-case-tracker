@@ -5,92 +5,97 @@ import { getBusyIntervals } from "@/lib/gcal";
  * Appointment availability helpers.
  *
  * Business hours are hardcoded constants — TrueTest Labs EGV is M-F 8am-5pm
- * with 30-minute slots. When the schedule ever varies (holidays, early
- * closes, second location), move this into a config table.
+ * with 30-minute slots, America/Chicago timezone.
  *
- * IMPORTANT: All business-hour calculations are done in America/Chicago.
- * The server may be in UTC (Vercel) or local time (dev), so we never use
- * setHours() directly — we construct dates via explicit timezone math.
+ * CRITICAL: All time calculations use explicit UTC construction from
+ * YYYY-MM-DD strings + Chicago timezone offset. We NEVER rely on
+ * `new Date(y, m, d)` or `setHours()` because those use the server's
+ * local timezone, which is UTC on Vercel — off by 5-6 hours from Chicago.
  */
 
 export const BUSINESS_HOURS = {
-  startHour: 8, // 8:00 AM Chicago
-  endHour: 17, // 5:00 PM Chicago — last slot starts at 4:30
+  startHour: 8,
+  endHour: 17,
   slotMinutes: 30,
-  daysOfWeek: [1, 2, 3, 4, 5] as number[], // Sun=0 ... Sat=6 → Mon-Fri
+  daysOfWeek: [1, 2, 3, 4, 5] as number[],
   timeZone: "America/Chicago",
 };
 
 export type SlotStatus = "available" | "booked" | "past";
 
 export type Slot = {
-  start: string; // ISO string — JSON-safe for API responses
+  start: string;
   end: string;
   status: SlotStatus;
   appointmentId?: string;
 };
 
 /**
- * Convert a YYYY-MM-DD date string + hour (in Chicago time) to a UTC Date.
- * Handles DST correctly by using Intl to find the real UTC offset for that
- * specific date/time in America/Chicago.
+ * Convert a YYYY-MM-DD date string + hour (in Chicago) to a UTC Date.
+ * Handles DST correctly.
+ *
+ * Strategy: We want "8 AM in Chicago" → the UTC instant for that.
+ * 1. Pretend the Chicago time IS UTC: Date.UTC(y, m-1, d, hour)
+ * 2. Ask Intl what Chicago time that UTC instant maps to
+ * 3. The difference tells us the offset
+ * 4. Apply the offset to get the real UTC time
  */
-function chicagoToUtc(dateStr: string, hour: number, minute = 0): Date {
-  // Create a date object in UTC for the given date/time as if it were Chicago
-  // Then figure out the real Chicago offset for that moment
+function chicagoToUtc(dateStr: string, hour: number): Date {
   const [y, m, d] = dateStr.split("-").map(Number);
 
-  // Use Intl.DateTimeFormat to get the UTC offset for Chicago at this date/time
-  // by formatting a reference date and parsing the offset
-  const refDate = new Date(Date.UTC(y, m - 1, d, hour + 6, minute)); // +6 as rough guess to land on correct day
-  const chicagoStr = refDate.toLocaleString("en-US", { timeZone: "America/Chicago" });
-  const chicagoDate = new Date(chicagoStr);
-  const offsetMs = refDate.getTime() - chicagoDate.getTime();
+  // Step 1: Create a "fake" UTC date using the Chicago hour
+  const fakeUtc = new Date(Date.UTC(y, m - 1, d, hour, 0, 0));
 
-  // Now construct the exact UTC time: Chicago local time + offset = UTC
-  return new Date(Date.UTC(y, m - 1, d, hour, minute, 0, 0) + offsetMs);
+  // Step 2: What does Chicago read at this UTC instant?
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(fakeUtc);
+  const get = (type: string) => parseInt(parts.find(p => p.type === type)?.value || "0", 10);
+  const chicagoH = get("hour") === 24 ? 0 : get("hour"); // midnight edge case
+  const chicagoAsUtc = Date.UTC(get("year"), get("month") - 1, get("day"), chicagoH, get("minute"), get("second"));
+
+  // Step 3: offset = what Chicago shows - what UTC is
+  // If UTC is 08:00 and Chicago shows 03:00, offset = 3-8 = -5 hours (CDT)
+  const offsetMs = chicagoAsUtc - fakeUtc.getTime();
+
+  // Step 4: To get "8 AM Chicago" in UTC, subtract the offset
+  // 8 AM Chicago CDT: UTC = 8 - (-5) = 13:00 UTC ✓
+  return new Date(Date.UTC(y, m - 1, d, hour, 0, 0) - offsetMs);
 }
 
 /**
- * Get the day-of-week for a date in Chicago timezone.
+ * Get day-of-week (0=Sun..6=Sat) for a YYYY-MM-DD in Chicago.
  */
 function chicagoDow(dateStr: string): number {
   const [y, m, d] = dateStr.split("-").map(Number);
-  // Create a date at noon UTC — safe from DST edge cases
+  // Noon UTC is safe from DST edge cases for getting the correct calendar day
   const ref = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
-  const parts = new Intl.DateTimeFormat("en-US", {
+  const dayStr = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Chicago",
     weekday: "short",
-  }).formatToParts(ref);
-  const dayName = parts.find((p) => p.type === "weekday")?.value || "";
+  }).format(ref);
   const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  return map[dayName] ?? ref.getDay();
+  return map[dayStr] ?? 0;
 }
 
 /**
- * Generate every 30-minute slot for a given date (YYYY-MM-DD format),
- * using America/Chicago business hours. Marks each slot as
- * available / booked / past.
+ * Generate every 30-minute slot for a given date string (YYYY-MM-DD),
+ * using America/Chicago business hours.
  *
- * Returns an empty array for weekends.
+ * Accepts a string to avoid timezone-shifting bugs that happen when
+ * `new Date(y, m, d)` is used on a UTC server.
  */
-export async function getAvailableSlots(date: Date): Promise<Slot[]> {
-  // Extract the YYYY-MM-DD that the client intended (from the ?date= param)
-  // The `date` param was constructed from YYYY-MM-DD parts in the route handler,
-  // so we reconstruct the date string to avoid any timezone shifting.
-  const pad = (n: number) => String(n).padStart(2, "0");
-  // Use UTC methods since the availability route constructs the date with new Date(y, m-1, d)
-  // which uses local time — but on Vercel that's UTC. To be safe, format in Chicago.
-  const chicagoFormatted = date.toLocaleDateString("en-CA", { timeZone: "America/Chicago" }); // en-CA gives YYYY-MM-DD
-  const dateStr = chicagoFormatted; // YYYY-MM-DD in Chicago time
-
+export async function getAvailableSlots(dateStr: string): Promise<Slot[]> {
   const dow = chicagoDow(dateStr);
   if (!BUSINESS_HOURS.daysOfWeek.includes(dow)) return [];
 
   const dayStart = chicagoToUtc(dateStr, BUSINESS_HOURS.startHour);
   const dayEnd = chicagoToUtc(dateStr, BUSINESS_HOURS.endHour);
 
-  // Pull both sources in parallel
   const [caseTrackerAppts, googleBusy] = await Promise.all([
     prisma.appointment.findMany({
       where: {
@@ -130,8 +135,7 @@ export async function getAvailableSlots(date: Date): Promise<Slot[]> {
 }
 
 /**
- * Last-second check before inserting an appointment. Prevents two staff
- * members on two phones from racing into the same slot.
+ * Last-second check before inserting an appointment.
  */
 export async function isSlotFree(start: Date): Promise<boolean> {
   const end = new Date(start.getTime() + BUSINESS_HOURS.slotMinutes * 60 * 1000);

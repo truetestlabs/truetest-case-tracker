@@ -14,15 +14,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "date query param required (YYYY-MM-DD)" }, { status: 400 });
   }
 
-  // Parse as local-time midnight (not UTC)
-  const [y, m, d] = dateParam.split("-").map((n) => parseInt(n, 10));
-  if (!y || !m || !d) {
+  // Validate YYYY-MM-DD format
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
     return NextResponse.json({ error: "invalid date format" }, { status: 400 });
   }
-  const date = new Date(y, m - 1, d);
 
   try {
-    const slots = await getAvailableSlots(date);
+    // Pass the date STRING directly — never go through new Date() which
+    // shifts timezone on UTC servers (Vercel).
+    const slots = await getAvailableSlots(dateParam);
     return NextResponse.json({ date: dateParam, slots });
   } catch (error) {
     console.error("[appointments/availability] error:", error);
