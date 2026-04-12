@@ -102,32 +102,36 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Sync to Google Calendar — non-blocking on failure. Returns null if
-    // the creds aren't set or Google is down; we still return a successful
-    // booking to the caller because the Appointment row is the case-tracker
-    // record of truth. An ops job can backfill missing googleEventIds later.
-    const donor = appointment.donor ?? appointment.case?.donor ?? null;
-    const donorName = donor ? `${donor.firstName ?? ""} ${donor.lastName ?? ""}`.trim() : "Client";
-    const caseRef = appointment.case?.caseNumber ?? "(new case)";
-    const descLines = [
-      `Case: ${caseRef}`,
-      donor?.phone ? `Phone: ${donor.phone}` : null,
-      appointment.notes || null,
-    ].filter(Boolean);
+    // Sync to Google Calendar
+    console.log("[appointments] about to call createCalendarEvent");
+    let eventId: string | null = null;
+    try {
+      const donor = appointment.donor ?? appointment.case?.donor ?? null;
+      const donorName = donor ? `${donor.firstName ?? ""} ${donor.lastName ?? ""}`.trim() : "Client";
+      const caseRef = appointment.case?.caseNumber ?? "(new case)";
+      const descLines = [
+        `Case: ${caseRef}`,
+        donor?.phone ? `Phone: ${donor.phone}` : null,
+        appointment.notes || null,
+      ].filter(Boolean);
 
-    const eventId = await createCalendarEvent({
-      summary: `TrueTest — ${donorName}`,
-      description: descLines.join("\n"),
-      start: appointment.startTime,
-      end: appointment.endTime,
-      attendeeEmail: donor?.email ?? undefined,
-    });
-
-    if (eventId) {
-      await prisma.appointment.update({
-        where: { id: appointment.id },
-        data: { googleEventId: eventId },
+      eventId = await createCalendarEvent({
+        summary: `TrueTest — ${donorName}`,
+        description: descLines.join("\n"),
+        start: appointment.startTime,
+        end: appointment.endTime,
+        attendeeEmail: donor?.email ?? undefined,
       });
+      console.log("[appointments] createCalendarEvent returned:", eventId);
+
+      if (eventId) {
+        await prisma.appointment.update({
+          where: { id: appointment.id },
+          data: { googleEventId: eventId },
+        });
+      }
+    } catch (gcalErr) {
+      console.error("[appointments] gcal sync error:", gcalErr);
     }
 
     return NextResponse.json(
