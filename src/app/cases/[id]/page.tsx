@@ -460,7 +460,7 @@ export default function CaseDetailPage() {
                         <p className="text-xs text-gray-500 mt-0.5">Specimen ID: <span className="font-mono font-medium text-gray-700">{test.specimenId}</span></p>
                       )}
                       <div className="mt-2.5 mb-1">
-                        <TestProgressBar currentStatus={test.testStatus} caseId={caseData.id} testOrderId={test.id} testDescription={test.testDescription} onUpdated={loadCase} />
+                        <TestProgressBar currentStatus={test.testStatus} caseId={caseData.id} testOrderId={test.id} testDescription={test.testDescription} hasMroHistory={test.documents.some((d) => d.documentType === "correspondence")} onUpdated={loadCase} />
                       </div>
                       <div className="flex items-center justify-between mt-2 text-xs">
                         <span className={`font-medium ${payColor}`}>{label}</span>
@@ -491,9 +491,18 @@ export default function CaseDetailPage() {
                             <div className="mt-1.5 flex gap-1">
                               <button onClick={async (e) => {
                                 e.stopPropagation();
-                                await fetch(`/api/cases/${caseData.id}/test-orders`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ testOrderId: test.id, testStatus: "results_released" }) });
+                                const res = await fetch(`/api/cases/${caseData.id}/test-orders`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ testOrderId: test.id, testStatus: "results_released" }) });
                                 await fetch(`/api/cases/${caseData.id}/compose-results`, { method: "POST" });
                                 window.dispatchEvent(new Event("refreshReminders"));
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  if (data.promptCloseCase) {
+                                    const shouldClose = confirm("All tests on this case are now closed.\n\nWould you like to close the case?");
+                                    if (shouldClose) {
+                                      await fetch(`/api/cases/${caseData.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caseStatus: "closed" }) });
+                                    }
+                                  }
+                                }
                                 loadCase();
                               }} className="flex-1 text-[10px] px-2 py-1.5 rounded bg-blue-700 text-white hover:bg-blue-800 font-semibold">Release Results</button>
                               <button onClick={async (e) => {
@@ -514,7 +523,7 @@ export default function CaseDetailPage() {
                               <button onClick={async (e) => {
                                 e.stopPropagation();
                                 // Advance to mro_released → auto-close fires via PATCH handler
-                                await fetch(`/api/cases/${caseData.id}/test-orders`, {
+                                const res = await fetch(`/api/cases/${caseData.id}/test-orders`, {
                                   method: "PATCH",
                                   headers: { "Content-Type": "application/json" },
                                   body: JSON.stringify({ testOrderId: test.id, testStatus: "mro_released" }),
@@ -522,6 +531,20 @@ export default function CaseDetailPage() {
                                 // Compose MRO-complete email for the distribution list
                                 await fetch(`/api/cases/${caseData.id}/compose-results?mro_complete=true`, { method: "POST" });
                                 window.dispatchEvent(new Event("refreshReminders"));
+                                // Check if all tests are now closed → prompt to close case
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  if (data.promptCloseCase) {
+                                    const shouldClose = confirm("All tests on this case are now closed.\n\nWould you like to close the case?");
+                                    if (shouldClose) {
+                                      await fetch(`/api/cases/${caseData.id}`, {
+                                        method: "PATCH",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ caseStatus: "closed" }),
+                                      });
+                                    }
+                                  }
+                                }
                                 loadCase();
                               }} className="mt-1.5 w-full text-[10px] px-2 py-1.5 rounded bg-purple-700 text-white hover:bg-purple-800 font-semibold">
                                 ✉ Release MRO Report

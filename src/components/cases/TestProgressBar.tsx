@@ -29,12 +29,17 @@ type Props = {
   caseId?: string;
   testOrderId?: string;
   testDescription?: string;
+  hasMroHistory?: boolean;
   onUpdated?: () => void;
 };
 
-export function TestProgressBar({ currentStatus, caseId, testOrderId, testDescription, onUpdated }: Props) {
+export function TestProgressBar({ currentStatus, caseId, testOrderId, testDescription, hasMroHistory, onUpdated }: Props) {
   const isSweatPatch = testDescription?.toLowerCase().includes("sweat patch");
-  const isMROPath = MRO_STATUSES.includes(currentStatus);
+  // Show MRO steps if the test is currently in MRO, OR if it was closed
+  // after going through MRO (closed status loses the MRO context otherwise).
+  // The hasMroHistory prop is passed from the parent when the test has an
+  // MRO document (correspondence type) uploaded.
+  const isMROPath = MRO_STATUSES.includes(currentStatus) || (currentStatus === "closed" && hasMroHistory);
   const baseSteps = isMROPath ? MRO_STEPS : STANDARD_STEPS;
   const steps = isSweatPatch
     ? baseSteps.map((s) =>
