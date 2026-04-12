@@ -67,23 +67,6 @@ const TEST_TYPES = [
   { value: "sweat_patch", label: "Sweat Patch" },
 ] as const;
 
-/** Get next N business days (Mon-Fri) starting from today. */
-function getBusinessDays(count: number): Date[] {
-  const days: Date[] = [];
-  const now = new Date();
-  let d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  while (days.length < count) {
-    const dow = d.getDay();
-    if (dow >= 1 && dow <= 5) days.push(new Date(d));
-    d.setDate(d.getDate() + 1);
-  }
-  return days;
-}
-
-function fmtDayLabel(d: Date): string {
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-
 function fmtDateKey(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -92,6 +75,30 @@ function fmtDateKey(d: Date): string {
 function fmtSlotTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
+
+/**
+ * Build the 6-week grid for a given month — always 42 cells starting on
+ * Sunday of the week containing the 1st, so every month renders with a
+ * stable layout.
+ */
+function buildMonthGrid(year: number, month: number): Date[] {
+  const firstOfMonth = new Date(year, month, 1);
+  const gridStart = new Date(firstOfMonth);
+  gridStart.setDate(firstOfMonth.getDate() - firstOfMonth.getDay());
+  const days: Date[] = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    days.push(d);
+  }
+  return days;
+}
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const DOW_HEADERS = ["S", "M", "T", "W", "T", "F", "S"];
 
 export default function PhoneIntakePage() {
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
@@ -102,12 +109,41 @@ export default function PhoneIntakePage() {
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout>>(null);
 
-  // Slot picker
-  const days = getBusinessDays(6);
-  const [selectedDay, setSelectedDay] = useState<Date>(days[0]);
+  // Month calendar + slot picker
+  const today = new Date();
+  const [viewYear, setViewYear] = useState<number>(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState<number>(today.getMonth());
+  const [selectedDay, setSelectedDay] = useState<Date>(
+    new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  );
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
+
+  const monthGrid = buildMonthGrid(viewYear, viewMonth);
+
+  function goPrevMonth() {
+    if (viewMonth === 0) {
+      setViewYear((y) => y - 1);
+      setViewMonth(11);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
+  }
+  function goNextMonth() {
+    if (viewMonth === 11) {
+      setViewYear((y) => y + 1);
+      setViewMonth(0);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
+  }
+  function goToday() {
+    const n = new Date();
+    setViewYear(n.getFullYear());
+    setViewMonth(n.getMonth());
+    setSelectedDay(new Date(n.getFullYear(), n.getMonth(), n.getDate()));
+  }
 
   // Submission
   const [submitting, setSubmitting] = useState(false);
@@ -506,21 +542,77 @@ export default function PhoneIntakePage() {
             Pick an appointment
           </h2>
 
-          {/* Day tabs */}
-          <div className="flex gap-1 mb-4 overflow-x-auto pb-1">
-            {days.map((d) => {
-              const isActive = fmtDateKey(d) === fmtDateKey(selectedDay);
+          {/* Month header */}
+          <div className="flex items-center justify-between mb-2">
+            <button
+              type="button"
+              onClick={goPrevMonth}
+              className="p-1 rounded hover:bg-gray-100 text-gray-600"
+              aria-label="Previous month"
+            >
+              ‹
+            </button>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-gray-900">
+                {MONTH_NAMES[viewMonth]} {viewYear}
+              </p>
+              <button
+                type="button"
+                onClick={goToday}
+                className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200"
+              >
+                Today
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={goNextMonth}
+              className="p-1 rounded hover:bg-gray-100 text-gray-600"
+              aria-label="Next month"
+            >
+              ›
+            </button>
+          </div>
+
+          {/* Day-of-week headers */}
+          <div className="grid grid-cols-7 gap-1 mb-1">
+            {DOW_HEADERS.map((d, i) => (
+              <div key={i} className="text-center text-[10px] font-semibold text-gray-400 uppercase">
+                {d}
+              </div>
+            ))}
+          </div>
+
+          {/* Month grid */}
+          <div className="grid grid-cols-7 gap-1 mb-4">
+            {monthGrid.map((d) => {
+              const isCurrentMonth = d.getMonth() === viewMonth;
+              const isSelected = fmtDateKey(d) === fmtDateKey(selectedDay);
+              const isToday = fmtDateKey(d) === fmtDateKey(today);
+              const dow = d.getDay();
+              const isWeekend = dow === 0 || dow === 6;
+              const isPast =
+                d < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+              const disabled = isWeekend || isPast;
               return (
                 <button
                   key={d.toISOString()}
-                  onClick={() => setSelectedDay(d)}
-                  className={`px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                    isActive
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setSelectedDay(new Date(d))}
+                  className={`aspect-square rounded-lg text-xs font-semibold transition-colors ${
+                    isSelected
                       ? "bg-[#1e3a5f] text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      : disabled
+                      ? "text-gray-300 cursor-not-allowed"
+                      : !isCurrentMonth
+                      ? "text-gray-300 hover:bg-gray-50"
+                      : isToday
+                      ? "bg-amber-50 text-amber-900 hover:bg-amber-100"
+                      : "text-gray-700 hover:bg-gray-100"
                   }`}
                 >
-                  {fmtDayLabel(d)}
+                  {d.getDate()}
                 </button>
               );
             })}
