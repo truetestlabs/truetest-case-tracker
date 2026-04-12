@@ -167,8 +167,13 @@ export type CreateEventParams = {
  */
 export async function createCalendarEvent(params: CreateEventParams): Promise<string | null> {
   const client = getClient();
-  if (!client || !primaryCalendarId) return null;
+  if (!client || !primaryCalendarId) {
+    console.warn(`[gcal] createCalendarEvent skipped — client=${!!client}, calendarId=${!!primaryCalendarId}`);
+    return null;
+  }
   try {
+    console.log(`[gcal] creating event: "${params.summary}" at ${params.start.toISOString()}`);
+
     // Fold the donor email into the description instead of the attendees
     // list — service accounts aren't allowed to invite attendees.
     const fullDescription = [
@@ -196,9 +201,12 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<st
         },
       },
     });
-    return res.data.id ?? null;
-  } catch (e) {
-    console.error("[gcal] event insert failed:", e);
+    const eventId = res.data.id ?? null;
+    console.log(`[gcal] event created: ${eventId}`);
+    return eventId;
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[gcal] event insert failed: ${msg}`);
     return null;
   }
 }
