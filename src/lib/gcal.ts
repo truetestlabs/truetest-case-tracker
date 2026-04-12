@@ -185,7 +185,10 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<st
     // delegation — the impersonated user's primary calendar is just called
     // "primary", not their email address. Using the email directly returns
     // 404 Not Found on insert (even though events.list works with it).
-    const writeCalId = process.env.GOOGLE_CALENDAR_IMPERSONATE ? "primary" : primaryCalendarId!;
+        // Always use "primary" — with domain-wide delegation, the impersonated
+    // user's primary calendar is referenced as "primary". Using the email
+    // address directly returns 404 on insert even though list works.
+    const writeCalId = "primary";
     const res = await client.events.insert({
       calendarId: writeCalId,
       sendUpdates: "none", // internal-only; client gets the SMS instead
@@ -223,7 +226,10 @@ export async function deleteCalendarEvent(eventId: string): Promise<void> {
   const client = getClient();
   if (!client || !primaryCalendarId) return;
   try {
-    const writeCalId = process.env.GOOGLE_CALENDAR_IMPERSONATE ? "primary" : primaryCalendarId!;
+        // Always use "primary" — with domain-wide delegation, the impersonated
+    // user's primary calendar is referenced as "primary". Using the email
+    // address directly returns 404 on insert even though list works.
+    const writeCalId = "primary";
     await client.events.delete({ calendarId: writeCalId, eventId, sendUpdates: "none" });
   } catch (e) {
     console.error("[gcal] event delete failed:", e);
