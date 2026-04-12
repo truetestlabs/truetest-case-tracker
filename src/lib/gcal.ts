@@ -80,13 +80,14 @@ function getClient(): calendar_v3.Calendar | null {
 export type BusyInterval = { start: Date; end: Date };
 
 /**
- * Query busy intervals on the shared calendar for a time range. Used by
- * the availability helper to hide slots that overlap anything already on
- * Google Calendar (including Square walk-ins synced in from outside).
+ * Query ALL events on the configured calendars for a time range. Returns
+ * their start/end times as busy intervals that block appointment slots.
  *
- * Uses the freebusy API — only returns start/end times, never event
- * titles or attendees. Fails open: returns [] on error so read failures
- * don't block booking.
+ * Uses the Events list API instead of freebusy so that events marked as
+ * "Free" (the Lab calendar default) still block slots. The freebusy API
+ * only returns events with status=busy, which misses most Lab events.
+ *
+ * Fails open: returns [] on error so read failures don't block booking.
  */
 export async function getBusyIntervals(
   rangeStart: Date,
@@ -94,31 +95,41 @@ export async function getBusyIntervals(
 ): Promise<BusyInterval[]> {
   const client = getClient();
   if (!client || allCalendarIds.length === 0) return [];
-  try {
-    const res = await client.freebusy.query({
-      requestBody: {
+
+  const allBusy: BusyInterval[] = [];
+
+  for (const calId of allCalendarIds) {
+    try {
+      const res = await client.events.list({
+        calendarId: calId,
         timeMin: rangeStart.toISOString(),
         timeMax: rangeEnd.toISOString(),
-        items: allCalendarIds.map((id) => ({ id })),
-      },
-    });
-    // Merge busy intervals from ALL calendars into one flat list
-    const allBusy: BusyInterval[] = [];
-    const calendars = res.data.calendars ?? {};
-    for (const calId of allCalendarIds) {
-      const busy = calendars[calId]?.busy ?? [];
-      for (const b of busy) {
-        allBusy.push({
-          start: new Date(b.start as string),
-          end: new Date(b.end as string),
-        });
+        singleEvents: true, // expand recurring events
+        orderBy: "startTime",
+        maxResults: 100,
+        // Only need start/end — minimize data transfer
+        fields: "items(start,end,status)",
+      });
+      const events = res.data.items ?? [];
+      for (const ev of events) {
+        // Skip cancelled events
+        if (ev.status === "cancelled") continue;
+        const start = ev.start?.dateTime ?? ev.start?.date;
+        const end = ev.end?.dateTime ?? ev.end?.date;
+        if (start && end) {
+          allBusy.push({
+            start: new Date(start),
+            end: new Date(end),
+          });
+        }
       }
+    } catch (e) {
+      console.error(`[gcal] events.list failed for ${calId}:`, e);
+      // Continue to next calendar — don't let one failure block all
     }
-    return allBusy;
-  } catch (e) {
-    console.error("[gcal] freebusy query failed:", e);
-    return [];
   }
+
+  return allBusy;
 }
 
 export type CreateEventParams = {
