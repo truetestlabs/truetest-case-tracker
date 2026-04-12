@@ -160,7 +160,7 @@ export default function PhoneIntakePage() {
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
     searchDebounce.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/contacts?type=donor&q=${encodeURIComponent(search)}`);
+        const res = await fetch(`/api/contacts?type=donor&limit=8&q=${encodeURIComponent(search)}`);
         if (!res.ok) {
           console.warn("[phone-intake] contact search failed:", res.status);
           return;

@@ -5,10 +5,13 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type");
   const q = searchParams.get("q");
+  // Optional limit — when set, we skip the expensive _count join too
+  // (used by phone-intake's typeahead, which only needs lean results fast)
+  const limitParam = searchParams.get("limit");
+  const limit = limitParam ? Math.max(1, Math.min(50, parseInt(limitParam, 10) || 0)) : undefined;
 
   const where: Record<string, unknown> = {};
   if (type) {
-    // Support comma-separated list (e.g. "attorney,gal") for cross-type search
     const types = type.split(",").map((t) => t.trim()).filter(Boolean);
     where.contactType = types.length > 1 ? { in: types } : types[0];
   }
@@ -18,7 +21,7 @@ export async function GET(request: NextRequest) {
       { lastName: { contains: q, mode: "insensitive" } },
       { firmName: { contains: q, mode: "insensitive" } },
       { email: { contains: q, mode: "insensitive" } },
-      { phone: { contains: q } }, // phone is stored as digits + formatting; case-sensitive is fine
+      { phone: { contains: q } },
     ];
   }
 
@@ -26,7 +29,10 @@ export async function GET(request: NextRequest) {
     const contacts = await prisma.contact.findMany({
       where,
       orderBy: { lastName: "asc" },
-      include: { _count: { select: { caseContacts: true } } },
+      take: limit,
+      // Skip the _count join when a limit is set — it's a separate subquery
+      // per row that blows up p99 latency on typeahead searches.
+      ...(limit ? {} : { include: { _count: { select: { caseContacts: true } } } }),
     });
     return NextResponse.json(contacts);
   } catch (error) {
