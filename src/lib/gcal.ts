@@ -74,6 +74,7 @@ function getClient(): calendar_v3.Calendar | null {
       subject: process.env.GOOGLE_CALENDAR_IMPERSONATE || "michael@truetestlabs.com",
     });
     cachedClient = google.calendar({ version: "v3", auth });
+    console.log(`[gcal] client initialized. subject=${auth.subject}, email=${auth.email}`);
     return cachedClient;
   } catch (e) {
     console.error("[gcal] failed to init client:", e);
@@ -104,6 +105,7 @@ export async function getBusyIntervals(
 
   for (const calId of allCalendarIds) {
     try {
+      console.log(`[gcal] events.list calId=${calId} range=${rangeStart.toISOString()}..${rangeEnd.toISOString()}`);
       const res = await client.events.list({
         calendarId: calId,
         timeMin: rangeStart.toISOString(),
@@ -115,6 +117,7 @@ export async function getBusyIntervals(
         fields: "items(start,end,status)",
       });
       const events = res.data.items ?? [];
+      console.log(`[gcal] events.list returned ${events.length} events for ${calId}`);
       for (const ev of events) {
         // Skip cancelled events
         if (ev.status === "cancelled") continue;
@@ -127,8 +130,9 @@ export async function getBusyIntervals(
           });
         }
       }
-    } catch (e) {
-      console.error(`[gcal] events.list failed for ${calId}:`, e);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[gcal] events.list failed for ${calId}: ${msg}`);
       // Continue to next calendar — don't let one failure block all
     }
   }
