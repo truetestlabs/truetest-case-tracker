@@ -473,10 +473,11 @@ model Appointment {
   case       Case?             @relation(fields: [caseId], references: [id], onDelete: SetNull)
   donorId    String?
   donor      Contact?          @relation("DonorAppointments", fields: [donorId], references: [id], onDelete: SetNull)
-  notes      String?
-  createdBy  String?           // "phone-intake" | "kiosk" | staff name
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
+  notes          String?
+  createdBy      String?           // "phone-intake" | "kiosk" | staff name
+  googleEventId  String?           // Google Calendar event ID after sync
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@index([startTime])
   @@index([caseId])

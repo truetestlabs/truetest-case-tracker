@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { BUSINESS_HOURS, isSlotFree } from "@/lib/appointments";
+import { createCalendarEvent } from "@/lib/gcal";
 
 /**
  * GET /api/appointments?from=ISO&to=ISO — list appointments in a range
@@ -71,9 +72,49 @@ export async function POST(request: NextRequest) {
         notes: body.notes || null,
         createdBy: body.createdBy || "dashboard",
       },
+      include: {
+        donor: { select: { firstName: true, lastName: true, email: true, phone: true } },
+        case: {
+          select: {
+            caseNumber: true,
+            donor: { select: { firstName: true, lastName: true, email: true, phone: true } },
+          },
+        },
+      },
     });
 
-    return NextResponse.json({ appointment }, { status: 201 });
+    // Sync to Google Calendar — non-blocking on failure. Returns null if
+    // the creds aren't set or Google is down; we still return a successful
+    // booking to the caller because the Appointment row is the case-tracker
+    // record of truth. An ops job can backfill missing googleEventIds later.
+    const donor = appointment.donor ?? appointment.case?.donor ?? null;
+    const donorName = donor ? `${donor.firstName ?? ""} ${donor.lastName ?? ""}`.trim() : "Client";
+    const caseRef = appointment.case?.caseNumber ?? "(new case)";
+    const descLines = [
+      `Case: ${caseRef}`,
+      donor?.phone ? `Phone: ${donor.phone}` : null,
+      appointment.notes || null,
+    ].filter(Boolean);
+
+    const eventId = await createCalendarEvent({
+      summary: `TrueTest — ${donorName}`,
+      description: descLines.join("\n"),
+      start: appointment.startTime,
+      end: appointment.endTime,
+      attendeeEmail: donor?.email ?? undefined,
+    });
+
+    if (eventId) {
+      await prisma.appointment.update({
+        where: { id: appointment.id },
+        data: { googleEventId: eventId },
+      });
+    }
+
+    return NextResponse.json(
+      { appointment: { ...appointment, googleEventId: eventId } },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("[appointments] POST error:", error);
     return NextResponse.json({ error: "failed to create appointment" }, { status: 500 });

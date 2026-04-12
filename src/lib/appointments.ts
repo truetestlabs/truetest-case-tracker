@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import { getBusyIntervals } from "@/lib/gcal";
 
 /**
- * Appointment availability helpers (v1).
+ * Appointment availability helpers.
  *
  * Business hours are hardcoded constants — TrueTest Labs EGV is M-F 8am-5pm
  * with 30-minute slots. When the schedule ever varies (holidays, early
@@ -39,14 +40,21 @@ export async function getAvailableSlots(date: Date): Promise<Slot[]> {
   const dayEnd = new Date(date);
   dayEnd.setHours(BUSINESS_HOURS.endHour, 0, 0, 0);
 
-  // Any non-cancelled appointment on this day counts as "taken"
-  const existing = await prisma.appointment.findMany({
-    where: {
-      startTime: { gte: dayStart, lt: dayEnd },
-      status: { in: ["booked", "completed"] },
-    },
-    select: { id: true, startTime: true, endTime: true },
-  });
+  // Pull both sources in parallel:
+  // - case-tracker Appointment rows (belt-and-suspenders in case a booking
+  //   wrote to our DB but failed to sync to Google)
+  // - Google Calendar busy intervals (the source of truth — includes
+  //   Square walk-in bookings synced in from outside)
+  const [caseTrackerAppts, googleBusy] = await Promise.all([
+    prisma.appointment.findMany({
+      where: {
+        startTime: { gte: dayStart, lt: dayEnd },
+        status: { in: ["booked", "completed"] },
+      },
+      select: { id: true, startTime: true, endTime: true },
+    }),
+    getBusyIntervals(dayStart, dayEnd),
+  ]);
 
   const slots: Slot[] = [];
   const now = new Date();
@@ -55,15 +63,22 @@ export async function getAvailableSlots(date: Date): Promise<Slot[]> {
   for (let t = dayStart.getTime(); t < dayEnd.getTime(); t += slotMs) {
     const start = new Date(t);
     const end = new Date(t + slotMs);
-    const clash = existing.find((a) => a.startTime.getTime() === start.getTime());
+
+    const trackerClash = caseTrackerAppts.find(
+      (a) => a.startTime.getTime() === start.getTime()
+    );
+    // Any Google event that overlaps this 30-min window blocks the slot
+    const googleClash = googleBusy.some((b) => b.start < end && b.end > start);
+
     let status: SlotStatus = "available";
-    if (clash) status = "booked";
+    if (trackerClash || googleClash) status = "booked";
     else if (start < now) status = "past";
+
     slots.push({
       start: start.toISOString(),
       end: end.toISOString(),
       status,
-      appointmentId: clash?.id,
+      appointmentId: trackerClash?.id,
     });
   }
   return slots;
@@ -76,13 +91,20 @@ export async function getAvailableSlots(date: Date): Promise<Slot[]> {
  */
 export async function isSlotFree(start: Date): Promise<boolean> {
   const end = new Date(start.getTime() + BUSINESS_HOURS.slotMinutes * 60 * 1000);
-  const conflict = await prisma.appointment.findFirst({
-    where: {
-      status: { in: ["booked", "completed"] },
-      startTime: { lt: end },
-      endTime: { gt: start },
-    },
-    select: { id: true },
-  });
-  return conflict === null;
+
+  const [conflict, googleBusy] = await Promise.all([
+    prisma.appointment.findFirst({
+      where: {
+        status: { in: ["booked", "completed"] },
+        startTime: { lt: end },
+        endTime: { gt: start },
+      },
+      select: { id: true },
+    }),
+    getBusyIntervals(start, end),
+  ]);
+
+  if (conflict) return false;
+  if (googleBusy.some((b) => b.start < end && b.end > start)) return false;
+  return true;
 }
