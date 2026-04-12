@@ -102,8 +102,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Sync to Google Calendar
-    console.log("[appointments] about to call createCalendarEvent");
+    // Sync to Google Calendar (v2 — with explicit logging)
+    console.log("[appointments] about to call createCalendarEvent for", appointment.id);
     let eventId: string | null = null;
     try {
       const donor = appointment.donor ?? appointment.case?.donor ?? null;
