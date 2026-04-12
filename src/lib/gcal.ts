@@ -68,6 +68,10 @@ function getClient(): calendar_v3.Calendar | null {
       email: key.client_email,
       key: key.private_key,
       scopes: ["https://www.googleapis.com/auth/calendar"],
+      // Domain-Wide Delegation: impersonate the Workspace user so the
+      // service account has full access to their calendars without needing
+      // explicit sharing (which Workspace admin policies were blocking).
+      subject: process.env.GOOGLE_CALENDAR_IMPERSONATE || "michael@truetestlabs.com",
     });
     cachedClient = google.calendar({ version: "v3", auth });
     return cachedClient;
