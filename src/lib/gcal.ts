@@ -104,6 +104,13 @@ export type CreateEventParams = {
   description?: string;
   start: Date;
   end: Date;
+  /**
+   * Donor email. NOT added as an event attendee — service accounts can't
+   * invite attendees without Domain-Wide Delegation of Authority, which
+   * is a much bigger privilege than we need. Instead the email is just
+   * appended to the event description for staff reference. Client gets
+   * the booking confirmation via SMS, not a calendar invite.
+   */
   attendeeEmail?: string;
   location?: string;
 };
@@ -118,12 +125,21 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<st
   const client = getClient();
   if (!client || !calendarId) return null;
   try {
+    // Fold the donor email into the description instead of the attendees
+    // list — service accounts aren't allowed to invite attendees.
+    const fullDescription = [
+      params.description,
+      params.attendeeEmail ? `Email: ${params.attendeeEmail}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
     const res = await client.events.insert({
       calendarId,
       sendUpdates: "none", // internal-only; client gets the SMS instead
       requestBody: {
         summary: params.summary,
-        description: params.description,
+        description: fullDescription || undefined,
         location:
           params.location ?? "2256 Landmeier Rd Ste A, Elk Grove Village, IL 60007",
         start: {
@@ -134,7 +150,6 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<st
           dateTime: params.end.toISOString(),
           timeZone: "America/Chicago",
         },
-        attendees: params.attendeeEmail ? [{ email: params.attendeeEmail }] : undefined,
       },
     });
     return res.data.id ?? null;

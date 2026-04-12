@@ -114,7 +114,7 @@ export default function PhoneIntakePage() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ caseId: string; caseNumber: string; slot: Slot } | null>(null);
 
-  // Donor search debounce
+  // Donor search debounce — hits /api/contacts?type=donor&q=...
   useEffect(() => {
     if (!search.trim() || search.length < 2) {
       setSearchResults([]);
@@ -125,13 +125,17 @@ export default function PhoneIntakePage() {
     searchDebounce.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/contacts?type=donor&q=${encodeURIComponent(search)}`);
-        if (res.ok) {
-          const data = await res.json();
-          setSearchResults((data || []).slice(0, 8));
-          setShowSearchDropdown(data.length > 0);
+        if (!res.ok) {
+          console.warn("[phone-intake] contact search failed:", res.status);
+          return;
         }
-      } catch {
-        /* silent */
+        const data = await res.json();
+        const results = Array.isArray(data) ? data.slice(0, 8) : [];
+        console.log("[phone-intake] donor search", search, "→", results.length, "results");
+        setSearchResults(results);
+        setShowSearchDropdown(results.length > 0);
+      } catch (e) {
+        console.warn("[phone-intake] contact search error:", e);
       }
     }, 250);
   }, [search]);
@@ -363,7 +367,7 @@ export default function PhoneIntakePage() {
             autoComplete="off"
           />
           {showSearchDropdown && searchResults.length > 0 && (
-            <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 max-h-64 overflow-y-auto">
+            <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 max-h-64 overflow-y-auto">
               {searchResults.map((d) => (
                 <button
                   key={d.id}

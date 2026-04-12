@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
       { lastName: { contains: q, mode: "insensitive" } },
       { firmName: { contains: q, mode: "insensitive" } },
       { email: { contains: q, mode: "insensitive" } },
+      { phone: { contains: q } }, // phone is stored as digits + formatting; case-sensitive is fine
     ];
   }
 
