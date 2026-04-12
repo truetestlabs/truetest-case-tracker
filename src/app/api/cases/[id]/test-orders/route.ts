@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendResultsReleasedEmail, sendNoShowEmail } from "@/lib/email";
+import { deleteCalendarEvent } from "@/lib/gcal";
 
 export async function POST(
   request: NextRequest,
@@ -244,6 +245,29 @@ export async function PATCH(
       }
     }
 
+    // Cancel linked Google Calendar appointment when test is cancelled/no_show
+    if (["cancelled", "no_show"].includes(updated.testStatus)) {
+      const appointments = await prisma.appointment.findMany({
+        where: { caseId, status: "booked" },
+        select: { id: true, googleEventId: true },
+      });
+      // If ALL tests on this case are now cancelled/no_show/closed, cancel the appointment
+      const activeTests = await prisma.testOrder.count({
+        where: { caseId, testStatus: { notIn: ["cancelled", "no_show", "closed"] }, id: { not: testOrderId } },
+      });
+      if (activeTests === 0) {
+        for (const appt of appointments) {
+          if (appt.googleEventId) {
+            await deleteCalendarEvent(appt.googleEventId);
+          }
+          await prisma.appointment.update({
+            where: { id: appt.id },
+            data: { status: "cancelled" },
+          });
+        }
+      }
+    }
+
     // Check if all tests on this case are now closed — prompt to close case
     let promptCloseCase = false;
     if (updated.testStatus === "closed") {
@@ -278,6 +302,26 @@ export async function DELETE(
     const existing = await prisma.testOrder.findUnique({ where: { id: testOrderId } });
     if (!existing || existing.caseId !== caseId) {
       return NextResponse.json({ error: "Test order not found" }, { status: 404 });
+    }
+
+    // If this was the last active test, cancel linked appointments
+    const remainingActive = await prisma.testOrder.count({
+      where: { caseId, id: { not: testOrderId }, testStatus: { notIn: ["cancelled", "no_show", "closed"] } },
+    });
+    if (remainingActive === 0) {
+      const appointments = await prisma.appointment.findMany({
+        where: { caseId, status: "booked" },
+        select: { id: true, googleEventId: true },
+      });
+      for (const appt of appointments) {
+        if (appt.googleEventId) {
+          await deleteCalendarEvent(appt.googleEventId);
+        }
+        await prisma.appointment.update({
+          where: { id: appt.id },
+          data: { status: "cancelled" },
+        });
+      }
     }
 
     // Delete related status logs first

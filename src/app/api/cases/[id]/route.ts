@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { deleteCalendarEvent } from "@/lib/gcal";
 
 export async function GET(
   _request: NextRequest,
@@ -53,6 +54,21 @@ export async function DELETE(
     const caseData = await prisma.case.findUnique({ where: { id } });
     if (!caseData) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
+    }
+
+    // Cancel linked appointments on Google Calendar before deleting
+    const appointments = await prisma.appointment.findMany({
+      where: { caseId: id, status: "booked" },
+      select: { id: true, googleEventId: true },
+    });
+    for (const appt of appointments) {
+      if (appt.googleEventId) {
+        await deleteCalendarEvent(appt.googleEventId);
+      }
+      await prisma.appointment.update({
+        where: { id: appt.id },
+        data: { status: "cancelled" },
+      });
     }
 
     // Delete in order due to foreign keys
