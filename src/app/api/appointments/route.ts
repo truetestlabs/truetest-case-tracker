@@ -102,37 +102,32 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Sync to Google Calendar (v2 — with explicit logging)
-    console.log("[appointments] about to call createCalendarEvent for", appointment.id);
-    let eventId: string | null = null;
-    try {
-      const donor = appointment.donor ?? appointment.case?.donor ?? null;
-      const donorName = donor ? `${donor.firstName ?? ""} ${donor.lastName ?? ""}`.trim() : "Client";
-      const caseRef = appointment.case?.caseNumber ?? "(new case)";
-      const descLines = [
-        `Case: ${caseRef}`,
-        donor?.phone ? `Phone: ${donor.phone}` : null,
-        appointment.notes || null,
-      ].filter(Boolean);
+    // Sync to Google Calendar — inline, before returning response
+    const donor = appointment.donor ?? appointment.case?.donor ?? null;
+    const donorName = donor ? `${donor.firstName ?? ""} ${donor.lastName ?? ""}`.trim() : "Client";
+    const caseRef = appointment.case?.caseNumber ?? "(new case)";
+    const descLines = [
+      `Case: ${caseRef}`,
+      donor?.phone ? `Phone: ${donor.phone}` : null,
+      appointment.notes || null,
+    ].filter(Boolean);
 
-      eventId = await createCalendarEvent({
-        summary: `TrueTest — ${donorName}`,
-        description: descLines.join("\n"),
-        start: appointment.startTime,
-        end: appointment.endTime,
-        attendeeEmail: donor?.email ?? undefined,
+    const eventId = await createCalendarEvent({
+      summary: `TrueTest — ${donorName}`,
+      description: descLines.join("\n"),
+      start: appointment.startTime,
+      end: appointment.endTime,
+      attendeeEmail: donor?.email ?? undefined,
+    });
+
+    if (eventId) {
+      await prisma.appointment.update({
+        where: { id: appointment.id },
+        data: { googleEventId: eventId },
       });
-      console.log("[appointments] createCalendarEvent returned:", eventId);
-
-      if (eventId) {
-        await prisma.appointment.update({
-          where: { id: appointment.id },
-          data: { googleEventId: eventId },
-        });
-      }
-    } catch (gcalErr) {
-      console.error("[appointments] gcal sync error:", gcalErr);
     }
+
+    console.log(`[appointments] POST complete: appt=${appointment.id} gcalEvent=${eventId ?? "NONE"}`);
 
     return NextResponse.json(
       { appointment: { ...appointment, googleEventId: eventId } },
