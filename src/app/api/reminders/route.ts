@@ -74,17 +74,24 @@ export async function GET() {
         take: 20,
       }),
 
-      // 3. Stale test orders (2 days)
+      // 3. Stale test orders — 2 days for most tests, 7 days for sweat patches
+      //    (sweat patches are applied and left on for ~7 days before removal)
       prisma.testOrder.findMany({
         where: {
           testStatus: "order_created",
-          updatedAt: { lt: twoDaysAgo },
           case: { caseStatus: { not: "closed" } },
+          OR: [
+            // Non-sweat-patch: stale after 2 days
+            { specimenType: { not: "sweat_patch" }, updatedAt: { lt: twoDaysAgo } },
+            // Sweat patch: stale after 7 days
+            { specimenType: "sweat_patch", updatedAt: { lt: sevenDaysAgo } },
+          ],
         },
         select: {
           id: true,
           testDescription: true,
           updatedAt: true,
+          specimenType: true,
           case: { select: { id: true, caseNumber: true, donor: { select: { firstName: true, lastName: true } } } },
         },
         take: 20,
