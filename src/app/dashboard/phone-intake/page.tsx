@@ -544,33 +544,33 @@ export default function PhoneIntakePage() {
 
           {/* Month header */}
           <div className="flex items-center justify-between mb-2">
-            <button
-              type="button"
-              onClick={goPrevMonth}
-              className="p-1 rounded hover:bg-gray-100 text-gray-600"
-              aria-label="Previous month"
-            >
-              ‹
-            </button>
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-gray-900">
-                {MONTH_NAMES[viewMonth]} {viewYear}
-              </p>
+            <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={goToday}
-                className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200"
+                onClick={goPrevMonth}
+                className="w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-600 text-lg flex items-center justify-center"
+                aria-label="Previous month"
               >
-                Today
+                ‹
+              </button>
+              <button
+                type="button"
+                onClick={goNextMonth}
+                className="w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-600 text-lg flex items-center justify-center"
+                aria-label="Next month"
+              >
+                ›
               </button>
             </div>
+            <p className="text-sm font-semibold text-gray-900">
+              {MONTH_NAMES[viewMonth]} {viewYear}
+            </p>
             <button
               type="button"
-              onClick={goNextMonth}
-              className="p-1 rounded hover:bg-gray-100 text-gray-600"
-              aria-label="Next month"
+              onClick={goToday}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#1e3a5f] text-white hover:bg-[#162c47]"
             >
-              ›
+              Today
             </button>
           </div>
 
