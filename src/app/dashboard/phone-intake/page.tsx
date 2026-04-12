@@ -107,7 +107,14 @@ export default function PhoneIntakePage() {
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<DonorResult[]>([]);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [searching, setSearching] = useState(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout>>(null);
+
+  // Warm the donor-search endpoint on mount so the first real search
+  // doesn't pay the Supabase cold-connection tax (~2s from idle).
+  useEffect(() => {
+    fetch("/api/contacts?type=donor&limit=1&q=__warmup__").catch(() => {});
+  }, []);
 
   // Month calendar + slot picker
   const today = new Date();
@@ -155,25 +162,29 @@ export default function PhoneIntakePage() {
     if (!search.trim() || search.length < 2) {
       setSearchResults([]);
       setShowSearchDropdown(false);
+      setSearching(false);
       return;
     }
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    setSearching(true);
+    setShowSearchDropdown(true); // show the dropdown immediately so the "Searching…" row is visible
     searchDebounce.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/contacts?type=donor&limit=8&q=${encodeURIComponent(search)}`);
         if (!res.ok) {
           console.warn("[phone-intake] contact search failed:", res.status);
+          setSearching(false);
           return;
         }
         const data = await res.json();
         const results = Array.isArray(data) ? data.slice(0, 8) : [];
-        console.log("[phone-intake] donor search", search, "→", results.length, "results");
         setSearchResults(results);
-        setShowSearchDropdown(results.length > 0);
+        setSearching(false);
       } catch (e) {
         console.warn("[phone-intake] contact search error:", e);
+        setSearching(false);
       }
-    }, 250);
+    }, 120);
   }, [search]);
 
   // Load slots when day changes
@@ -402,9 +413,20 @@ export default function PhoneIntakePage() {
             className="w-full text-base p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-[#1e3a5f]"
             autoComplete="off"
           />
-          {showSearchDropdown && searchResults.length > 0 && (
+          {showSearchDropdown && (searching || searchResults.length > 0 || search.length >= 2) && (
             <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 max-h-64 overflow-y-auto">
-              {searchResults.map((d) => (
+              {searching && (
+                <div className="px-4 py-3 text-sm text-gray-400 flex items-center gap-2">
+                  <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-[#1e3a5f] rounded-full animate-spin" />
+                  Searching…
+                </div>
+              )}
+              {!searching && searchResults.length === 0 && search.length >= 2 && (
+                <div className="px-4 py-3 text-sm text-gray-400">
+                  No donors match &ldquo;{search}&rdquo;
+                </div>
+              )}
+              {!searching && searchResults.map((d) => (
                 <button
                   key={d.id}
                   onMouseDown={(e) => e.preventDefault()}
