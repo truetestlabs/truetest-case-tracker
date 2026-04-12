@@ -506,7 +506,7 @@ export default function CaseDetailPage() {
                             </div>
                           );
                         }
-                        // At MRO → button to release MRO results to parties
+                        // At MRO → button to release MRO report to parties
                         if (test.testStatus === "at_mro") {
                           return (
                             <button onClick={async (e) => {
@@ -517,12 +517,12 @@ export default function CaseDetailPage() {
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ testOrderId: test.id, testStatus: "mro_released" }),
                               });
-                              // Compose and queue the results email (includes MRO report)
-                              await fetch(`/api/cases/${caseData.id}/compose-results`, { method: "POST" });
+                              // Compose MRO-complete email for the distribution list
+                              await fetch(`/api/cases/${caseData.id}/compose-results?mro_complete=true`, { method: "POST" });
                               window.dispatchEvent(new Event("refreshReminders"));
                               loadCase();
                             }} className="mt-1.5 w-full text-[10px] px-2 py-1.5 rounded bg-purple-700 text-white hover:bg-purple-800 font-semibold">
-                              ✉ MRO Release Results to Parties
+                              ✉ Release MRO Report
                             </button>
                           );
                         }
