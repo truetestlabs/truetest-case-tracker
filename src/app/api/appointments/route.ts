@@ -83,6 +83,25 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // If this appointment is linked to a case, stamp the appointment date
+    // onto any pre-collection TestOrders on that case so the cases list
+    // renders "Scheduled @ TTL <date/time>" instead of "Order Created".
+    // Only touches order_created rows that don't already have an
+    // appointmentDate — existing scheduled tests are left alone.
+    if (appointment.caseId) {
+      await prisma.testOrder.updateMany({
+        where: {
+          caseId: appointment.caseId,
+          testStatus: "order_created",
+          appointmentDate: null,
+        },
+        data: {
+          appointmentDate: start,
+          collectionSiteType: "truetest",
+        },
+      });
+    }
+
     // Sync to Google Calendar — non-blocking on failure. Returns null if
     // the creds aren't set or Google is down; we still return a successful
     // booking to the caller because the Appointment row is the case-tracker
