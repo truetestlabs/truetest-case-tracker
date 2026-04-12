@@ -157,39 +157,8 @@ export default function NewCasePage() {
                 <option value="by_agreement">By Agreement</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Court Case Number
-              </label>
-              <input
-                type="text"
-                name="courtCaseNumber"
-                placeholder="e.g., 2026-D-001234"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                County / Jurisdiction
-              </label>
-              <input
-                type="text"
-                name="county"
-                placeholder="e.g., Cook County"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Judge Name
-              </label>
-              <input
-                type="text"
-                name="judgeName"
-                placeholder="Judge's name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+            {/* Court Case Number, County, Judge Name removed to declutter —
+                can be added later from Edit Case if needed */}
             <div className="md:col-span-2 mt-1">
               <label className="inline-flex items-center gap-2 cursor-pointer">
                 <input
@@ -321,54 +290,7 @@ export default function NewCasePage() {
           </div>
         </section>
 
-        {/* Scheduling */}
-        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Scheduling</h2>
-          <p className="text-sm text-gray-600 mb-3">Send the donor a link to book their appointment:</p>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                const donorPhone = (document.querySelector('input[name="donorPhone"]') as HTMLInputElement)?.value;
-                const donorName = (document.querySelector('input[name="donorFirstName"]') as HTMLInputElement)?.value || "there";
-                const msg = encodeURIComponent(`Hi ${donorName}, please book your appointment at TrueTest Labs here: https://book.squareup.com/appointments/vktpg026o844b6/location/NRHN4SKCVGFSD/services/362SUMWGC5H55J2MCVTJF4FK`);
-                if (donorPhone) {
-                  window.open(`sms:${donorPhone}&body=${msg}`, "_blank");
-                } else {
-                  alert("Enter the donor's phone number first");
-                }
-              }}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-            >
-              Text Booking Link
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const donorEmail = (document.querySelector('input[name="donorEmail"]') as HTMLInputElement)?.value;
-                const donorName = (document.querySelector('input[name="donorFirstName"]') as HTMLInputElement)?.value || "there";
-                const subject = encodeURIComponent("TrueTest Labs - Schedule Your Appointment");
-                const body = encodeURIComponent(`Hi ${donorName},\n\nPlease book your appointment at TrueTest Labs using the link below:\n\nhttps://book.squareup.com/appointments/vktpg026o844b6/location/NRHN4SKCVGFSD/services/362SUMWGC5H55J2MCVTJF4FK\n\nThank you,\nTrueTest Labs`);
-                if (donorEmail) {
-                  window.open(`mailto:${donorEmail}?subject=${subject}&body=${body}`, "_blank");
-                } else {
-                  alert("Enter the donor's email first");
-                }
-              }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-            >
-              Email Booking Link
-            </button>
-            <a
-              href="https://book.squareup.com/appointments/vktpg026o844b6/location/NRHN4SKCVGFSD/services/362SUMWGC5H55J2MCVTJF4FK"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-            >
-              Open Booking Page
-            </a>
-          </div>
-        </section>
+        {/* Scheduling section removed — booking moved to sidebar + phone intake */}
 
         {/* Notes */}
         <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

@@ -131,13 +131,13 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
         const isUploading = uploading === slot.type;
 
         return (
-          <div key={slot.type} className="flex items-center gap-2 text-xs">
-            <span className="w-5 text-center">{slot.icon}</span>
-            <span className="text-gray-500 w-14 flex-shrink-0">{slot.label}:</span>
+          <div key={slot.type} className={`flex items-center gap-2 text-xs rounded-md px-1.5 py-1 ${doc ? "bg-green-50" : ""}`}>
+            <span className="w-5 text-center">{doc ? "✅" : slot.icon}</span>
+            <span className={`w-14 flex-shrink-0 font-medium ${doc ? "text-green-700" : "text-gray-500"}`}>{slot.label}:</span>
 
             {doc ? (
               <div className="flex items-center gap-1 flex-1 min-w-0">
-                <span className="text-gray-700 truncate flex-1">{doc.fileName}</span>
+                <span className="text-green-800 font-medium truncate flex-1">{doc.fileName}</span>
                 <button
                   onClick={() => handleDownload(doc.id)}
                   className="text-blue-500 hover:text-blue-700 flex-shrink-0 px-1"
