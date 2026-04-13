@@ -47,7 +47,7 @@ export async function GET() {
         where: {
           testStatus: { in: ["specimen_collected", "specimen_held", "sent_to_lab"] },
           collectionDate: { lt: oneHourAgo },
-          statusLogs: { none: { notificationSent: true, note: { contains: "collection" } } },
+          statusLogs: { none: { notificationSent: true, newStatus: { in: ["specimen_collected", "sent_to_lab"] } } },
         },
         select: {
           id: true,
