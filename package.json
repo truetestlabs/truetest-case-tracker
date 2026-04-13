@@ -15,6 +15,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
     "@prisma/client": "^6.9.0",
+    "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.49.0",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/archiver": "^7.0.0",

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deleteCalendarEvent } from "@/lib/gcal";
+import { getAuthUser } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
 
 export async function GET(
   _request: NextRequest,
@@ -45,7 +47,7 @@ export async function GET(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
@@ -79,6 +81,12 @@ export async function DELETE(
     await prisma.testOrder.deleteMany({ where: { caseId: id } });
     await prisma.caseContact.deleteMany({ where: { caseId: id } });
     await prisma.case.delete({ where: { id } });
+
+    // Audit log
+    const user = await getAuthUser(request);
+    if (user) {
+      logAudit({ userId: user.id, action: "delete_case", resource: "case", resourceId: id, metadata: { caseNumber: caseData.caseNumber } });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

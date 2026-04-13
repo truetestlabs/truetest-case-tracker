@@ -566,3 +566,33 @@ model CheckIn {
 
   @@index([scheduleId, checkedInAt])
 }
+
+// ============================================================
+// AUTH + AUDIT
+// ============================================================
+
+model User {
+  id          String     @id // Supabase Auth UUID
+  email       String     @unique
+  name        String
+  role        String     @default("staff") // "admin" | "staff"
+  createdAt   DateTime   @default(now())
+  lastLoginAt DateTime?
+  auditLogs   AuditLog[]
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String   // login, view_case, create_case, delete_case, upload_document, etc.
+  resource   String?  // case, test_order, contact, document, appointment
+  resourceId String?  // specific record ID
+  metadata   Json?    // IP, user agent, old/new values
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([resourceId])
+  @@index([createdAt])
+}

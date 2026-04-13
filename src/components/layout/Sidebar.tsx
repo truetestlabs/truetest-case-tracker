@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
+import { createSupabaseBrowser } from "@/lib/supabase-browser";
 
 const navigation = [
   { name: "Quick Intake", href: "/intake", icon: ZapIcon },
@@ -15,15 +16,32 @@ const navigation = [
   { name: "Upload Order", href: "/cases/upload-order", icon: UploadIcon },
   { name: "Kiosk Intakes", href: "/dashboard/intakes", icon: ClipboardIcon },
   { name: "Contacts", href: "/contacts", icon: UsersIcon },
+  { name: "Audit Log", href: "/dashboard/audit-log", icon: ShieldIcon },
 ];
 
 const BOOKING_URL = "https://book.squareup.com/appointments/vktpg026o844b6/location/NRHN4SKCVGFSD/services/362SUMWGC5H55J2MCVTJF4FK";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [bookingModal, setBookingModal] = useState<"text" | "email" | null>(null);
   const [bookingName, setBookingName] = useState("");
   const [bookingContact, setBookingContact] = useState("");
+
+  // Auth
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  useEffect(() => {
+    const supabase = createSupabaseBrowser();
+    supabase.auth.getUser().then(({ data }) => {
+      setUserEmail(data.user?.email || null);
+    });
+  }, []);
+  async function handleSignOut() {
+    const supabase = createSupabaseBrowser();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   // Reminders
   type ReminderItem = { id: string; type: string; message: string; caseId: string; caseNumber: string; age: string; draftId?: string };
@@ -457,8 +475,23 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Footer */}
-      <div className="px-4 py-4 border-t border-white/10">
+      {/* User + Footer */}
+      <div className="px-4 py-3 border-t border-white/10">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+              <span className="text-[10px] font-bold text-white/70">{userEmail ? userEmail.slice(0, 2).toUpperCase() : "?"}</span>
+            </div>
+            <span className="text-[11px] text-white/50 truncate">{userEmail || ""}</span>
+          </div>
+          <button
+            onClick={handleSignOut}
+            className="text-[10px] text-white/30 hover:text-white/70 font-medium flex-shrink-0"
+            title="Sign out"
+          >
+            Sign out
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" style={{ boxShadow: "0 0 6px rgba(74,222,128,0.6)" }} />
           <span className="text-xs text-white/40">Elk Grove Village, IL</span>
@@ -472,6 +505,14 @@ function ZapIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="13,2 3,14 12,14 11,22 21,10 12,10 13,2" />
+    </svg>
+  );
+}
+
+function ShieldIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
   );
 }
