@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-// @ts-expect-error - pdf-parse doesn't have types
-import pdf from "pdf-parse";
+
+// Lazy import — pdf-parse doesn't have a proper ESM default export
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdf = require("pdf-parse");
 
 function parseCourtOrderText(text: string) {
   const fullText = text;
