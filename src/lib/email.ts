@@ -827,7 +827,7 @@ export async function sendPaymentReceivedEmail(
       ${calloutBox({
         bg: "#ecfdf5", border: "#a7f3d0", titleColor: "#065f46", textColor: "#064e3b",
         title: "Sample Being Processed",
-        text: "Your payment has been received and your specimen is now being sent to the lab for processing. Results will be released once testing is complete.",
+        text: "Your payment has been received and your specimen is now being sent to the lab for processing. Results generally take 3-6 business days to be available and will be released once testing is complete.",
       })}`,
   });
 
