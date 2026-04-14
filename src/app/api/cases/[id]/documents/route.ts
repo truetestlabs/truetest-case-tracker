@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import type { TestStatus } from "@prisma/client";
+import type { TestStatus, LabResultStatus } from "@prisma/client";
 import { claude } from "@/lib/claude";
 import { generateResultSummary } from "@/lib/resultSummary";
+import { extractLabResultStructured, LAB_RESULT_PARSER_VERSION } from "@/lib/resultExtract";
+import type { ExtractedLabResult } from "@/lib/resultExtract";
+import { runLabResultCrosschecks } from "@/lib/labResultCrosscheck";
 import { uploadFile } from "@/lib/storage";
 
 // Allow longer execution for AI summary generation on upload
@@ -233,11 +236,19 @@ export async function POST(
         : `${donorFirst} ${donorLast} COC ${cocDate}${ext}`;
     }
 
-    // For result reports: generate AI summary from PDF (async, best-effort)
+    // For result reports: run BOTH the existing narrative summary AND the
+    // new structured extractor in parallel. The summary is the human-readable
+    // email-ready paragraph; the structured data feeds the LabResult row,
+    // the date cross-checks, and eventually the UI result cards.
     let extractedData: { summary: string } | null = null;
+    let structuredResult: ExtractedLabResult | null = null;
     if (documentType === "result_report" && ext.toLowerCase() === ".pdf") {
-      const summary = await generateResultSummary(buffer);
+      const [summary, structured] = await Promise.all([
+        generateResultSummary(buffer),
+        extractLabResultStructured(buffer),
+      ]);
       if (summary) extractedData = { summary };
+      structuredResult = structured;
     }
 
     // Create document record
@@ -346,6 +357,64 @@ export async function POST(
               : "Auto-held: lab results uploaded but payment outstanding",
           },
         });
+
+        // ── Create the LabResult row ─────────────────────────────────────
+        // We write a row whether or not the structured extractor succeeded:
+        // a pending row with no analytes still gives us somewhere to attach
+        // the source Document and receivedByUs timestamp, and the UI can
+        // show "parser couldn't read this — please review manually".
+        const findings = structuredResult
+          ? runLabResultCrosschecks(structuredResult, {
+              collectionDate: order.collectionDate,
+              specimenId: order.specimenId,
+              labAccessionNumber: order.labAccessionNumber,
+            })
+          : [];
+
+        const parseIsoDate = (s: string | null | undefined): Date | null => {
+          if (!s) return null;
+          const match = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+          if (!match) return null;
+          const [, y, m, d] = match;
+          const date = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10), 12, 0, 0);
+          return Number.isNaN(date.getTime()) ? null : date;
+        };
+
+        await prisma.labResult.create({
+          data: {
+            testOrderId: order.id,
+            documentId: document.id,
+            source: "pdf_upload",
+            parserVersion: LAB_RESULT_PARSER_VERSION,
+            overallStatus: (structuredResult?.overallStatus ?? "unknown") as LabResultStatus,
+            reportedCollectionDate: parseIsoDate(structuredResult?.reportedCollectionDate),
+            receivedAtLab: parseIsoDate(structuredResult?.receivedAtLab),
+            reportDate: parseIsoDate(structuredResult?.reportDate),
+            mroVerificationDate: parseIsoDate(structuredResult?.mroVerificationDate),
+            labReportNumber: structuredResult?.labReportNumber ?? null,
+            labSpecimenId: structuredResult?.labSpecimenId ?? null,
+            labName: structuredResult?.labName ?? null,
+            analytes: structuredResult?.analytes ?? [],
+            specimenValidity: structuredResult?.specimenValidity ?? undefined,
+            mismatches: findings,
+            rawSummary: extractedData?.summary ?? null,
+          },
+        });
+
+        if (findings.length > 0) {
+          await prisma.statusLog.create({
+            data: {
+              caseId,
+              testOrderId: order.id,
+              oldStatus: newStatus,
+              newStatus: "needs_review",
+              changedBy: "admin",
+              note:
+                `Lab result cross-check flagged ${findings.length} mismatch${findings.length === 1 ? "" : "es"}: ` +
+                findings.map((f) => `${f.severity.toUpperCase()} ${f.type} — ${f.message}`).join(" | "),
+            },
+          });
+        }
       }
 
       // Reopen case if it was closed (results need review before re-closing)

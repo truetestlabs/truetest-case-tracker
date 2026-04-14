@@ -305,6 +305,7 @@ model TestOrder {
   statusLogs           StatusLog[]
   emailDrafts          EmailDraft[]
   randomSelection      RandomSelection?
+  labResults           LabResult[]
 
   @@index([caseId])
   @@index([testStatus])
@@ -328,9 +329,98 @@ model Document {
   courtOrders     CourtOrder[]
   testOrderId     String?
   testOrder       TestOrder?   @relation("TestOrderDocuments", fields: [testOrderId], references: [id])
+  labResults      LabResult[]
 
   @@index([caseId])
   @@index([documentType])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// LabResult — structured lab-reported data extracted from a result report
+// (PDF today, HL7 webhook later). One TestOrder can have multiple rows (e.g.
+// an amended report supersedes the prior one). Writing this as a dedicated
+// table rather than stuffing JSON into Document.extractedData gives us real
+// querying, date cross-checks, and a clean destination for the future USDTL
+// webhook parser.
+// ─────────────────────────────────────────────────────────────────────────
+model LabResult {
+  id                      String           @id @default(cuid())
+  testOrderId             String
+  testOrder               TestOrder        @relation(fields: [testOrderId], references: [id], onDelete: Cascade)
+
+  // Source document — nullable because the future HL7 webhook path may not
+  // immediately have a PDF attached (the ED segment extraction may lag).
+  documentId              String?
+  document                Document?        @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  // ── Lab-reported dates (what the report says, not what we recorded) ──
+  reportedCollectionDate  DateTime?        // collection date printed on the report
+  receivedAtLab           DateTime?        // when the lab received the specimen
+  reportDate              DateTime?        // when the lab finalized the report
+  mroVerificationDate     DateTime?        // if MRO reviewed, when they signed off
+
+  // When WE received the result (upload time for now, HL7 arrival later).
+  receivedByUs            DateTime         @default(now())
+
+  // ── Identifiers from the lab (to cross-check against our records) ──
+  labReportNumber         String?          // lab's unique report ID
+  labSpecimenId           String?          // what the lab has as the specimen ID
+  labName                 String?          // denormalized for query speed
+
+  // ── Overall verdict ──
+  overallStatus           LabResultStatus  @default(pending)
+
+  // ── Structured per-analyte data ──
+  // JSON shape: Array<{
+  //   name: string, cutoff: string?, value: string?,
+  //   result: "negative"|"positive"|"inconclusive", notes: string?
+  // }>
+  analytes                Json?
+
+  // ── Specimen validity (urine-specific; null for hair/blood/etc.) ──
+  // { creatinine?: string, ph?: string, status?: "valid"|"dilute"|"adulterated"|"invalid" }
+  specimenValidity        Json?
+
+  // ── Cross-check mismatches ──
+  // Populated at extraction time by comparing parsed fields against the
+  // TestOrder. Array of {
+  //   type: "collection_date"|"specimen_id"|"other",
+  //   severity: "info"|"warning"|"critical",
+  //   ourValue: string, theirValue: string, message: string
+  // }
+  // Empty array = everything matched. null = cross-check not run yet.
+  mismatches              Json?
+  mismatchesResolvedAt    DateTime?
+  mismatchesResolvedBy    String?          // user id, "auto", or null
+
+  // ── Raw AI text summary (human-readable narrative) ──
+  rawSummary              String?          @db.Text
+
+  // ── Extraction metadata (useful for debugging + future reprocessing) ──
+  source                  String           @default("pdf_upload") // "pdf_upload" | "hl7_webhook" | "manual"
+  parserVersion           String?          // prompt/extractor version that wrote this row
+  extractedAt             DateTime         @default(now())
+
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+
+  @@index([testOrderId])
+  @@index([overallStatus])
+  @@index([receivedByUs])
+  @@index([labReportNumber])
+}
+
+enum LabResultStatus {
+  pending       // extraction in progress or failed
+  negative      // all analytes below cutoff
+  positive      // one or more analytes above cutoff (and not downgraded by MRO)
+  dilute        // specimen flagged dilute
+  adulterated   // specimen flagged adulterated
+  invalid       // specimen validity failed outright
+  mixed         // partial — e.g. some analytes positive and MRO verified one negative
+  mro_pending   // awaiting MRO review
+  mro_verified_negative // MRO downgraded to negative
+  unknown       // parser couldn't determine status
 }
 
 model CourtOrder {
