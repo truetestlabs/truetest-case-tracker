@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { apiError } from "@/lib/clientErrors";
 
 type Doc = {
   id: string;
@@ -43,7 +44,7 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
           documentType: docType,
         }),
       });
-      if (!urlRes.ok) throw new Error("Failed to get upload URL");
+      if (!urlRes.ok) throw await apiError(urlRes, "Failed to get upload URL");
       const { uploadUrl, storagePath, headers } = await urlRes.json();
 
       // Step 2: Upload file directly to Supabase Storage (bypasses Vercel size limit)

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiError } from "@/lib/clientErrors";
 
 export default function UploadOrderPage() {
   const router = useRouter();
@@ -57,7 +58,7 @@ export default function UploadOrderPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ parsedData }),
       });
-      if (!res.ok) throw new Error("Failed to create case");
+      if (!res.ok) throw await apiError(res, "Failed to create case");
       const result = await res.json();
       router.push(`/cases/${result.caseId}`);
     } catch (err) {

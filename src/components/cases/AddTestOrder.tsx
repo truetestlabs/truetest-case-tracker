@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiError } from "@/lib/clientErrors";
 
 type CatalogItem = {
   id: string;
@@ -84,21 +85,7 @@ export function AddTestOrder({ caseId, onAdded }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) {
-        // Surface the actual server error so zod validation messages, auth
-        // failures, etc. are visible to the user instead of a generic "Failed"
-        let message = `Failed to create test order (HTTP ${res.status})`;
-        try {
-          const body = await res.json();
-          if (body?.error) message = body.error;
-          if (Array.isArray(body?.details) && body.details.length > 0) {
-            message += ": " + body.details.map((d: { path: string; message: string }) => `${d.path} ${d.message}`).join("; ");
-          }
-        } catch {
-          // non-JSON response — leave the generic message
-        }
-        throw new Error(message);
-      }
+      if (!res.ok) throw await apiError(res, "Failed to create test order");
       setOpen(false);
       setSelectedTest(null);
       setSearchTerm("");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiError } from "@/lib/clientErrors";
 
 type ContactData = {
   id: string; // caseContact id
@@ -57,7 +58,7 @@ export function EditContactModal({ caseId, caseContact, onSaved, onClose }: Prop
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to update");
+      if (!res.ok) throw await apiError(res, "Failed to update contact");
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiError } from "@/lib/clientErrors";
 
 type CaseInfo = {
   id: string;
@@ -54,7 +55,7 @@ export function EditCaseModal({ caseData, onSaved, onClose }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to update case");
+      if (!res.ok) throw await apiError(res, "Failed to update case");
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

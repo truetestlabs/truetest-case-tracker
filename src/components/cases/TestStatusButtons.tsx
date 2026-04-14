@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { TEST_STATUS_FLOW, TEST_STATUS_CONFIG } from "@/lib/case-utils";
+import { apiError } from "@/lib/clientErrors";
 
 type Props = {
   caseId: string;
@@ -44,7 +45,7 @@ export function TestStatusButtons({ caseId, testOrderId, currentStatus, testDesc
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ testOrderId, testStatus: newStatus }),
       });
-      if (!res.ok) throw new Error("Failed to update status");
+      if (!res.ok) throw await apiError(res, "Failed to update status");
       onUpdated();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to update");

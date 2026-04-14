@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { apiError } from "@/lib/clientErrors";
 
 type Document = {
   id: string;
@@ -71,7 +72,7 @@ function DocumentUploadSlot({
           documentType: effectiveDocType,
         }),
       });
-      if (!urlRes.ok) throw new Error("Failed to get upload URL");
+      if (!urlRes.ok) throw await apiError(urlRes, "Failed to get upload URL");
       const { uploadUrl, storagePath, headers } = await urlRes.json();
 
       // Step 2: Upload file directly to Supabase Storage (no size limit)

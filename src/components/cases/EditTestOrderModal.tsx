@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiError } from "@/lib/clientErrors";
 
 type TestOrderData = {
   id: string;
@@ -101,7 +102,7 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to update test order");
+      if (!res.ok) throw await apiError(res, "Failed to update test order");
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -277,7 +278,7 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
                 setLoading(true);
                 try {
                   const res = await fetch(`/api/cases/${caseId}/test-orders?testOrderId=${testOrder.id}`, { method: "DELETE" });
-                  if (!res.ok) throw new Error("Failed to delete");
+                  if (!res.ok) throw await apiError(res, "Failed to delete test order");
                   onSaved();
                 } catch {
                   setError("Failed to delete test order");
