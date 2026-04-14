@@ -8,6 +8,35 @@ import { uploadFile } from "@/lib/storage";
 // Allow longer execution for AI summary generation on upload
 export const maxDuration = 60;
 
+/**
+ * Parse a "M.D.YY" / "MM.DD.YYYY" / "M/D/YY" string (as returned by
+ * parseCocPdf) into a JavaScript Date. Returns null on bad input, impossible
+ * dates, or wildly out-of-range values (>30 days future or >2 years old —
+ * those are almost certainly OCR errors, not real collection dates).
+ *
+ * Uses noon-local time to dodge timezone edge cases around midnight.
+ */
+function parseCocDateString(s: string | undefined | null): Date | null {
+  if (!s) return null;
+  const match = s.trim().match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
+  if (!match) return null;
+  const [, mStr, dStr, yStr] = match;
+  let year = parseInt(yStr, 10);
+  if (year < 100) year = 2000 + year; // "26" → 2026. Good enough until 2100.
+  const month = parseInt(mStr, 10) - 1; // JS months are 0-indexed
+  const day = parseInt(dStr, 10);
+  if (month < 0 || month > 11 || day < 1 || day > 31) return null;
+  const date = new Date(year, month, day, 12, 0, 0);
+  if (Number.isNaN(date.getTime())) return null;
+  // Sanity bounds: if the parser reads a garbage date, fall back to upload
+  // time rather than writing a ridiculous value to the DB.
+  const now = Date.now();
+  const twoYearsAgo = now - 2 * 365 * 24 * 60 * 60 * 1000;
+  const thirtyDaysAhead = now + 30 * 24 * 60 * 60 * 1000;
+  if (date.getTime() < twoYearsAgo || date.getTime() > thirtyDaysAhead) return null;
+  return date;
+}
+
 /** Extract specimen ID and collection date from a USDTL chain of custody PDF.
  *  First tries text extraction (works for typed PDFs).
  *  Falls back to Claude Vision for scanned images. */
@@ -180,16 +209,25 @@ export async function POST(
       ? new Date(latestOrder.collectionDate).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" }).replace(/\//g, ".")
       : new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" }).replace(/\//g, ".");
 
+    // Parse the COC PDF ONCE, up front. Both the filename builder below AND
+    // the test-order auto-advance block further down need the extracted
+    // collection date + control number, and parsing is expensive (text
+    // extraction + possible Claude Vision fallback).
+    const parsedCoc =
+      documentType === "chain_of_custody" && ext.toLowerCase() === ".pdf"
+        ? await parseCocPdf(buffer)
+        : {};
+    const parsedCocDate = parseCocDateString(parsedCoc.collectionDate);
+
     // Build smart file name based on document type
     let displayName = originalFileName;
     if (documentType === "result_report" && donor) {
       displayName = `${donor.firstName} ${donor.lastName} Results ${collectionDate}${ext}`;
     } else if (documentType === "chain_of_custody") {
-      const parsed = ext.toLowerCase() === ".pdf" ? await parseCocPdf(buffer) : {};
-      const specimenId = manualSpecimenId || parsed.controlNumber || latestOrder?.labAccessionNumber || "";
+      const specimenId = manualSpecimenId || parsedCoc.controlNumber || latestOrder?.labAccessionNumber || "";
       const donorFirst = donor?.firstName || "Unknown";
       const donorLast = donor?.lastName || "Donor";
-      const cocDate = parsed.collectionDate || collectionDate;
+      const cocDate = parsedCoc.collectionDate || collectionDate;
       displayName = specimenId
         ? `${specimenId} ${donorFirst} ${donorLast} ${cocDate}${ext}`
         : `${donorFirst} ${donorLast} COC ${cocDate}${ext}`;
@@ -238,12 +276,17 @@ export async function POST(
         },
       });
 
+      // Prefer the date printed on the COC; fall back to upload time only if
+      // parsing failed or the parsed value was outside the sanity bounds.
+      const effectiveCollectionDate = parsedCocDate ?? new Date();
+      const usedParsedDate = parsedCocDate !== null;
+
       for (const order of testOrders) {
         await prisma.testOrder.update({
           where: { id: order.id },
           data: {
             testStatus: "specimen_collected",
-            collectionDate: new Date(),
+            collectionDate: effectiveCollectionDate,
             ...(manualSpecimenId && !order.specimenId ? { specimenId: manualSpecimenId } : {}),
           },
         });
@@ -254,7 +297,9 @@ export async function POST(
             oldStatus: order.testStatus,
             newStatus: "specimen_collected",
             changedBy: "admin",
-            note: "Auto-advanced: chain of custody uploaded",
+            note: usedParsedDate
+              ? `Auto-advanced: chain of custody uploaded. Collection date ${effectiveCollectionDate.toLocaleDateString("en-US")} extracted from COC.`
+              : "Auto-advanced: chain of custody uploaded. Collection date set to upload time (could not parse date from PDF).",
           },
         });
       }
