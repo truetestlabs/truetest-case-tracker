@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { generateCaseNumber } from "@/lib/case-utils";
 import { SpecimenType, Lab } from "@prisma/client";
 import type { TestStatus } from "@prisma/client";
+import { requireAuth } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
+import { createCaseSchema, formatZodError } from "@/lib/validation/schemas";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -44,8 +47,26 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Defense-in-depth auth (middleware already enforces this for protected routes)
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+  const user = auth.user;
+
+  // Validate body — keep loose (the legacy shape is wide) but at minimum
+  // checks donor sub-object, types, and string lengths.
+  let raw: unknown;
   try {
-    const body = await request.json();
+    raw = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const parsed = createCaseSchema.passthrough().safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(formatZodError(parsed.error), { status: 400 });
+  }
+  const body = parsed.data as Record<string, any>;
+
+  try {
 
     // One case per donor: check ALL cases (active and closed)
     if (body.donor?.firstName && body.donor?.lastName) {
@@ -164,7 +185,7 @@ export async function POST(request: NextRequest) {
         isMonitored: body.isMonitored || false,
         notes: body.notes || null,
         donorId,
-        createdBy: "admin", // TODO: replace with actual user
+        createdBy: user.email || user.name || "admin",
       },
       include: { donor: true },
     });
@@ -227,6 +248,14 @@ export async function POST(request: NextRequest) {
         note: "Case created via intake form",
       },
     });
+
+    logAudit({
+      userId: user.id,
+      action: "case.create",
+      resource: "case",
+      resourceId: newCase.id,
+      metadata: { caseNumber: newCase.caseNumber, caseType: newCase.caseType },
+    }).catch((e) => console.error("[cases] audit failed:", e));
 
     return NextResponse.json(newCase, { status: 201 });
   } catch (error) {

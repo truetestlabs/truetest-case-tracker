@@ -56,7 +56,7 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
 
   useEffect(() => {
     if (changingTest && catalog.length === 0) {
-      fetch("/api/test-catalog").then((r) => r.json()).then(setCatalog).catch(() => {});
+      fetch("/api/test-catalog").then((r) => r.json()).then(setCatalog).catch((e) => console.error("[EditTestOrderModal.tsx] background fetch failed:", e));
     }
   }, [changingTest]);
 

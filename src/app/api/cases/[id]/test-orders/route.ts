@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendResultsReleasedEmail, sendNoShowEmail } from "@/lib/email";
 import { deleteCalendarEvent } from "@/lib/gcal";
+import { requireAuth } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
+import { createTestOrderSchema, formatZodError } from "@/lib/validation/schemas";
 
 export async function POST(
   request: NextRequest,
@@ -9,8 +12,23 @@ export async function POST(
 ) {
   const { id: caseId } = await params;
 
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+  const user = auth.user;
+
+  let raw: unknown;
   try {
-    const body = await request.json();
+    raw = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const parsed = createTestOrderSchema.passthrough().safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(formatZodError(parsed.error), { status: 400 });
+  }
+  const body = parsed.data as Record<string, any>;
+
+  try {
 
     // Look up catalog item for lab cost (internal only)
     let labCost = null;
@@ -48,10 +66,18 @@ export async function POST(
         testOrderId: testOrder.id,
         oldStatus: "—",
         newStatus: testOrder.testStatus,
-        changedBy: "admin",
+        changedBy: user.email || user.name || "admin",
         note: `Test ordered: ${body.testDescription}`,
       },
     });
+
+    logAudit({
+      userId: user.id,
+      action: "test_order.create",
+      resource: "test_order",
+      resourceId: testOrder.id,
+      metadata: { caseId, specimenType: testOrder.specimenType, lab: testOrder.lab },
+    }).catch((e) => console.error("[test-orders] audit failed:", e));
 
     // Update case to active if it's still in intake
     const caseData = await prisma.case.findUnique({ where: { id: caseId } });

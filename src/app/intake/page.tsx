@@ -106,7 +106,7 @@ export default function QuickIntakePage() {
     fetch("/api/test-catalog")
       .then((r) => r.json())
       .then((data: TestOption[]) => setTests(data))
-      .catch(() => {});
+      .catch((e) => console.error("[page.tsx] background fetch failed:", e));
   }, []);
 
   // Re-focus first name when form resets (handles iOS Safari autoFocus blocking)

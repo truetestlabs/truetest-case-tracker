@@ -28,7 +28,7 @@ export default function IntakesPage() {
     fetch(`/api/kiosk/intakes${filter ? `?status=${filter}` : ""}`)
       .then((r) => r.json())
       .then((data) => { setDrafts(data.drafts || []); setPendingCount(data.pendingCount || 0); })
-      .catch(() => {});
+      .catch((e) => console.error("[page.tsx] background fetch failed:", e));
   }, [filter]);
 
   return (

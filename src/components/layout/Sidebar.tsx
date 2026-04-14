@@ -95,7 +95,7 @@ export function Sidebar() {
     fetch("/api/reminders")
       .then((r) => r.json())
       .then((data) => { setReminders(data.reminders || []); setReminderCount(data.count || 0); })
-      .catch(() => {});
+      .catch((e) => console.error("[Sidebar.tsx] background fetch failed:", e));
   }, []);
 
   useEffect(() => {

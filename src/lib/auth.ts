@@ -57,7 +57,7 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
       await prisma.user.update({
         where: { id: user.id },
         data: { lastLoginAt: new Date() },
-      }).catch(() => {}); // Non-blocking
+      }).catch((e) => console.error("[auth.ts] background fetch failed:", e)); // Non-blocking
     }
 
     return {

@@ -40,7 +40,7 @@ export function CreateScheduleModal({ caseId, onSaved, onClose }: Props) {
     fetch("/api/test-catalog")
       .then((r) => r.json())
       .then((data) => setCatalog(data))
-      .catch(() => {});
+      .catch((e) => console.error("[CreateScheduleModal.tsx] background fetch failed:", e));
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {

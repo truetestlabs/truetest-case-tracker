@@ -363,7 +363,7 @@ export default function KioskPage() {
                         lastName: form.lastName,
                         communicationConsent: true,
                       }),
-                    }).catch(() => {});
+                    }).catch((e) => console.error("[page.tsx] background fetch failed:", e));
                     // Fast reset — 2.5 seconds is enough for the user to see the confirmation
                     setTimeout(() => {
                       setForm(INITIAL_FORM);
@@ -391,7 +391,7 @@ export default function KioskPage() {
                         lastName: form.lastName,
                         communicationConsent: false,
                       }),
-                    }).catch(() => {});
+                    }).catch((e) => console.error("[page.tsx] background fetch failed:", e));
                     setTimeout(() => {
                       setForm(INITIAL_FORM);
                       setStep(1);

@@ -137,7 +137,7 @@ export default function CaseDetailPage() {
     fetch(`/api/cases/${caseId}/notifications`)
       .then((r) => r.json())
       .then(setNotifications)
-      .catch(() => {});
+      .catch((e) => console.error("[case page] load notifications failed:", e));
   }, []);
 
   function loadCase() {

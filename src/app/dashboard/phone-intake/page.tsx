@@ -113,7 +113,7 @@ export default function PhoneIntakePage() {
   // Warm the donor-search endpoint on mount so the first real search
   // doesn't pay the Supabase cold-connection tax (~2s from idle).
   useEffect(() => {
-    fetch("/api/contacts?type=donor&limit=1&q=__warmup__").catch(() => {});
+    fetch("/api/contacts?type=donor&limit=1&q=__warmup__").catch((e) => console.error("[page.tsx] background fetch failed:", e));
   }, []);
 
   // Month calendar + slot picker
@@ -313,7 +313,7 @@ export default function PhoneIntakePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ appointmentId }),
-      }).catch(() => {});
+      }).catch((e) => console.error("[page.tsx] background fetch failed:", e));
 
       // 5. Success state
       setResult({
@@ -339,7 +339,7 @@ export default function PhoneIntakePage() {
     fetch(`/api/appointments/availability?date=${fmtDateKey(selectedDay)}`)
       .then((r) => r.json())
       .then((d) => setSlots(d.slots || []))
-      .catch(() => {});
+      .catch((e) => console.error("[page.tsx] background fetch failed:", e));
   }
 
   // Success screen

@@ -35,7 +35,7 @@ export function AddTestOrder({ caseId, onAdded }: Props) {
       fetch("/api/test-catalog")
         .then((res) => res.json())
         .then((data) => setCatalog(data))
-        .catch(() => {});
+        .catch((e) => console.error("[AddTestOrder.tsx] background fetch failed:", e));
     }
   }, [open]);
 

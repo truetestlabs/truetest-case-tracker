@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
+import { createContactSchema, formatZodError } from "@/lib/validation/schemas";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -42,8 +45,23 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+  const user = auth.user;
+
+  let raw: unknown;
   try {
-    const body = await request.json();
+    raw = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const parsed = createContactSchema.passthrough().safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(formatZodError(parsed.error), { status: 400 });
+  }
+  const body = parsed.data as Record<string, any>;
+
+  try {
     const contact = await prisma.contact.create({
       data: {
         contactType: body.contactType,
@@ -58,6 +76,15 @@ export async function POST(request: NextRequest) {
         notes: body.notes || null,
       },
     });
+
+    logAudit({
+      userId: user.id,
+      action: "contact.create",
+      resource: "contact",
+      resourceId: contact.id,
+      metadata: { contactType: contact.contactType },
+    }).catch((e) => console.error("[contacts] audit failed:", e));
+
     return NextResponse.json(contact, { status: 201 });
   } catch (error) {
     console.error("Error creating contact:", error);

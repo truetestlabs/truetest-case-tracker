@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deleteCalendarEvent } from "@/lib/gcal";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, requireAuth } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 
 export async function GET(
@@ -101,8 +101,19 @@ export async function PATCH(
 ) {
   const { id } = await params;
 
+  // Defense-in-depth auth
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+  const user = auth.user;
+
+  let body: any;
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  try {
     const oldCase = await prisma.case.findUnique({ where: { id } });
     if (!oldCase) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
@@ -144,11 +155,26 @@ export async function PATCH(
           caseId: id,
           oldStatus: oldCase.caseStatus,
           newStatus: body.caseStatus,
-          changedBy: "admin",
+          changedBy: user.email || user.name || "admin",
           note: body.statusNote || null,
         },
       });
     }
+
+    logAudit({
+      userId: user.id,
+      action: "case.update",
+      resource: "case",
+      resourceId: id,
+      metadata: {
+        caseNumber: oldCase.caseNumber,
+        changedFields: Object.keys(updateData),
+        statusChange:
+          body.caseStatus && body.caseStatus !== oldCase.caseStatus
+            ? { from: oldCase.caseStatus, to: body.caseStatus }
+            : undefined,
+      },
+    }).catch((e) => console.error("[cases/id] audit failed:", e));
 
     return NextResponse.json(updated);
   } catch (error) {

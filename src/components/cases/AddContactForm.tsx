@@ -49,7 +49,7 @@ export function AddContactForm({ caseId, onAdded }: Props) {
           setSuggestions(data.slice(0, 8));
           setShowSuggestions(true);
         })
-        .catch(() => {});
+        .catch((e) => console.error("[AddContactForm.tsx] background fetch failed:", e));
     }, 300);
 
     return () => clearTimeout(timer);
