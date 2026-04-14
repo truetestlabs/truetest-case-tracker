@@ -12,8 +12,23 @@ import { z } from "zod";
 
 const trimmedString = (max: number) =>
   z.string().trim().min(1).max(max);
+
+// Accept undefined, null, or empty string → normalize to undefined.
+// Forms sending `formField || null` for empty inputs shouldn't 400 a whole
+// request over an optional field.
 const optionalTrimmed = (max: number) =>
-  z.string().trim().max(max).optional().or(z.literal("").transform(() => undefined));
+  z.preprocess(
+    (v) => (v == null || v === "" ? undefined : v),
+    z.string().trim().max(max).optional()
+  );
+
+// Same idea for optional longform body text (notes, descriptions, etc.)
+const optionalText = (max: number) =>
+  z.preprocess(
+    (v) => (v == null || v === "" ? undefined : v),
+    z.string().max(max).optional()
+  );
+
 const cuid = z.string().min(20).max(40);
 const email = z.string().email().max(254);
 const phone = z.string().min(7).max(32);
@@ -47,14 +62,14 @@ export const createCaseSchema = z.object({
     .object({
       firstName: trimmedString(80),
       lastName: trimmedString(80),
-      email: email.optional(),
-      phone: phone.optional(),
+      email: z.preprocess((v) => (v == null || v === "" ? undefined : v), email.optional()),
+      phone: z.preprocess((v) => (v == null || v === "" ? undefined : v), phone.optional()),
       dob: optionalTrimmed(32),
     })
     .optional(),
   hasCourtOrder: z.boolean().optional(),
   isMonitored: z.boolean().optional(),
-  notes: z.string().max(10_000).optional(),
+  notes: optionalText(10_000),
   contacts: z.array(z.any()).optional(),
   testOrders: z.array(z.any()).optional(),
 });
@@ -87,14 +102,14 @@ export const createContactSchema = z.object({
   ]),
   firstName: trimmedString(80),
   lastName: trimmedString(80),
-  email: email.optional().nullable(),
-  phone: phone.optional().nullable(),
+  email: z.preprocess((v) => (v == null || v === "" ? undefined : v), email.optional()),
+  phone: z.preprocess((v) => (v == null || v === "" ? undefined : v), phone.optional()),
   preferredContact: z.enum(["email", "phone", "text"]).optional(),
   represents: z
     .enum(["petitioner", "respondent", "child", "neutral", "na"])
     .optional(),
   organization: optionalTrimmed(160),
-  notes: z.string().max(5000).optional().nullable(),
+  notes: optionalText(5000),
 });
 
 // ── /api/email-drafts (POST) ──────────────────────────────────────────────
@@ -143,7 +158,7 @@ export const createTestOrderSchema = z.object({
   // TestOrder.schedulingType in Prisma — check schema.prisma if you add more
   schedulingType: z.string().max(32).optional(),
   labAccessionNumber: optionalTrimmed(64),
-  notes: z.string().max(5000).optional(),
+  notes: optionalText(5000),
 });
 
 // ── /api/public/order (POST) ──────────────────────────────────────────────
