@@ -32,7 +32,8 @@
     "react-dom": "^19.1.0",
     "resend": "^6.10.0",
     "twilio": "^5.13.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

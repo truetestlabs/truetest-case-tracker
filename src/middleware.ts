@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { rateLimit, getClientIp } from "@/lib/rateLimit";
 
 /**
  * Next.js middleware — runs before every request.
@@ -8,9 +9,16 @@ import { createServerClient } from "@supabase/ssr";
  * route is protected, redirects to /login. Public routes (kiosk,
  * intake, checkin, public API) pass through without auth.
  *
- * Also refreshes the auth session cookie on every request so it
- * stays alive while the user is active.
+ * Also rate-limits public API routes (anything reachable without auth)
+ * to brake drive-by abuse and runaway client loops, and refreshes the
+ * auth session cookie on every request so it stays alive.
  */
+
+// Public routes that get an IP-based rate limit (60 req / minute / IP).
+// We deliberately limit only API routes, not the public HTML pages — page
+// hits go through Vercel's CDN and shouldn't be throttled.
+const PUBLIC_API_PREFIXES = ["/api/public", "/api/kiosk", "/api/checkin"];
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -41,6 +49,27 @@ export async function middleware(request: NextRequest) {
     pathname.endsWith(".json") && pathname.startsWith("/manifest")
   ) {
     return NextResponse.next();
+  }
+
+  // Rate-limit public API routes BEFORE the auth check — auth is irrelevant
+  // for these and we don't want to burn the Supabase getUser() call on flood
+  // traffic. 60 req/min/IP is generous for the kiosk/intake flows and tight
+  // enough to brake any real abuse.
+  if (PUBLIC_API_PREFIXES.some((p) => pathname.startsWith(p))) {
+    const ip = getClientIp(request.headers);
+    const rl = rateLimit(`mw:${pathname}:${ip}`, 60, 60_000);
+    if (!rl.ok) {
+      return new NextResponse(
+        JSON.stringify({ error: "Too many requests" }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": "60",
+          },
+        }
+      );
+    }
   }
 
   // Create a response that we can modify (to set refreshed cookies)

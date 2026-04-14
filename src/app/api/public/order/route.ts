@@ -3,16 +3,39 @@ import { prisma } from "@/lib/prisma";
 import { generateCaseNumber } from "@/lib/case-utils";
 import { resolveFormTests, mapReasonToCaseType } from "@/lib/testMapping";
 import type { SpecimenType, Lab } from "@prisma/client";
+import { publicOrderSchema, formatZodError } from "@/lib/validation/schemas";
+import { verifyHmac, parseAllowlist } from "@/lib/hmac";
+import { rateLimit, getClientIp } from "@/lib/rateLimit";
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": process.env.CORS_ORIGIN || "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
+// ── CORS allowlist ────────────────────────────────────────────────────────
+// We refuse to fall back to "*" — a missing env var means the public route is
+// effectively closed until configured, which is the safe default.
+const ALLOWED_ORIGINS = parseAllowlist(process.env.PUBLIC_ORDER_ALLOWED_ORIGINS);
+// Always allow localhost during dev so we can test against the local marketing
+// site. Strip these from the prod env var if you don't want them.
+if (process.env.NODE_ENV !== "production") {
+  ALLOWED_ORIGINS.add("http://localhost:3000");
+  ALLOWED_ORIGINS.add("http://localhost:5173");
+  ALLOWED_ORIGINS.add("http://127.0.0.1:3000");
+}
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const allowed = origin && ALLOWED_ORIGINS.has(origin) ? origin : "";
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Vary": "Origin",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-TrueTest-Signature",
+  };
+}
 
 /** Handle CORS preflight */
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  if (!origin || !ALLOWED_ORIGINS.has(origin)) {
+    return new NextResponse(null, { status: 403 });
+  }
+  return new NextResponse(null, { status: 204, headers: corsHeaders(origin) });
 }
 
 /**
@@ -25,18 +48,64 @@ export async function OPTIONS() {
  * the form still shows success since EmailJS worked.
  */
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
+  const origin = request.headers.get("origin");
+  const headers = corsHeaders(origin);
 
-    // ── Validate minimum required fields ──
-    const donorFirst = body.donorFirst?.trim();
-    const donorLast = body.donorLast?.trim();
-    if (!donorFirst || !donorLast) {
-      return NextResponse.json(
-        { error: "Donor first and last name are required" },
-        { status: 400, headers: CORS_HEADERS }
-      );
-    }
+  // ── 1. CORS / origin allowlist ──
+  if (!origin || !ALLOWED_ORIGINS.has(origin)) {
+    console.warn(`[public/order] rejected: origin=${origin || "<none>"} not in allowlist`);
+    return NextResponse.json(
+      { error: "Origin not allowed" },
+      { status: 403, headers }
+    );
+  }
+
+  // ── 2. Rate limit by IP (30 / minute) ──
+  const ip = getClientIp(request.headers);
+  const rl = rateLimit(`public-order:${ip}`, 30, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: { ...headers, "Retry-After": "60" } }
+    );
+  }
+
+  // ── 3. HMAC signature verification ──
+  // Read the raw body once so we can both verify and parse it.
+  const rawBody = await request.text();
+  const signature = request.headers.get("x-truetest-signature");
+  const secret = process.env.PUBLIC_ORDER_HMAC_SECRET;
+  if (!secret) {
+    console.error("[public/order] PUBLIC_ORDER_HMAC_SECRET is not set; refusing request");
+    return NextResponse.json(
+      { error: "Server misconfigured" },
+      { status: 503, headers }
+    );
+  }
+  if (!verifyHmac(secret, rawBody, signature)) {
+    console.warn(`[public/order] rejected: bad/missing HMAC signature from ${ip}`);
+    return NextResponse.json(
+      { error: "Invalid signature" },
+      { status: 401, headers }
+    );
+  }
+
+  // ── 4. Parse + zod-validate the body ──
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400, headers });
+  }
+  const parsed = publicOrderSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    return NextResponse.json(formatZodError(parsed.error), { status: 400, headers });
+  }
+  const body = parsed.data;
+
+  try {
+    const donorFirst = body.donorFirst.trim();
+    const donorLast = body.donorLast.trim();
 
     // ── Map reason → caseType ──
     const caseType = mapReasonToCaseType(body.reason || "court_ordered");
@@ -83,7 +152,7 @@ export async function POST(request: NextRequest) {
     if (body.reason) noteParts.push(`Reason: ${body.reason}`);
     if (body.zipLoc) noteParts.push(`Location ZIP: ${body.zipLoc}`);
     if (body.stateId) noteParts.push(`State ID: ${body.stateId}`);
-    if (body.addOns?.length > 0) noteParts.push(`Add-ons requested: ${body.addOns.join(", ")}`);
+    if (body.addOns && body.addOns.length > 0) noteParts.push(`Add-ons requested: ${body.addOns.join(", ")}`);
     if (body.customTest) noteParts.push(`Custom test: ${body.customTest}`);
     if (body.specialInstructions && body.specialInstructions !== "none") {
       noteParts.push(`Special instructions: ${body.specialInstructions}`);
@@ -227,13 +296,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       { caseId: caseId, caseNumber },
-      { status: 201, headers: CORS_HEADERS }
+      { status: 201, headers }
     );
   } catch (error) {
     console.error("[Order] Website order error:", error);
     return NextResponse.json(
       { error: "Failed to create case" },
-      { status: 500, headers: CORS_HEADERS }
+      { status: 500, headers }
     );
   }
 }

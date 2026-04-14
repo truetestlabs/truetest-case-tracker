@@ -3,20 +3,45 @@
  * Uses the Supabase REST API directly (works on Vercel serverless).
  */
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ydziufgdiqmikkmdxafx.supabase.co";
-// Supabase Storage requires a JWT key (not the publishable key)
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-  || process.env.SUPABASE_ANON_JWT
-  || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlkeml1ZmdkaXFtaWtrbWR4YWZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTgxNTEsImV4cCI6MjA5MDYzNDE1MX0.7O7HB6mxS0SqjoFZRTtotichjoplHwe2ep8nntL3yfs";
+// Required env vars — fail loudly the first time they're actually used.
+// We deliberately do NOT fall back to the public anon JWT or hardcode a project URL:
+// silent fallbacks let prod misconfiguration succeed in the wrong way (writes that
+// land in an unexpected project, or fail RLS in a way nobody notices). Better to crash.
+//
+// We resolve these LAZILY (not at module load) so Next.js's "collect page data"
+// build phase can import this module without env vars set. Production runtime
+// still throws on the first request.
+function requireEnv(name: string, hint?: string): string {
+  const v = process.env[name];
+  if (!v) {
+    throw new Error(
+      `[storage] ${name} is not set. Configure it in .env.local (dev) or Vercel env vars (prod).${hint ? " " + hint : ""}`
+    );
+  }
+  return v;
+}
+
+function getSupabaseUrl(): string {
+  return requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+}
+// Supabase Storage requires a JWT key (not the publishable key) with write permission
+// to the documents bucket — the service role key is the right one in server-side code.
+function getSupabaseKey(): string {
+  return requireEnv(
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "Do NOT fall back to the anon key — it cannot write to the documents bucket under RLS."
+  );
+}
+
 const BUCKET = "documents";
 
 function storageUrl(filePath: string): string {
   const encoded = filePath.split("/").map(encodeURIComponent).join("/");
-  return `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${encoded}`;
+  return `${getSupabaseUrl()}/storage/v1/object/${BUCKET}/${encoded}`;
 }
 
 function headers(contentType?: string): Record<string, string> {
-  const key = SUPABASE_KEY;
+  const key = getSupabaseKey();
   const h: Record<string, string> = {
     Authorization: `Bearer ${key}`,
     apikey: key,
@@ -48,7 +73,7 @@ export async function uploadFile(
 
   if (!res.ok) {
     const err = await res.text();
-    console.error("[Storage] Upload failed:", res.status, err, "URL:", SUPABASE_URL, "Key present:", !!SUPABASE_KEY, "Key length:", SUPABASE_KEY.length);
+    console.error("[Storage] Upload failed:", res.status, err);
     throw new Error(`Storage upload failed: ${res.status} — ${err}`);
   }
 

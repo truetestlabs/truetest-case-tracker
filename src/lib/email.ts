@@ -8,7 +8,9 @@ function getResend() {
 }
 
 const FROM_EMAIL = process.env.FROM_EMAIL || "TrueTest Labs <noreply@truetestlabs.com>";
-const REPLY_TO = process.env.REPLY_TO_EMAIL || "Mgammel@truetestlabs.com";
+// Reply-To falls back to the shared support mailbox, NOT a personal inbox, so that a
+// missing env var in any environment never accidentally exposes a private email.
+const REPLY_TO = process.env.REPLY_TO_EMAIL || "support@truetestlabs.com";
 const OFFICE_PHONE = "(847) 258-3966";
 const OFFICE_ADDRESS = "2256 Landmeier Rd Ste A, Elk Grove Village, IL 60007";
 
