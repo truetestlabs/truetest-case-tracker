@@ -111,6 +111,19 @@ export const createEmailDraftSchema = z.object({
 
 // ── /api/cases/[id]/test-orders (POST) ────────────────────────────────────
 
+// Enum values must match the Prisma Lab enum in prisma/schema.prisma exactly.
+// When a new lab is added there, also add it here or requests with that lab
+// value will be rejected with a 400.
+const labEnum = z.enum([
+  "usdtl",
+  "crl_quest",
+  "quest",
+  "expertox",
+  "nms",
+  "medipro",
+  "truetest_inhouse",
+]);
+
 export const createTestOrderSchema = z.object({
   testCatalogId: cuid.optional().nullable(),
   testDescription: trimmedString(255),
@@ -125,9 +138,10 @@ export const createTestOrderSchema = z.object({
     "unknown_substance",
     "semen",
   ]),
-  lab: z.enum(["usdtl", "other"]).optional(),
+  lab: labEnum.optional(),
   collectionType: z.enum(["observed", "unobserved"]).optional(),
-  schedulingType: z.enum(["scheduled", "random", "walk_in"]).optional(),
+  // TestOrder.schedulingType in Prisma — check schema.prisma if you add more
+  schedulingType: z.string().max(32).optional(),
   labAccessionNumber: optionalTrimmed(64),
   notes: z.string().max(5000).optional(),
 });
