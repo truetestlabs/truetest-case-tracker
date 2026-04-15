@@ -115,11 +115,14 @@ export default function MonitoredCasesPage() {
                               : undefined;
                             return <StatusBadge status={test.testStatus} type="test" label={testLabel} />;
                           })()}
-                          {c.testOrders.filter((t) => t.testStatus !== "closed")[0].appointmentDate && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              {new Date(c.testOrders[0].appointmentDate).toLocaleDateString()} {new Date(c.testOrders[0].appointmentDate).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                            </p>
-                          )}
+                          {(() => {
+                            const appt = c.testOrders.filter((t) => t.testStatus !== "closed")[0]?.appointmentDate;
+                            return appt ? (
+                              <p className="text-xs text-gray-500 mt-1">
+                                {new Date(appt).toLocaleDateString()} {new Date(appt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                              </p>
+                            ) : null;
+                          })()}
                         </div>
                       ) : (
                         <span className="text-xs text-gray-400">No tests</span>
