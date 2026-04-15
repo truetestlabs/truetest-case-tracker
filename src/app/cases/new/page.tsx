@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { AccountSelect } from "@/components/accounts/AccountSelect";
 
 type DuplicateCase = {
   id: string;
@@ -17,6 +18,7 @@ export default function NewCasePage() {
   const [error, setError] = useState("");
   const [duplicates, setDuplicates] = useState<DuplicateCase[]>([]);
   const [dupChecked, setDupChecked] = useState(false);
+  const [referringAccountId, setReferringAccountId] = useState<string | null>(null);
   // bypassDup removed — one case per donor, no bypass allowed
 
   // Check for existing cases with same donor name
@@ -76,6 +78,7 @@ export default function NewCasePage() {
       county: form.get("county") || null,
       judgeName: form.get("judgeName") || null,
       notes: form.get("notes") || null,
+      referringAccountId: referringAccountId || null,
       // confirmDuplicate removed — one case per donor, no bypass
       donor: {
         firstName: form.get("donorFirstName"),
@@ -171,6 +174,16 @@ export default function NewCasePage() {
                 <span className="text-xs text-gray-400">— repeated testing over time with random scheduling</span>
               </label>
             </div>
+          </div>
+        </section>
+
+        {/* Referring Account */}
+        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Referring Account</h2>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Account <span className="text-gray-400 font-normal">(optional)</span></label>
+            <AccountSelect value={referringAccountId} onChange={setReferringAccountId} placeholder="No referring account" />
+            <p className="text-xs text-gray-400 mt-1">Law firm or organization referring this case. Create a new account inline if needed.</p>
           </div>
         </section>
 

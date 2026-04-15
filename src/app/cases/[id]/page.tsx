@@ -30,6 +30,8 @@ type CaseData = {
   isMonitored: boolean;
   notes: string | null;
   createdAt: string;
+  referringAccountId: string | null;
+  referringAccount: { id: string; name: string; shortCode: string | null } | null;
   donor: { firstName: string; lastName: string; email: string | null; phone: string | null } | null;
   caseContacts: Array<{
     id: string;
@@ -203,6 +205,12 @@ export default function CaseDetailPage() {
                 caseData.county,
                 caseData.judgeName && `Judge ${caseData.judgeName}`,
               ].filter(Boolean).join(" · ")}
+            </p>
+          )}
+          {caseData.referringAccount && (
+            <p className="text-xs text-gray-500 mt-1">
+              Account: <span className="font-medium text-gray-700">{caseData.referringAccount.name}</span>
+              {caseData.referringAccount.shortCode && <span className="text-gray-400"> ({caseData.referringAccount.shortCode})</span>}
             </p>
           )}
         </div>

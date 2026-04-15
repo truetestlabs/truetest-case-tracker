@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { apiError } from "@/lib/clientErrors";
+import { AccountSelect } from "@/components/accounts/AccountSelect";
 
 type CaseInfo = {
   id: string;
@@ -13,6 +14,7 @@ type CaseInfo = {
   hasCourtOrder: boolean;
   isMonitored: boolean;
   notes: string | null;
+  referringAccountId: string | null;
   donor: { firstName: string; lastName: string; email: string | null; phone: string | null } | null;
 };
 
@@ -25,6 +27,7 @@ type Props = {
 export function EditCaseModal({ caseData, onSaved, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [referringAccountId, setReferringAccountId] = useState<string | null>(caseData.referringAccountId);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -41,6 +44,7 @@ export function EditCaseModal({ caseData, onSaved, onClose }: Props) {
       county: form.get("county") || null,
       judgeName: form.get("judgeName") || null,
       notes: form.get("notes") || null,
+      referringAccountId: referringAccountId || null,
       donor: {
         firstName: form.get("donorFirstName"),
         lastName: form.get("donorLastName"),
@@ -117,6 +121,12 @@ export function EditCaseModal({ caseData, onSaved, onClose }: Props) {
                 <span className="text-xs text-gray-400">— repeated testing / random scheduling</span>
               </label>
             </div>
+          </div>
+
+          {/* Referring Account */}
+          <div className="border-t border-gray-200 pt-4">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Referring Account</label>
+            <AccountSelect value={referringAccountId} onChange={setReferringAccountId} placeholder="No referring account" />
           </div>
 
           {/* Donor Info */}

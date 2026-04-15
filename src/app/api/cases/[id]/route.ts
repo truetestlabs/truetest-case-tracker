@@ -15,6 +15,7 @@ export async function GET(
       where: { id },
       include: {
         donor: true,
+        referringAccount: { select: { id: true, name: true, shortCode: true } },
         caseContacts: {
           include: { contact: true },
           orderBy: { roleInCase: "asc" },
