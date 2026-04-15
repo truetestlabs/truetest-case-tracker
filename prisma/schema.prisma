@@ -172,6 +172,11 @@ model Case {
   // Relations
   donorId               String?
   donor                 Contact?      @relation("CaseDonor", fields: [donorId], references: [id])
+  // Referring organization — the firm/practice that sent us this case.
+  // Optional because legacy cases predate the Account layer. Use this for
+  // "all cases from AHDC" style queries instead of traversing CaseContacts.
+  referringAccountId    String?
+  referringAccount      Account?      @relation(fields: [referringAccountId], references: [id])
   caseContacts          CaseContact[]
   testOrders            TestOrder[]
   documents             Document[]
@@ -186,6 +191,7 @@ model Case {
   @@index([caseType])
   @@index([donorId])
   @@index([courtCaseNumber])
+  @@index([referringAccountId])
 }
 
 model Contact {
@@ -193,6 +199,10 @@ model Contact {
   contactType       ContactType
   firstName         String
   lastName          String
+  // firmName: legacy free-text. Kept as a read-only display string during
+  // the transition to normalized Accounts. Once account backfill is
+  // complete, new writes should populate accountId instead. Removing this
+  // field is a future cleanup pass.
   firmName          String?
   email             String?
   phone             String?
@@ -205,6 +215,12 @@ model Contact {
   updatedAt         DateTime          @updatedAt
 
   // Relations
+  // Normalized link to the referring organization (law firm, counseling
+  // practice, evaluator office, etc.). Optional because legacy contacts
+  // predate the Account layer.
+  accountId         String?
+  account           Account?          @relation("AccountContacts", fields: [accountId], references: [id])
+  primaryForAccounts Account[]        @relation("AccountPrimaryContact")
   donorCases        Case[]            @relation("CaseDonor")
   caseContacts      CaseContact[]
   sentMessages      Message[]         @relation("MessageSender")
@@ -213,6 +229,64 @@ model Contact {
   @@index([contactType])
   @@index([lastName, firstName])
   @@index([email])
+  @@index([accountId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Account — a referring organization (law firm, counseling practice,
+// evaluator office, court, state agency). Cases are referred BY an
+// account, individuals (attorneys, counselors, GALs) work AT an account.
+// Added to replace free-text Contact.firmName with a queryable entity.
+// ─────────────────────────────────────────────────────────────────────────
+model Account {
+  id                String          @id @default(cuid())
+  name              String          // "Associates in Human Development Counseling"
+  shortCode         String?         // "AHDC" — optional abbreviation, searchable
+  type              AccountType     @default(other)
+
+  // Optional main point of contact at the account. Kept as an explicit
+  // FK (not derived from a roleInCase) so a single person can be the
+  // standing POC across all cases from this account.
+  primaryContactId  String?
+  primaryContact    Contact?        @relation("AccountPrimaryContact", fields: [primaryContactId], references: [id])
+
+  // Reachability
+  address           String?
+  phone             String?
+  email             String?
+  website           String?
+  notes             String?
+
+  // Billing preference — no invoicing logic yet, just the lever so a
+  // future build can read this flag and decide per-case vs rolled-up
+  // without requiring another migration.
+  invoiceGrouping   InvoiceGrouping @default(per_case)
+
+  active            Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  // Relations
+  contacts          Contact[]       @relation("AccountContacts")
+  cases             Case[]
+
+  @@index([name])
+  @@index([shortCode])
+  @@index([active])
+}
+
+enum AccountType {
+  law_firm
+  counseling_practice
+  evaluator_office
+  court
+  state_agency
+  other
+}
+
+enum InvoiceGrouping {
+  per_case
+  consolidated
 }
 
 model CaseContact {
