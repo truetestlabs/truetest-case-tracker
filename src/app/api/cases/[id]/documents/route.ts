@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import type { TestStatus, LabResultStatus } from "@prisma/client";
 import { claude } from "@/lib/claude";
 import { generateResultSummary } from "@/lib/resultSummary";
-import { extractLabResultStructured, LAB_RESULT_PARSER_VERSION } from "@/lib/resultExtract";
+import { extractLabResult, LAB_RESULT_PARSER_VERSION } from "@/lib/resultExtract";
 import type { ExtractedLabResult } from "@/lib/resultExtract";
 import { runLabResultCrosschecks } from "@/lib/labResultCrosscheck";
 import { uploadFile } from "@/lib/storage";
@@ -236,19 +236,21 @@ export async function POST(
         : `${donorFirst} ${donorLast} COC ${cocDate}${ext}`;
     }
 
-    // For result reports: run BOTH the existing narrative summary AND the
-    // new structured extractor in parallel. The summary is the human-readable
-    // email-ready paragraph; the structured data feeds the LabResult row,
-    // the date cross-checks, and eventually the UI result cards.
+    // For result reports: generate the narrative summary first (the human-
+    // readable paragraph that feeds the compose-results email), THEN parse
+    // structured data out of that summary. Sequential because the structured
+    // extractor is dramatically more reliable when fed clean prose than when
+    // asked to read the PDF directly — the "read PDF + structure output"
+    // combined task empirically fails on ~40% of real lab PDFs.
     let extractedData: { summary: string } | null = null;
     let structuredResult: ExtractedLabResult | null = null;
     if (documentType === "result_report" && ext.toLowerCase() === ".pdf") {
-      const [summary, structured] = await Promise.all([
-        generateResultSummary(buffer),
-        extractLabResultStructured(buffer),
-      ]);
+      const summary = await generateResultSummary(buffer);
       if (summary) extractedData = { summary };
-      structuredResult = structured;
+      structuredResult = await extractLabResult({
+        pdfBuffer: buffer,
+        summaryText: summary,
+      });
     }
 
     // Create document record

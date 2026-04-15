@@ -19,9 +19,11 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { downloadFile } from "@/lib/storage";
 import {
-  extractLabResultStructured,
+  extractLabResult,
+  extractLabResultFromText,
   LAB_RESULT_PARSER_VERSION,
 } from "@/lib/resultExtract";
+import { generateResultSummary } from "@/lib/resultSummary";
 import { runLabResultCrosschecks } from "@/lib/labResultCrosscheck";
 import type { LabResultStatus } from "@prisma/client";
 
@@ -100,8 +102,31 @@ async function backfillOne(doc: {
       };
     }
 
-    const downloaded = await downloadFile(doc.filePath);
-    const structured = await extractLabResultStructured(downloaded.buffer);
+    // Prefer the stored narrative summary if we already have one — parsing
+    // structured data out of clean prose is dramatically more reliable than
+    // parsing it out of a raw PDF. Only fall through to downloading the
+    // PDF if we need to generate a summary OR run the PDF-direct fallback.
+    let summary = (doc.extractedData as { summary?: string } | null)?.summary ?? null;
+    let structured = null;
+
+    if (summary) {
+      structured = await extractLabResultFromText(summary);
+    }
+
+    // If we have no summary or the text-based extractor returned nothing
+    // useful, download the PDF and run the full orchestrator (which will
+    // re-try text-based after generating a fresh summary, then fall back
+    // to PDF-direct).
+    if (!structured || (structured.analytes?.length ?? 0) === 0) {
+      const downloaded = await downloadFile(doc.filePath);
+      if (!summary) {
+        summary = await generateResultSummary(downloaded.buffer);
+      }
+      structured = await extractLabResult({
+        pdfBuffer: downloaded.buffer,
+        summaryText: summary,
+      });
+    }
 
     const findings = structured
       ? runLabResultCrosschecks(structured, {
@@ -110,9 +135,6 @@ async function backfillOne(doc: {
           labAccessionNumber: order.labAccessionNumber,
         })
       : [];
-
-    const existingSummary =
-      (doc.extractedData as { summary?: string } | null)?.summary ?? null;
 
     await prisma.labResult.create({
       data: {
@@ -131,7 +153,7 @@ async function backfillOne(doc: {
         analytes: structured?.analytes ?? [],
         specimenValidity: structured?.specimenValidity ?? undefined,
         mismatches: findings,
-        rawSummary: existingSummary,
+        rawSummary: summary,
         receivedByUs: doc.uploadedAt,
       },
     });
@@ -165,11 +187,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
 
+  // By default: process Documents that have no LabResult yet.
+  // With ?reprocessEmpty=true: ALSO process Documents whose existing
+  // LabResult is empty (overallStatus=unknown or zero analytes) — useful
+  // after parser version bumps or bug fixes. We delete the old row first
+  // so we don't end up with duplicates.
+  const url = new URL(request.url);
+  const reprocessEmpty = url.searchParams.get("reprocessEmpty") === "true";
+
   const candidates = await prisma.document.findMany({
     where: {
       documentType: "result_report",
       fileName: { endsWith: ".pdf" },
-      labResults: { none: {} },
+      ...(reprocessEmpty
+        ? {
+            OR: [
+              { labResults: { none: {} } },
+              { labResults: { some: { overallStatus: "unknown" } } },
+            ],
+          }
+        : { labResults: { none: {} } }),
     },
     orderBy: { uploadedAt: "asc" },
     select: {
@@ -182,6 +219,17 @@ export async function POST(request: NextRequest) {
       extractedData: true,
     },
   });
+
+  // If reprocessing, nuke the stale empty LabResults for this batch first so
+  // backfillOne() can create fresh ones without duplicate constraints.
+  if (reprocessEmpty && candidates.length > 0) {
+    await prisma.labResult.deleteMany({
+      where: {
+        documentId: { in: candidates.map((c) => c.id) },
+        overallStatus: "unknown",
+      },
+    });
+  }
 
   if (candidates.length === 0) {
     return NextResponse.json({

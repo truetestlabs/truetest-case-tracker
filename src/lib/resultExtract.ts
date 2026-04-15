@@ -20,7 +20,7 @@
 import { claude } from "@/lib/claude";
 import type Anthropic from "@anthropic-ai/sdk";
 
-export const LAB_RESULT_PARSER_VERSION = "resultExtract/v1-2026-04-14";
+export const LAB_RESULT_PARSER_VERSION = "resultExtract/v2-2026-04-14";
 
 export type AnalyteResult = {
   name: string;
@@ -160,9 +160,11 @@ const TOOL_SCHEMA: Anthropic.Tool = {
 } as const;
 
 /**
- * Run Claude with tool_choice forced to record_lab_result and return the
- * parsed tool input. Returns null if the API errors or the response doesn't
- * contain a tool_use block (e.g. Claude refused or the PDF was unreadable).
+ * PDF-direct extraction: forces tool_use while Claude reads the PDF. Works
+ * for some reports but empirically unreliable on many real lab PDFs — the
+ * combined "read PDF + structure output" task seems to be harder for the
+ * model than either alone. Kept as a fallback path; prefer
+ * extractLabResultFromText whenever we already have a narrative summary.
  */
 export async function extractLabResultStructured(
   pdfBuffer: Buffer
@@ -172,7 +174,7 @@ export async function extractLabResultStructured(
     const base64 = pdfBuffer.toString("base64");
     const response = await claude.messages.create({
       model: "claude-opus-4-5",
-      max_tokens: 2500,
+      max_tokens: 4000,
       tools: [TOOL_SCHEMA],
       tool_choice: { type: "tool", name: "record_lab_result" },
       messages: [
@@ -202,4 +204,82 @@ export async function extractLabResultStructured(
     console.error("[resultExtract] extraction error:", e);
     return null;
   }
+}
+
+/**
+ * Text-based extraction: takes the already-generated narrative summary
+ * (from generateResultSummary) and parses it into structured data. This is
+ * the PREFERRED path — the summary is clean prose that the model can
+ * reliably map into the tool schema, and this call is cheaper and faster
+ * than the PDF-direct path (sonnet handles it easily; no base64 blob).
+ */
+export async function extractLabResultFromText(
+  summaryText: string
+): Promise<ExtractedLabResult | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  if (!summaryText || summaryText.length < 20) return null;
+  try {
+    const response = await claude.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 4000,
+      tools: [TOOL_SCHEMA],
+      tool_choice: { type: "tool", name: "record_lab_result" },
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Parse this drug/alcohol test result summary into the record_lab_result tool.
+
+Rules:
+- Include EVERY analyte mentioned in the summary (including negatives listed in phrases like "all substances tested negative") as separate entries in the analytes array.
+- For PEth results, the single "analyte" is "PEth" with the numeric value and cutoff.
+- Dates must be ISO 8601 (YYYY-MM-DD). Convert "March 11, 2026" → "2026-03-11".
+- If the summary mentions MRO verification, set overallStatus to "mro_verified_negative" if it was downgraded, "mro_pending" if it's in review, "mixed" if partially downgraded.
+- Use null for any field the summary doesn't mention rather than guessing.
+- Lab names are matched to the enum if possible: usdtl, quest, crl, labcorp, nms, medipro, truetest_inhouse.
+
+---
+
+${summaryText}`,
+            },
+          ],
+        },
+      ],
+    });
+
+    const toolUse = response.content.find((b) => b.type === "tool_use");
+    if (!toolUse || toolUse.type !== "tool_use") {
+      console.warn("[resultExtract] from-text: Claude did not return a tool_use block");
+      return null;
+    }
+    return toolUse.input as ExtractedLabResult;
+  } catch (e) {
+    console.error("[resultExtract] from-text extraction error:", e);
+    return null;
+  }
+}
+
+/**
+ * Orchestrator: prefer text-based extraction (reliable, cheap) when a
+ * summary is available, fall back to PDF-direct (Opus with document input)
+ * only when we don't have one. If text-based succeeds but returns zero
+ * analytes, also retry against the PDF.
+ */
+export async function extractLabResult({
+  pdfBuffer,
+  summaryText,
+}: {
+  pdfBuffer?: Buffer;
+  summaryText?: string | null;
+}): Promise<ExtractedLabResult | null> {
+  if (summaryText && summaryText.length >= 20) {
+    const fromText = await extractLabResultFromText(summaryText);
+    if (fromText && (fromText.analytes?.length ?? 0) > 0) return fromText;
+  }
+  if (pdfBuffer) {
+    return await extractLabResultStructured(pdfBuffer);
+  }
+  return null;
 }
