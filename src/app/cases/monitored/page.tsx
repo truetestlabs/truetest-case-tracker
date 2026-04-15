@@ -105,17 +105,17 @@ export default function MonitoredCasesPage() {
                       <StatusBadge status={c.caseType} type="caseType" />
                     </td>
                     <td className="px-6 py-4">
-                      {c.testOrders.length > 0 ? (
+                      {c.testOrders.filter((t) => t.testStatus !== "closed").length > 0 ? (
                         <div>
                           {(() => {
-                            const test = c.testOrders[0];
+                            const test = c.testOrders.filter((t) => t.testStatus !== "closed")[0];
                             const isSweatPatch = test.testDescription?.toLowerCase().includes("sweat patch");
                             const testLabel = isSweatPatch && test.testStatus === "order_created" ? "Patch Applied"
                               : isSweatPatch && test.testStatus === "specimen_collected" ? "Patch Removed"
                               : undefined;
                             return <StatusBadge status={test.testStatus} type="test" label={testLabel} />;
                           })()}
-                          {c.testOrders[0].appointmentDate && (
+                          {c.testOrders.filter((t) => t.testStatus !== "closed")[0].appointmentDate && (
                             <p className="text-xs text-gray-500 mt-1">
                               {new Date(c.testOrders[0].appointmentDate).toLocaleDateString()} {new Date(c.testOrders[0].appointmentDate).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                             </p>

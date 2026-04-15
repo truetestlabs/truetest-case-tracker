@@ -227,7 +227,7 @@ export default function CasesPage() {
                     <td className="px-5 py-2.5">
                       {c.testOrders.length > 0 ? (
                         <div className="flex flex-col gap-1">
-                          {c.testOrders.map((test, ti) => {
+                          {c.testOrders.filter((t) => t.testStatus !== "closed").map((test, ti) => {
                             const preCollectionStatuses = ["order_created", "awaiting_payment", "payment_received"];
                             const isPreCollection = preCollectionStatuses.includes(test.testStatus);
                             const hasAppt = test.appointmentDate;
