@@ -164,6 +164,26 @@ export async function PATCH(
       const newMethod = updateData.paymentMethod;
       if (!oldMethod && newMethod) {
         data.paymentDate = new Date();
+
+        // Workflow unblock: if this test was sitting in results_held waiting
+        // for payment, the moment payment arrives we can advance it to
+        // results_received. Without this, the "Release Results" button on
+        // the case page never appears (the UI branch requires testStatus ===
+        // "results_received" AND paymentMethod set), and the user has to
+        // manually drag the status bar between states.
+        //
+        // Only fire when the caller isn't already changing testStatus in
+        // the same PATCH — otherwise we'd clobber an explicit override.
+        if (existing.testStatus === "results_held" && !updateData.testStatus) {
+          updateData.testStatus = "results_received";
+          data.testStatus = "results_received";
+          if (!existing.resultsReceivedDate) {
+            data.resultsReceivedDate = now;
+          }
+          updateData.statusNote =
+            updateData.statusNote ||
+            "Auto-advanced results_held → results_received after payment was recorded.";
+        }
       } else if (oldMethod && !newMethod) {
         data.paymentDate = null;
       }
