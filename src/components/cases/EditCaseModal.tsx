@@ -20,7 +20,7 @@ type CaseInfo = {
 
 type Props = {
   caseData: CaseInfo;
-  onSaved: () => void;
+  onSaved: (accountRecipientsAdded?: number) => void;
   onClose: () => void;
 };
 
@@ -60,7 +60,8 @@ export function EditCaseModal({ caseData, onSaved, onClose }: Props) {
         body: JSON.stringify(data),
       });
       if (!res.ok) throw await apiError(res, "Failed to update case");
-      onSaved();
+      const result = await res.json();
+      onSaved(result.accountRecipientsAdded ?? 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {

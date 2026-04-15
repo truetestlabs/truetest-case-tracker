@@ -275,7 +275,13 @@ export default function CaseDetailPage() {
       {showEditCase && (
         <EditCaseModal
           caseData={caseData}
-          onSaved={() => { setShowEditCase(false); loadCase(); }}
+          onSaved={(recipientsAdded) => {
+            setShowEditCase(false);
+            loadCase();
+            if (recipientsAdded && recipientsAdded > 0) {
+              alert(`Case saved. ${recipientsAdded} default recipient${recipientsAdded > 1 ? "s" : ""} from the account were automatically added to this case.`);
+            }
+          }}
           onClose={() => setShowEditCase(false)}
         />
       )}

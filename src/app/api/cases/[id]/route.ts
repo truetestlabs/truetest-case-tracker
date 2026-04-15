@@ -165,6 +165,52 @@ export async function PATCH(
       });
     }
 
+    // Auto-apply account default recipients when a referringAccount is newly assigned
+    let accountRecipientsAdded = 0;
+    const newAccountId = updateData.referringAccountId as string | null | undefined;
+    if (newAccountId && newAccountId !== oldCase.referringAccountId) {
+      const defaults = await prisma.accountDefaultRecipient.findMany({
+        where: { accountId: newAccountId },
+      });
+      for (const dr of defaults) {
+        // Find or create a Contact record for this default recipient
+        let contact = dr.email
+          ? await prisma.contact.findFirst({ where: { email: dr.email } })
+          : null;
+        if (!contact) {
+          contact = await prisma.contact.create({
+            data: {
+              firstName: dr.firstName,
+              lastName: dr.lastName,
+              email: dr.email,
+              phone: dr.phone,
+              contactType: dr.role as import("@prisma/client").ContactType,
+              preferredContact: "email",
+              represents: "na",
+            },
+          });
+        }
+        // Skip if already a CaseContact in this role
+        const exists = await prisma.caseContact.findFirst({
+          where: { caseId: id, contactId: contact.id, roleInCase: dr.role as import("@prisma/client").CaseRole },
+        });
+        if (!exists) {
+          await prisma.caseContact.create({
+            data: {
+              caseId: id,
+              contactId: contact.id,
+              roleInCase: dr.role as import("@prisma/client").CaseRole,
+              receivesResults: dr.receivesResults,
+              receivesStatus: dr.receivesStatus,
+              receivesInvoices: dr.receivesInvoices,
+              canOrderTests: dr.canOrderTests,
+            },
+          });
+          accountRecipientsAdded++;
+        }
+      }
+    }
+
     logAudit({
       userId: user.id,
       action: "case.update",
@@ -180,7 +226,7 @@ export async function PATCH(
       },
     }).catch((e) => console.error("[cases/id] audit failed:", e));
 
-    return NextResponse.json(updated);
+    return NextResponse.json({ ...updated, accountRecipientsAdded });
   } catch (error) {
     console.error("Error updating case:", error);
     return NextResponse.json({ error: "Failed to update case" }, { status: 500 });
