@@ -16,6 +16,7 @@ import { TestProgressBar } from "@/components/cases/TestProgressBar";
 import { TestOrderDocuments } from "@/components/cases/TestOrderDocuments";
 import { CaseDocuments } from "@/components/cases/CaseDocuments";
 import { EditTestOrderModal } from "@/components/cases/EditTestOrderModal";
+import { LabResultCard, type LabResultData } from "@/components/cases/LabResultCard";
 
 type CaseData = {
   id: string;
@@ -71,6 +72,7 @@ type CaseData = {
       fileName: string;
       uploadedAt: string;
     }>;
+    labResults?: LabResultData[];
   }>;
   documents: Array<{
     id: string;
@@ -368,6 +370,29 @@ export default function CaseDetailPage() {
               </div>
             )}
           </section>
+
+          {/* Lab Results (structured data from uploaded result PDFs) */}
+          {caseData.testOrders.some((t) => (t.labResults?.length ?? 0) > 0) && (
+            <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+              <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider mb-3">
+                Lab Results
+              </h3>
+              <div className="space-y-3">
+                {caseData.testOrders
+                  .filter((t) => (t.labResults?.length ?? 0) > 0)
+                  .flatMap((t) =>
+                    (t.labResults || []).map((r) => (
+                      <LabResultCard
+                        key={r.id}
+                        result={r}
+                        testDescription={t.testDescription}
+                        onResolved={loadCase}
+                      />
+                    ))
+                  )}
+              </div>
+            </section>
+          )}
 
           {/* Documents */}
           <CaseDocuments caseId={caseData.id} documents={caseData.documents} onUpdated={loadCase} />

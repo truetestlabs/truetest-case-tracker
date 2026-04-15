@@ -27,6 +27,9 @@ export async function GET(
               orderBy: { uploadedAt: "desc" },
               select: { id: true, documentType: true, fileName: true, uploadedAt: true },
             },
+            labResults: {
+              orderBy: { receivedByUs: "desc" },
+            },
           },
         },
         documents: { orderBy: { uploadedAt: "desc" } },
