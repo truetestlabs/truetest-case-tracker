@@ -56,15 +56,20 @@ export default function CasesPage() {
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  // Default to "Open" so the page still lands on non-closed cases on first
+  // load. "All Statuses" (value="") now legitimately means "no filter" —
+  // previously the `|| "active"` fallback silently turned the empty string
+  // back into "active", so picking "All Statuses" hid closed cases.
+  const [statusFilter, setStatusFilter] = useState("active");
   const [typeFilter, setTypeFilter] = useState("");
 
   function loadCases() {
     setLoading(true);
     const params = new URLSearchParams();
     if (query) params.set("q", query);
-    // Default to open cases only; use status filter to override
-    params.set("status", statusFilter || "active");
+    // Only send status when a specific filter is selected. Empty string
+    // ("All Statuses") means show everything including closed.
+    if (statusFilter) params.set("status", statusFilter);
     if (typeFilter) params.set("type", typeFilter);
 
     fetch(`/api/cases?${params}`)
