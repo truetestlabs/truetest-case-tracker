@@ -99,11 +99,27 @@ function severityBadge(severity: string): string {
 export function LabResultCard({ result, testDescription, onResolved }: Props) {
   const [busyIndex, setBusyIndex] = useState<number | null>(null);
   const [error, setError] = useState<string>("");
+  // For "clean" negatives we collapse the analyte table by default and
+  // let the user expand it if they want to verify which substances were
+  // tested. Anything other than a pure negative (positive, dilute,
+  // adulterated, MRO pending, etc.) always shows the full table
+  // because each row may contain the important quantitative value.
+  const [showAnalytes, setShowAnalytes] = useState(false);
 
   const status = overallStatusStyle(result.overallStatus);
   const analytes = result.analytes || [];
   const mismatches = result.mismatches || [];
   const unresolvedMismatches = mismatches.filter((m) => !m.resolved);
+
+  // Collapse behavior: only when the overall verdict is a clean negative
+  // (or MRO-verified negative). Any other status keeps the full table
+  // expanded so positive/inconclusive/invalid details are always visible.
+  const isCleanNegative =
+    (result.overallStatus === "negative" ||
+      result.overallStatus === "mro_verified_negative") &&
+    analytes.length > 0 &&
+    analytes.every((a) => a.result === "negative");
+  const shouldCollapse = isCleanNegative && !showAnalytes;
 
   async function resolveMismatch(index: number, action: Mismatch["resolvedAction"]) {
     if (!action) return;
@@ -223,8 +239,21 @@ export function LabResultCard({ result, testDescription, onResolved }: Props) {
         </div>
       )}
 
-      {/* Analyte table */}
-      {analytes.length > 0 && (
+      {/* Analyte table (collapsed by default for clean negatives) */}
+      {analytes.length > 0 && shouldCollapse && (
+        <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-md px-3 py-2">
+          <p className="text-xs text-green-800 font-medium">
+            ✓ All {analytes.length} substances tested negative
+          </p>
+          <button
+            onClick={() => setShowAnalytes(true)}
+            className="text-xs text-green-700 hover:text-green-900 hover:underline font-medium"
+          >
+            Show analytes
+          </button>
+        </div>
+      )}
+      {analytes.length > 0 && !shouldCollapse && (
         <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
             <thead>
@@ -246,6 +275,14 @@ export function LabResultCard({ result, testDescription, onResolved }: Props) {
               ))}
             </tbody>
           </table>
+          {isCleanNegative && (
+            <button
+              onClick={() => setShowAnalytes(false)}
+              className="mt-2 text-xs text-gray-500 hover:text-gray-700 hover:underline"
+            >
+              Hide analytes
+            </button>
+          )}
         </div>
       )}
 
