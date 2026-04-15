@@ -6,6 +6,7 @@ import { generateResultSummary } from "@/lib/resultSummary";
 import { extractLabResult, LAB_RESULT_PARSER_VERSION } from "@/lib/resultExtract";
 import type { ExtractedLabResult } from "@/lib/resultExtract";
 import { runLabResultCrosschecks } from "@/lib/labResultCrosscheck";
+import { detectCocMisclassification } from "@/lib/detectCocMisclassification";
 import { uploadFile } from "@/lib/storage";
 
 // Allow longer execution for AI summary generation on upload
@@ -244,6 +245,7 @@ export async function POST(
     // combined task empirically fails on ~40% of real lab PDFs.
     let extractedData: { summary: string } | null = null;
     let structuredResult: ExtractedLabResult | null = null;
+    let cocMisclassificationWarning: string | null = null;
     if (documentType === "result_report" && ext.toLowerCase() === ".pdf") {
       const summary = await generateResultSummary(buffer);
       if (summary) extractedData = { summary };
@@ -251,6 +253,15 @@ export async function POST(
         pdfBuffer: buffer,
         summaryText: summary,
       });
+      // Catch COC forms misfiled as result reports before we write a bogus
+      // LabResult row + incorrectly advance the test order status. If this
+      // fires, we still save the Document (so the user has a record of
+      // what they uploaded) but downstream side effects are skipped and
+      // the response includes a warning for the client to surface.
+      cocMisclassificationWarning = detectCocMisclassification(
+        summary,
+        structuredResult
+      );
     }
 
     // Create document record
@@ -319,8 +330,11 @@ export async function POST(
 
     }
 
-    // Auto-advance test orders when lab results are uploaded
-    if (documentType === "result_report") {
+    // Auto-advance test orders when lab results are uploaded.
+    // Skip the whole block if the COC-misclassification detector fired —
+    // we saved the file, but we don't want to advance status or write a
+    // LabResult based on a document that isn't actually a results report.
+    if (documentType === "result_report" && !cocMisclassificationWarning) {
       const caseInfo = await prisma.case.findUnique({
         where: { id: caseId },
         select: { isMonitored: true },
@@ -437,7 +451,28 @@ export async function POST(
       }
     }
 
-    return NextResponse.json(document, { status: 201 });
+    // If the COC-misclassification detector fired on a result_report upload,
+    // log a StatusLog entry and pass the warning back to the client so the
+    // upload UI can surface it as a toast/banner.
+    if (cocMisclassificationWarning) {
+      await prisma.statusLog.create({
+        data: {
+          caseId,
+          testOrderId: testOrderId || null,
+          oldStatus: "—",
+          newStatus: "coc_misclassified",
+          changedBy: "admin",
+          note: `COC misclassified upload flagged: "${document.fileName}". ${cocMisclassificationWarning}`,
+        },
+      });
+    }
+
+    return NextResponse.json(
+      cocMisclassificationWarning
+        ? { ...document, warning: cocMisclassificationWarning }
+        : document,
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Error uploading document:", error);
     const msg = error instanceof Error ? error.message : "Failed to upload document";

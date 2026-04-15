@@ -92,6 +92,15 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
         const err = await processRes.json().catch(() => null);
         alert(err?.error || `Processing failed (${processRes.status})`);
       } else {
+        // Surface the COC-misclassification warning if the server set one
+        // on the response. The upload still saves, but the user sees a
+        // warning so they can verify they uploaded the right PDF.
+        try {
+          const body = await processRes.json();
+          if (body?.warning) {
+            alert(`⚠ Upload saved with a warning:\n\n${body.warning}`);
+          }
+        } catch { /* not JSON — skip */ }
         onUpdated();
       }
     } catch (e) {

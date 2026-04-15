@@ -123,6 +123,15 @@ function DocumentUploadSlot({
         } catch { /* not JSON */ }
         throw new Error(detail);
       }
+      // The server returns the Document row plus an optional `warning`
+      // field when the COC-misclassification detector fired. Surface it
+      // to the user so they notice and either swap the file or continue.
+      try {
+        const body = await processRes.json();
+        if (body?.warning) {
+          alert(`⚠ Upload saved with a warning:\n\n${body.warning}`);
+        }
+      } catch { /* ignore JSON parse issues */ }
       onUpdated();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
