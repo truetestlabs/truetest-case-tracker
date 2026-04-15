@@ -269,10 +269,33 @@ model Account {
   // Relations
   contacts          Contact[]       @relation("AccountContacts")
   cases             Case[]
+  defaultRecipients AccountDefaultRecipient[]
 
   @@index([name])
   @@index([shortCode])
   @@index([active])
+}
+
+// AccountDefaultRecipient — people who are automatically added as result/
+// invoice recipients on every new case created under this account.
+// Stored flat (name + email) rather than FK'd to Contact so the record
+// survives contact merges and is self-contained.
+model AccountDefaultRecipient {
+  id               String   @id @default(cuid())
+  accountId        String
+  account          Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  firstName        String
+  lastName         String
+  email            String?
+  phone            String?
+  role             CaseRole @default(evaluator)
+  receivesResults  Boolean  @default(true)
+  receivesStatus   Boolean  @default(false)
+  receivesInvoices Boolean  @default(false)
+  canOrderTests    Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  @@index([accountId])
 }
 
 enum AccountType {

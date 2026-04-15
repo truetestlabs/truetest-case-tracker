@@ -1,13 +1,38 @@
 "use client";
 
 /**
- * /accounts/[id] — account detail. Shows metadata, linked cases, and
- * linked contacts. "Edit" button reuses the shared AccountFormModal.
+ * /accounts/[id] — account detail. Shows metadata, linked cases, linked
+ * contacts, and the default recipient list that pre-fills new cases.
+ * "Edit" button reuses the shared AccountFormModal.
  */
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AccountFormModal, type AccountDraft } from "@/components/accounts/AccountFormModal";
+
+type DefaultRecipient = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  role: string;
+  receivesResults: boolean;
+  receivesStatus: boolean;
+  receivesInvoices: boolean;
+  canOrderTests: boolean;
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  evaluator: "Evaluator",
+  petitioner_attorney: "Petitioner Attorney",
+  respondent_attorney: "Respondent Attorney",
+  gal: "GAL",
+  judge: "Judge",
+  referring_party: "Referring Party",
+  court_clerk: "Court Clerk",
+  other: "Other",
+};
 
 type AccountDetail = {
   id: string;
@@ -58,11 +83,22 @@ const TYPE_LABELS: Record<string, string> = {
   other: "Other",
 };
 
+const BLANK_RECIPIENT = {
+  firstName: "", lastName: "", email: "", phone: "", role: "evaluator",
+  receivesResults: true, receivesStatus: false, receivesInvoices: false, canOrderTests: false,
+};
+
 export default function AccountDetailPage() {
   const params = useParams<{ id: string }>();
   const [account, setAccount] = useState<AccountDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
+
+  // Default recipients
+  const [recipients, setRecipients] = useState<DefaultRecipient[]>([]);
+  const [showAddRecipient, setShowAddRecipient] = useState(false);
+  const [recipientDraft, setRecipientDraft] = useState({ ...BLANK_RECIPIENT });
+  const [savingRecipient, setSavingRecipient] = useState(false);
 
   const loadAccount = useCallback(() => {
     setLoading(true);
@@ -72,9 +108,42 @@ export default function AccountDetailPage() {
       .catch((e) => { console.error("[account detail] load failed:", e); setLoading(false); });
   }, [params.id]);
 
+  const loadRecipients = useCallback(() => {
+    fetch(`/api/accounts/${params.id}/default-recipients`)
+      .then((r) => r.json())
+      .then(setRecipients)
+      .catch((e) => console.error("[default-recipients] load failed:", e));
+  }, [params.id]);
+
   useEffect(() => {
     loadAccount();
-  }, [loadAccount]);
+    loadRecipients();
+  }, [loadAccount, loadRecipients]);
+
+  async function saveRecipient() {
+    if (!recipientDraft.firstName.trim() && !recipientDraft.lastName.trim()) return;
+    setSavingRecipient(true);
+    try {
+      const res = await fetch(`/api/accounts/${params.id}/default-recipients`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(recipientDraft),
+      });
+      if (res.ok) {
+        setRecipientDraft({ ...BLANK_RECIPIENT });
+        setShowAddRecipient(false);
+        loadRecipients();
+      }
+    } finally {
+      setSavingRecipient(false);
+    }
+  }
+
+  async function removeRecipient(id: string) {
+    if (!confirm("Remove this default recipient?")) return;
+    await fetch(`/api/accounts/${params.id}/default-recipients?recipientId=${id}`, { method: "DELETE" });
+    loadRecipients();
+  }
 
   if (loading) {
     return (
@@ -185,6 +254,148 @@ export default function AccountDetailPage() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </section>
+
+          {/* Default Recipients */}
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm">
+            <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-800 uppercase tracking-wider">
+                  Default Recipients
+                </h2>
+                <p className="text-[11px] text-slate-400 mt-0.5">Auto-added to every new case under this account</p>
+              </div>
+              <button
+                onClick={() => setShowAddRecipient(true)}
+                className="text-xs px-3 py-1.5 bg-[#1e3a5f] text-white rounded-lg font-medium hover:bg-[#2a5490]"
+              >
+                + Add
+              </button>
+            </div>
+
+            {/* Add form */}
+            {showAddRecipient && (
+              <div className="px-5 py-4 bg-slate-50 border-b border-slate-100">
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">First Name</label>
+                    <input
+                      type="text"
+                      value={recipientDraft.firstName}
+                      onChange={(e) => setRecipientDraft((d) => ({ ...d, firstName: e.target.value }))}
+                      className="w-full px-2 py-1.5 border border-slate-300 rounded text-sm"
+                      placeholder="First"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Last Name</label>
+                    <input
+                      type="text"
+                      value={recipientDraft.lastName}
+                      onChange={(e) => setRecipientDraft((d) => ({ ...d, lastName: e.target.value }))}
+                      className="w-full px-2 py-1.5 border border-slate-300 rounded text-sm"
+                      placeholder="Last"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={recipientDraft.email}
+                      onChange={(e) => setRecipientDraft((d) => ({ ...d, email: e.target.value }))}
+                      className="w-full px-2 py-1.5 border border-slate-300 rounded text-sm"
+                      placeholder="email@example.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Role</label>
+                    <select
+                      value={recipientDraft.role}
+                      onChange={(e) => setRecipientDraft((d) => ({ ...d, role: e.target.value }))}
+                      className="w-full px-2 py-1.5 border border-slate-300 rounded text-sm bg-white"
+                    >
+                      {Object.entries(ROLE_LABELS).map(([v, l]) => (
+                        <option key={v} value={v}>{l}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-4 mb-3">
+                  {[
+                    { key: "receivesResults", label: "Results" },
+                    { key: "receivesInvoices", label: "Invoices" },
+                    { key: "receivesStatus", label: "Status updates" },
+                    { key: "canOrderTests", label: "Can order tests" },
+                  ].map(({ key, label }) => (
+                    <label key={key} className="inline-flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={recipientDraft[key as keyof typeof recipientDraft] as boolean}
+                        onChange={(e) => setRecipientDraft((d) => ({ ...d, [key]: e.target.checked }))}
+                        className="w-3.5 h-3.5"
+                      />
+                      <span className="text-xs text-slate-700">{label}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveRecipient}
+                    disabled={savingRecipient}
+                    className="px-3 py-1.5 bg-[#1e3a5f] text-white rounded text-xs font-medium hover:bg-[#2a5490] disabled:opacity-50"
+                  >
+                    {savingRecipient ? "Saving…" : "Save"}
+                  </button>
+                  <button
+                    onClick={() => { setShowAddRecipient(false); setRecipientDraft({ ...BLANK_RECIPIENT }); }}
+                    className="px-3 py-1.5 text-slate-500 text-xs hover:text-slate-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {recipients.length === 0 && !showAddRecipient ? (
+              <p className="p-5 text-sm text-slate-500">No default recipients yet.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {recipients.map((r) => (
+                  <li key={r.id} className="px-5 py-3 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">
+                        {r.firstName} {r.lastName}
+                        <span className="ml-2 text-[10px] font-normal text-slate-400 uppercase tracking-wide">
+                          {ROLE_LABELS[r.role] || r.role}
+                        </span>
+                      </p>
+                      {r.email && <p className="text-xs text-slate-500">{r.email}</p>}
+                      <div className="flex gap-1.5 mt-1 flex-wrap">
+                        {r.receivesResults && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700">Results</span>
+                        )}
+                        {r.receivesInvoices && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">Invoices</span>
+                        )}
+                        {r.receivesStatus && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">Status</span>
+                        )}
+                        {r.canOrderTests && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">Orders</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeRecipient(r.id)}
+                      className="text-slate-300 hover:text-red-400 text-lg leading-none mt-0.5 shrink-0"
+                      title="Remove"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </section>
 
