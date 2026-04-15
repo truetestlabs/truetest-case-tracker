@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { AccountSelect } from "@/components/accounts/AccountSelect";
 
 /**
  * Staff-facing phone intake page — optimized for booking an appointment
@@ -41,6 +42,7 @@ type FormState = {
   testTypes: string[];
   notes: string;
   existingDonorId: string | null;
+  referringAccountId: string | null;
 };
 
 const INITIAL_FORM: FormState = {
@@ -52,6 +54,7 @@ const INITIAL_FORM: FormState = {
   testTypes: [],
   notes: "",
   existingDonorId: null,
+  referringAccountId: null,
 };
 
 const CASE_TYPES = [
@@ -289,7 +292,16 @@ export default function PhoneIntakePage() {
         caseNumber = approve.caseNumber;
       }
 
-      // 3. Create the appointment — race check happens server-side
+      // 3. Apply referring account + auto-add default recipients (fire-and-forget)
+      if (form.referringAccountId && caseId) {
+        fetch(`/api/cases/${caseId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ referringAccountId: form.referringAccountId }),
+        }).catch((e) => console.error("[phone-intake] account patch failed:", e));
+      }
+
+      // 4. Create the appointment — race check happens server-side
       const apptRes = await fetch("/api/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -524,6 +536,15 @@ export default function PhoneIntakePage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Account <span className="text-gray-400 font-normal">(optional)</span></label>
+            <AccountSelect
+              value={form.referringAccountId}
+              onChange={(id) => setForm((f) => ({ ...f, referringAccountId: id }))}
+              placeholder="No referring account"
+            />
           </div>
 
           <div>
