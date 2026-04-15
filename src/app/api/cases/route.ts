@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type");
   const q = searchParams.get("q");
   const monitored = searchParams.get("monitored");
+  const referringAccountId = searchParams.get("referringAccountId");
 
   const where: Record<string, unknown> = {};
   if (status === "active") {
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
   }
   if (type) where.caseType = type;
   if (monitored === "true") where.isMonitored = true;
+  if (referringAccountId) where.referringAccountId = referringAccountId;
   if (q) {
     where.OR = [
       { caseNumber: { contains: q, mode: "insensitive" } },
@@ -184,6 +186,7 @@ export async function POST(request: NextRequest) {
         hasCourtOrder: body.hasCourtOrder || false,
         isMonitored: body.isMonitored || false,
         notes: body.notes || null,
+        referringAccountId: body.referringAccountId || null,
         donorId,
         createdBy: user.email || user.name || "admin",
       },

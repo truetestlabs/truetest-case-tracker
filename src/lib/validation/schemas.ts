@@ -70,6 +70,7 @@ export const createCaseSchema = z.object({
   hasCourtOrder: z.boolean().optional(),
   isMonitored: z.boolean().optional(),
   notes: optionalText(10_000),
+  referringAccountId: cuid.optional().nullable(),
   contacts: z.array(z.any()).optional(),
   testOrders: z.array(z.any()).optional(),
 });
@@ -182,6 +183,39 @@ export const publicOrderSchema = z.object({
   firstName: optionalTrimmed(80),
   lastName: optionalTrimmed(80),
 });
+
+// ── /api/accounts (POST) ──────────────────────────────────────────────────
+
+const accountTypeEnum = z.enum([
+  "law_firm",
+  "counseling_practice",
+  "evaluator_office",
+  "court",
+  "state_agency",
+  "other",
+]);
+const invoiceGroupingEnum = z.enum(["per_case", "consolidated"]);
+
+export const createAccountSchema = z.object({
+  name: trimmedString(200),
+  shortCode: optionalTrimmed(24),
+  type: accountTypeEnum.optional(),
+  primaryContactId: cuid.optional().nullable(),
+  address: optionalText(500),
+  phone: optionalTrimmed(32),
+  email: z.preprocess(
+    (v) => (v == null || v === "" ? undefined : v),
+    email.optional()
+  ),
+  website: optionalTrimmed(255),
+  notes: optionalText(5000),
+  invoiceGrouping: invoiceGroupingEnum.optional(),
+  active: z.boolean().optional(),
+});
+
+// ── /api/accounts/[id] (PATCH) ────────────────────────────────────────────
+
+export const updateAccountSchema = createAccountSchema.partial();
 
 // ── Helper: format zod errors for API responses ───────────────────────────
 
