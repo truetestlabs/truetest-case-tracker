@@ -223,7 +223,24 @@ The test was processed at Quest Diagnostics' DHHS-certified laboratory in Lenexa
 
 ---
 
-EXAMPLE J — Dilute Positive Urine with partial MRO verification (one substance cleared, one stands):
+EXAMPLE J — Negative Urine with creatinine below threshold but NOT designated dilute by the lab:
+
+Roberto Vega — Urine Drug Test Summary
+Collected: April 14, 2026 | Reported: April 15, 2026 | Type: Urine
+
+Result: NEGATIVE — All Substances
+
+Roberto Vega's urine drug test returned negative for all substances tested, including amphetamine/methamphetamine, cocaine metabolite (BZE), marijuana (Delta-9-THC), MDMA/MDA, codeine/morphine, 6-acetylmorphine, oxycodone/oxymorphone, hydrocodone/hydromorphone, and phencyclidine (PCP).
+
+Specimen Validity: Creatinine was 17.8 mg/dL (below the >=20 mg/dL acceptable range); specific gravity was 1.0048 (within the 1.003-1.020 range), pH was 7.1 (within the 4.5-8.9 range), and no oxidizing adulterants were detected. The laboratory did not formally designate this specimen as dilute.
+
+The test was processed at Quest Diagnostics' DHHS-certified laboratory in Lenexa, Kansas.
+
+A negative result indicates that no substances were detected above the cutoff thresholds at the time of collection. This does not confirm abstinence, as detection windows vary by substance and individual factors.
+
+---
+
+EXAMPLE L — Dilute Positive Urine with partial MRO verification (one substance cleared, one stands):
 
 John Ritchie — Urine Drug Test Summary
 Collected: March 24, 2026 | Reported: March 29, 2026 | MRO Verification Date: April 3, 2026 | Type: Urine
@@ -245,7 +262,7 @@ The test was processed at Quest Diagnostics' DHHS-certified laboratory in Lenexa
 
 ---
 
-EXAMPLE K — Negative Hair Drug Test WITH EtG Alcohol Add-On (combined panel):
+EXAMPLE M — Negative Hair Drug Test WITH EtG Alcohol Add-On (combined panel):
 
 Ameet Patel — Hair Drug Test with EtG Alcohol Summary
 Collected: April 7, 2026 | Reported: April 10, 2026 | Type: Head Hair + EtG Add-On
@@ -309,7 +326,7 @@ HAIR:
 - Not specified: flag it
 - Cocaine + norcocaine present: note norcocaine = biological metabolism, consistent with ingestion. Calculate ratio vs 3% threshold
 - Hydrocodone positive in hair: include MRO referral
-- Hair + EtG alcohol add-on (combined panel, see Example K):
+- Hair + EtG alcohol add-on (combined panel, see Example M):
     * Header: "Hair Drug Test with EtG Alcohol Summary" / Type: "Head Hair + EtG Add-On"
     * Result line includes "(including EtG alcohol)" when negative
     * Call out the EtG as an ADD-ON in the first narrative sentence
@@ -321,7 +338,9 @@ SWEAT PATCH:
 - Do NOT include monitoring recommendation (sweat patch IS monitoring)
 
 DILUTE SPECIMENS:
-- Only if formally designated. Include the three-type explanation (Rejected/Positive/Negative) and recommend immediate retest
+- HARD RULE: A specimen is dilute ONLY if the lab report itself explicitly uses the word "DILUTE" or prints a formal dilute designation on the result. You are NEVER permitted to declare or imply a specimen is dilute based on individual validity parameter values (e.g., creatinine below 20 mg/dL, low specific gravity). That determination belongs exclusively to the laboratory. If the report does not say DILUTE, do not use dilute language anywhere in the summary.
+- When creatinine is below the acceptable range but the lab does NOT designate the specimen as dilute (e.g., specific gravity is within range so the lab withholds the designation): report the actual validity values in the Specimen Validity section without any dilute language. You may note that creatinine was below the acceptable threshold factually, but do not call the specimen dilute, do not include the three-type explanation, and do not recommend a retest.
+- Only when the lab has formally printed "DILUTE" on the result: include the three-type explanation (Rejected/Positive/Negative) and recommend immediate retest.
 
 POSITIVE ILLICIT DRUGS (NOT alcohol) — add monitoring recommendation (except in sweat patch summaries):
 "Given these results, ongoing monitoring is recommended. The sweat patch is worn on the skin for approximately one week and detects drug use cumulatively over the wear period, providing ongoing surveillance rather than a single point-in-time snapshot. Random urine testing is also available as an alternative. Both options can be tailored to the specific needs of the case. Please feel free to reach out to discuss the best fit for this monitoring program."
