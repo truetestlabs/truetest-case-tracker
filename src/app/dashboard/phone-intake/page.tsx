@@ -366,15 +366,13 @@ export default function PhoneIntakePage() {
   // Success screen
   if (result) {
     return (
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white rounded-xl border-2 border-green-200 shadow-sm p-8 text-center">
+      <div className="max-w-lg mx-auto">
+        <div className="bg-white rounded-xl border-2 border-green-200 shadow-sm p-6 text-center">
           <div className="text-5xl mb-3">✅</div>
           <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Appointment Booked</p>
-          <p className="text-3xl font-bold text-[#1e3a5f] mb-2">{result.caseNumber}</p>
-          <p className="text-base text-gray-700 mb-1">
-            {form.firstName} {form.lastName}
-          </p>
-          <p className="text-base text-gray-700 mb-6">
+          <p className="text-2xl font-bold text-[#1e3a5f] mb-2">{result.caseNumber}</p>
+          <p className="text-base text-gray-700 mb-1">{form.firstName} {form.lastName}</p>
+          <p className="text-sm text-gray-700 mb-4">
             {new Date(result.slot.start).toLocaleString("en-US", {
               weekday: "long",
               month: "long",
@@ -384,21 +382,21 @@ export default function PhoneIntakePage() {
             })}
           </p>
           {(form.phone || form.email) && (
-            <div className="text-sm text-gray-500 mb-6 space-y-1">
-              {form.phone && <p>📱 Confirmation SMS sent to {form.phone}</p>}
-              {form.email && <p>✉️ Confirmation email sent to {form.email}</p>}
+            <div className="text-sm text-gray-500 mb-5 space-y-1">
+              {form.phone && <p>📱 SMS sent to {form.phone}</p>}
+              {form.email && <p>✉️ Email sent to {form.email}</p>}
             </div>
           )}
           <div className="flex gap-3 justify-center">
             <Link
               href={`/cases/${result.caseId}`}
-              className="px-5 py-3 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50"
+              className="flex-1 px-4 py-3 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 text-center"
             >
               Open Case →
             </Link>
             <button
               onClick={startNew}
-              className="px-5 py-3 bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl hover:bg-[#162c47]"
+              className="flex-1 px-4 py-3 bg-[#1e3a5f] text-white text-sm font-semibold rounded-xl hover:bg-[#162c47]"
             >
               + New Intake
             </button>
@@ -410,11 +408,9 @@ export default function PhoneIntakePage() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Phone Intake</h1>
-          <p className="text-sm text-gray-500">Quick booking while on the call with a new client</p>
-        </div>
+      <div className="mb-4">
+        <h1 className="text-xl font-bold text-gray-900">Phone Intake</h1>
+        <p className="text-sm text-gray-500">Quick booking while on the call</p>
       </div>
 
       {error && (
@@ -709,7 +705,7 @@ export default function PhoneIntakePage() {
       </div>
 
       {/* Book it */}
-      <div className="mt-6 flex items-center justify-between bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
         <div className="text-sm text-gray-500">
           {selectedSlot ? (
             <>
@@ -725,13 +721,13 @@ export default function PhoneIntakePage() {
               </span>
             </>
           ) : (
-            "Pick a slot above"
+            "Select a time slot above"
           )}
         </div>
         <button
           onClick={bookIt}
           disabled={!canSubmit}
-          className="px-6 py-3 bg-[#1e3a5f] text-white rounded-xl text-base font-bold hover:bg-[#162c47] disabled:opacity-40 transition-all shadow-md"
+          className="w-full sm:w-auto px-6 py-3 bg-[#1e3a5f] text-white rounded-xl text-base font-bold hover:bg-[#162c47] disabled:opacity-40 transition-all shadow-md"
         >
           {submitting ? "Booking…" : "Book it"}
         </button>

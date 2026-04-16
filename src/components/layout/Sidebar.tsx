@@ -22,7 +22,7 @@ const navigation = [
 
 const BOOKING_URL = "https://book.squareup.com/appointments/vktpg026o844b6/location/NRHN4SKCVGFSD/services/362SUMWGC5H55J2MCVTJF4FK";
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const [bookingModal, setBookingModal] = useState<"text" | "email" | null>(null);
@@ -210,7 +210,7 @@ export function Sidebar() {
   const otherReminders = filteredReminders.filter((r) => r.type !== "email_draft");
 
   return (
-    <aside className="w-60 flex flex-col flex-shrink-0" style={{ background: "linear-gradient(180deg, #1a3352 0%, #162c47 100%)" }}>
+    <aside className="w-60 h-full flex flex-col flex-shrink-0" style={{ background: "linear-gradient(180deg, #1a3352 0%, #162c47 100%)" }}>
       {/* Logo */}
       <div className="px-4 py-4 flex items-center gap-3 border-b border-white/10">
         <img src="/logo.png" alt="TrueTest Labs" className="h-9 w-auto flex-shrink-0" />
@@ -230,6 +230,7 @@ export function Sidebar() {
               {index === 1 && <div className="my-2 mx-1 border-t border-white/10" />}
               <Link
                 href={item.href}
+                onClick={onNavigate}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
                   isActive
                     ? isQuickIntake
