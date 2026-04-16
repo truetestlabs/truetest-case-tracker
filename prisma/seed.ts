@@ -21,7 +21,7 @@ async function main() {
     { category: "Urine", testName: "10 Panel with Fentanyl", panelSize: "10 panel", specimenType: "urine" as const, lab: "crl_quest" as const, labTestCode: "P71+K462 / Quest 59387N", clientPrice: 115, labCost: 0, description: "Can be ordered at Quest PSCs" },
     { category: "Urine", testName: "10 Panel with EtG Urine", panelSize: "10 panel", specimenType: "urine" as const, lab: "crl_quest" as const, labTestCode: "P710+N060", clientPrice: 175, labCost: 0, description: "Can be ordered at Quest PSCs" },
     { category: "Urine", testName: "OPI/6AM/BUP/FENT/MEP/TRAM/KET", panelSize: "custom", specimenType: "urine" as const, lab: "quest" as const, labTestCode: "37209N", clientPrice: 165, labCost: 0 },
-    { category: "Urine", testName: "Steroid Panel", panelSize: "custom", specimenType: "urine" as const, lab: "quest" as const, labTestCode: "21791N", clientPrice: 275, labCost: 0, description: "Can be ordered at Quest PSCs" },
+    { category: "Urine", testName: "Steroid Panel 21791N Quest", panelSize: "custom", specimenType: "urine" as const, lab: "quest" as const, labTestCode: "21791N", clientPrice: 275, labCost: 0, description: "Can be ordered at Quest PSCs" },
 
     // URINE PANELS — USDTL
     { category: "Urine", testName: "12 Panel Urine (Meperidine & Tramadol)", panelSize: "12 panel", specimenType: "urine" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 245, labCost: 61 },
