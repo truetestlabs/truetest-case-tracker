@@ -6,7 +6,6 @@ import { useState, useEffect, useCallback } from "react";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 
 const navigation = [
-  { name: "Quick Intake", href: "/intake", icon: ZapIcon },
   { name: "Phone Intake", href: "/dashboard/phone-intake", icon: PhoneIcon },
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboardIcon },
   { name: "Calendar", href: "/calendar", icon: CalendarIcon },
