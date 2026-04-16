@@ -77,7 +77,7 @@ const TOOL_SCHEMA: Anthropic.Tool = {
           "unknown",
         ],
         description:
-          "Overall verdict of the report. 'mixed' = some analytes positive and some MRO-downgraded. 'mro_pending' = awaiting MRO review. 'mro_verified_negative' = MRO downgraded a lab positive to negative.",
+          "Overall verdict of the report. Use 'dilute' ONLY if the lab report itself explicitly prints the word DILUTE as a formal designation — never infer dilute from creatinine or specific gravity values alone. 'mixed' = some analytes positive and some MRO-downgraded. 'mro_pending' = awaiting MRO review. 'mro_verified_negative' = MRO downgraded a lab positive to negative.",
       },
       reportedCollectionDate: {
         type: ["string", "null"],
@@ -151,6 +151,7 @@ const TOOL_SCHEMA: Anthropic.Tool = {
           status: {
             type: ["string", "null"],
             enum: ["valid", "dilute", "adulterated", "invalid", null],
+            description: "Use 'dilute' ONLY if the lab report explicitly designates the specimen as DILUTE. Never infer dilute from creatinine or specific gravity values alone — the lab makes that call.",
           },
         },
       },
