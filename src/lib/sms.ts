@@ -37,6 +37,7 @@ export async function sendSms(to: string, body: string): Promise<{ ok: boolean; 
       to: toE164(to),
       body,
     });
+    console.log(`[sms] sent to ${toE164(to)} sid=${msg.sid} status=${msg.status}`);
     return { ok: true, sid: msg.sid };
   } catch (e) {
     console.error("[sms] send failed:", e);
