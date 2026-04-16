@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getEmailRecipients, sendMroReferralEmail } from "@/lib/email";
+import { generateMroSummary } from "@/lib/resultSummary";
+import { downloadFile } from "@/lib/storage";
 
 /**
  * GET /api/cases/[id]/compose-results?mro=true|false
@@ -53,24 +55,40 @@ export async function GET(
       const mroDoc = await prisma.document.findFirst({
         where: { caseId, documentType: { in: ["correspondence", "other"] } },
         orderBy: { uploadedAt: "desc" },
-        select: { extractedData: true },
+        select: { id: true, extractedData: true, filePath: true },
       });
-      const mroSummary = (mroDoc?.extractedData as { summary?: string } | null)?.summary;
+      let mroSummary = (mroDoc?.extractedData as { summary?: string } | null)?.summary;
+
+      // If no summary yet, parse the MRO PDF with Claude now
+      if (!mroSummary && mroDoc?.filePath) {
+        try {
+          const { buffer } = await downloadFile(mroDoc.filePath);
+          mroSummary = await generateMroSummary(buffer) ?? undefined;
+          if (mroSummary) {
+            await prisma.document.update({
+              where: { id: mroDoc.id },
+              data: { extractedData: { summary: mroSummary } },
+            });
+          }
+        } catch (e) {
+          console.warn("[compose-results] MRO summary generation failed:", e);
+        }
+      }
 
       const subject = docket
         ? `${docket} / ${lastName} — MRO Review Complete (${caseData.caseNumber})`
         : `MRO Review Complete — ${lastName} (${caseData.caseNumber})`;
 
       const lines: string[] = [];
-      lines.push("MRO Review Complete");
-      lines.push("");
-      lines.push(`The Medical Review Officer has completed their review for ${donorName}.`);
-      lines.push(`Case No. ${caseData.caseNumber}${testOrder ? ` \u2022 ${testOrder.testDescription}` : ""}`);
-      lines.push("");
       if (mroSummary) {
         lines.push(mroSummary);
       } else {
-        lines.push("The MRO report is now available. Please contact our office to obtain a copy of the final report.");
+        lines.push("MRO Review Complete");
+        lines.push("");
+        lines.push(`The Medical Review Officer has completed their review for ${donorName}.`);
+        lines.push(`Case No. ${caseData.caseNumber}${testOrder ? ` \u2022 ${testOrder.testDescription}` : ""}`);
+        lines.push("");
+        lines.push("The MRO report is attached to this email.");
       }
       lines.push("");
       lines.push("Questions? Contact our office:");
@@ -178,24 +196,40 @@ export async function POST(
       const mroDoc = await prisma.document.findFirst({
         where: { caseId, documentType: { in: ["correspondence", "other"] } },
         orderBy: { uploadedAt: "desc" },
-        select: { extractedData: true },
+        select: { id: true, extractedData: true, filePath: true },
       });
-      const mroSummary = (mroDoc?.extractedData as { summary?: string } | null)?.summary;
+      let mroSummary = (mroDoc?.extractedData as { summary?: string } | null)?.summary;
+
+      // If no summary yet, parse the MRO PDF with Claude now
+      if (!mroSummary && mroDoc?.filePath) {
+        try {
+          const { buffer } = await downloadFile(mroDoc.filePath);
+          mroSummary = await generateMroSummary(buffer) ?? undefined;
+          if (mroSummary) {
+            await prisma.document.update({
+              where: { id: mroDoc.id },
+              data: { extractedData: { summary: mroSummary } },
+            });
+          }
+        } catch (e) {
+          console.warn("[compose-results POST] MRO summary generation failed:", e);
+        }
+      }
 
       subject = docket
         ? `${docket} / ${lastName} — MRO Review Complete (${caseData.caseNumber})`
         : `MRO Review Complete — ${lastName} (${caseData.caseNumber})`;
 
       const lines: string[] = [];
-      lines.push("MRO Review Complete");
-      lines.push("");
-      lines.push(`The Medical Review Officer has completed their review for ${donorName}.`);
-      lines.push(`Case No. ${caseData.caseNumber}${testOrder ? ` \u2022 ${testOrder.testDescription}` : ""}`);
-      lines.push("");
       if (mroSummary) {
         lines.push(mroSummary);
       } else {
-        lines.push("The MRO report is now available. Please contact our office to obtain a copy of the final report.");
+        lines.push("MRO Review Complete");
+        lines.push("");
+        lines.push(`The Medical Review Officer has completed their review for ${donorName}.`);
+        lines.push(`Case No. ${caseData.caseNumber}${testOrder ? ` \u2022 ${testOrder.testDescription}` : ""}`);
+        lines.push("");
+        lines.push("The MRO report is attached to this email.");
       }
       lines.push("");
       lines.push("Questions? Contact our office:");

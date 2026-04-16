@@ -393,3 +393,67 @@ Flag as not forensically defensible.
 NEVER reference collection reason (random, court-ordered, etc.) in the summary.
 
 If you cannot read the document, return only: UNABLE_TO_PARSE`;
+
+// ---------------------------------------------------------------------------
+// MRO Report Summary
+// ---------------------------------------------------------------------------
+
+const MRO_SUMMARY_PROMPT = `You are TrueTest Labs' forensic toxicology reporting assistant. Read the attached MRO (Medical Review Officer) report and produce a concise, professional summary for family law attorneys.
+
+Match the style of the example below EXACTLY. Output ONLY the summary — plain text, no markdown, no asterisks, no extra commentary.
+
+================================================================
+EXAMPLE — MRO Report Summary:
+
+Benjamin Mundt — MRO Report Summary
+Lab Accession #: PD052102 | Collected: 04/01/26 | MRO Verified: 04/16/26
+MRO Verified Result: POSITIVE — Cocaine
+Verified by: Donald S. Freedman, M.D., C.M.R.O., American Medical Review Officer Inc., Jacksonville, FL (904) 332-0472
+Amphetamine: MRO Verified Negative — valid prescription confirmed.
+This result was reviewed by a Medical Review Officer (MRO) following the laboratory report. An MRO is a licensed physician with specialized training in forensic toxicology who independently evaluates whether a valid, current prescription or documented medical basis exists that could account for a positive laboratory finding. In this case, cocaine was verified positive, and amphetamine was verified negative based on a confirmed valid prescription. The MRO verification was completed on 04/16/26.
+================================================================
+
+RULES:
+- First line: [Donor Full Name] — MRO Report Summary
+- Second line: Lab Accession #: [number] | Collected: [MM/DD/YY] | MRO Verified: [MM/DD/YY]
+- Third line: MRO Verified Result: [POSITIVE or NEGATIVE] — [substance(s) if positive]
+- Fourth line: Verified by: [MRO physician name, credentials, company, city, state, phone]
+- If any substance was changed from positive to negative (prescription confirmed), add a line: [Substance]: MRO Verified Negative — valid prescription confirmed.
+- Final paragraph: Explain what MRO review is and summarize this specific case's outcome. Include the MRO verification date.
+- Use the exact dates, names, accession numbers, and phone numbers from the document.
+- If you cannot read the document, return only: UNABLE_TO_PARSE`;
+
+export async function generateMroSummary(pdfBuffer: Buffer): Promise<string | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+
+  try {
+    const base64 = pdfBuffer.toString("base64");
+
+    const response = await claude.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 1000,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "document",
+              source: { type: "base64", media_type: "application/pdf", data: base64 },
+            },
+            {
+              type: "text",
+              text: MRO_SUMMARY_PROMPT,
+            },
+          ],
+        },
+      ],
+    });
+
+    const text = response.content.find((b) => b.type === "text")?.text?.trim() || "";
+    if (!text || text === "UNABLE_TO_PARSE") return null;
+    return text;
+  } catch (e) {
+    console.error("MRO summary generation error:", e);
+    return null;
+  }
+}
