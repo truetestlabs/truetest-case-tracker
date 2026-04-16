@@ -54,5 +54,5 @@ export function formatAppointmentConfirmation(firstName: string, startTime: Date
     minute: "2-digit",
     timeZone: "America/Chicago",
   });
-  return `Hi ${firstName}, you're booked with TrueTest Labs for ${timeStr}. Address: 2221 Oakton St, Elk Grove Village, IL 60007. Reply to this message if you need to reschedule.`;
+  return `Hi ${firstName}, you're booked with TrueTest Labs for ${timeStr}. Address: 2256 Landmeier Rd Ste A, Elk Grove Village, IL 60007. Reply to this message if you need to reschedule.`;
 }
