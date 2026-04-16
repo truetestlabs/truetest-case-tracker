@@ -8,7 +8,7 @@ export async function GET() {
       where: { status: "pending" },
       orderBy: { createdAt: "desc" },
       include: {
-        case: { select: { caseNumber: true, donor: { select: { firstName: true, lastName: true } } } },
+        case: { select: { id: true, caseNumber: true, donor: { select: { firstName: true, lastName: true } } } },
         testOrder: { select: { testDescription: true } },
       },
     });

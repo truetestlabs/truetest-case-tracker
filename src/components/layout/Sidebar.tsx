@@ -52,7 +52,7 @@ export function Sidebar() {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   // Email draft review modal
-  type DraftData = { id: string; subject: string; body: string; recipients: string[]; draftType: string; caseNumber: string; donorName: string };
+  type DraftData = { id: string; subject: string; body: string; recipients: string[]; draftType: string; caseNumber: string; caseId: string; donorName: string };
   const [reviewDraft, setReviewDraft] = useState<DraftData | null>(null);
   const [draftSubject, setDraftSubject] = useState("");
   const [draftBody, setDraftBody] = useState("");
@@ -140,6 +140,7 @@ export function Sidebar() {
         recipients: draft.recipients as string[],
         draftType: draft.draftType,
         caseNumber: draft.case?.caseNumber || "",
+        caseId: draft.case?.id || "",
         donorName,
       });
       setDraftSubject(draft.subject);
@@ -182,6 +183,26 @@ export function Sidebar() {
       setReviewDraft(null);
       loadReminders();
     } catch { alert("Failed to discard"); }
+  }
+
+  const [regenerating, setRegenerating] = useState(false);
+  async function regenerateDraftBody() {
+    if (!reviewDraft?.caseId) return;
+    setRegenerating(true);
+    setDraftMsg(null);
+    try {
+      const params = reviewDraft.draftType === "results_mro_complete" ? "mro_complete=true" : "mro=true";
+      const res = await fetch(`/api/cases/${reviewDraft.caseId}/compose-results?${params}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to regenerate");
+      setDraftBody(data.body);
+      setDraftSubject(data.subject);
+      setDraftMsg("Body regenerated — review and approve before sending.");
+    } catch (e) {
+      setDraftMsg(e instanceof Error ? e.message : "Regeneration failed");
+    } finally {
+      setRegenerating(false);
+    }
   }
 
   const draftReminders = filteredReminders.filter((r) => r.type === "email_draft");
@@ -454,14 +475,25 @@ export function Sidebar() {
 
             {/* Actions */}
             <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50 rounded-b-xl">
-              <button
-                onClick={discardDraft}
-                className="px-4 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                Discard Draft
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={discardDraft}
+                  className="px-4 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  Discard Draft
+                </button>
+                {(reviewDraft.draftType === "results_mro_complete" || reviewDraft.draftType === "results_mro") && (
+                  <button
+                    onClick={regenerateDraftBody}
+                    disabled={regenerating}
+                    className="px-4 py-2 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {regenerating ? "Regenerating…" : "↺ Regenerate"}
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-3">
-                {draftMsg && <span className={`text-xs font-medium ${draftMsg.startsWith("Sent") ? "text-green-600" : "text-red-600"}`}>{draftMsg}</span>}
+                {draftMsg && <span className={`text-xs font-medium ${draftMsg.startsWith("Sent") || draftMsg.startsWith("Body regenerated") ? "text-green-600" : "text-red-600"}`}>{draftMsg}</span>}
                 <button onClick={() => setReviewDraft(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
                 <button
                   onClick={sendDraft}
