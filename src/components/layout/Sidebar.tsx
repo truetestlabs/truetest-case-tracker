@@ -191,7 +191,8 @@ export function Sidebar() {
     setRegenerating(true);
     setDraftMsg(null);
     try {
-      const params = reviewDraft.draftType === "results_mro_complete" ? "mro_complete=true" : "mro=true";
+      const isMroComplete = reviewDraft.draftType === "results_mro_complete" || draftBody.includes("MRO Review Complete") || draftBody.includes("MRO report");
+    const params = isMroComplete ? "mro_complete=true" : "";
       const res = await fetch(`/api/cases/${reviewDraft.caseId}/compose-results?${params}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to regenerate");
@@ -482,15 +483,13 @@ export function Sidebar() {
                 >
                   Discard Draft
                 </button>
-                {(reviewDraft.draftType === "results_mro_complete" || reviewDraft.draftType === "results_mro") && (
-                  <button
-                    onClick={regenerateDraftBody}
-                    disabled={regenerating}
-                    className="px-4 py-2 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {regenerating ? "Regenerating…" : "↺ Regenerate"}
-                  </button>
-                )}
+                <button
+                  onClick={regenerateDraftBody}
+                  disabled={regenerating}
+                  className="px-4 py-2 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {regenerating ? "Regenerating…" : "↺ Regenerate"}
+                </button>
               </div>
               <div className="flex items-center gap-3">
                 {draftMsg && <span className={`text-xs font-medium ${draftMsg.startsWith("Sent") || draftMsg.startsWith("Body regenerated") ? "text-green-600" : "text-red-600"}`}>{draftMsg}</span>}
