@@ -319,13 +319,22 @@ export default function PhoneIntakePage() {
       }
       const appointmentId: string = apptData.appointment.id;
 
-      // 4. Fire confirmation SMS (fire-and-forget — failure must never
-      //    affect the booking)
-      fetch("/api/appointments/sms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appointmentId }),
-      }).catch((e) => console.error("[page.tsx] background fetch failed:", e));
+      // 4. Fire confirmation SMS + email (fire-and-forget — failure must
+      //    never affect the booking). Send whichever contact methods we have.
+      if (form.phone.trim()) {
+        fetch("/api/appointments/sms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ appointmentId }),
+        }).catch((e) => console.error("[page.tsx] SMS fire-and-forget failed:", e));
+      }
+      if (form.email.trim()) {
+        fetch("/api/appointments/email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ appointmentId }),
+        }).catch((e) => console.error("[page.tsx] email fire-and-forget failed:", e));
+      }
 
       // 5. Success state
       setResult({
@@ -374,8 +383,11 @@ export default function PhoneIntakePage() {
               minute: "2-digit",
             })}
           </p>
-          {form.phone && (
-            <p className="text-sm text-gray-500 mb-6">📱 Confirmation SMS sent to {form.phone}</p>
+          {(form.phone || form.email) && (
+            <div className="text-sm text-gray-500 mb-6 space-y-1">
+              {form.phone && <p>📱 Confirmation SMS sent to {form.phone}</p>}
+              {form.email && <p>✉️ Confirmation email sent to {form.email}</p>}
+            </div>
           )}
           <div className="flex gap-3 justify-center">
             <Link

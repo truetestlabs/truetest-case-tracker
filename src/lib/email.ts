@@ -625,6 +625,67 @@ export async function sendRefusalToTestEmail(
   return emailList;
 }
 
+/** Send appointment booking confirmation email to the donor */
+export async function sendBookingConfirmationEmail(opts: {
+  toEmail: string;
+  firstName: string;
+  startTime: Date | string;
+}): Promise<void> {
+  if (!process.env.RESEND_API_KEY) return;
+
+  const apptDate = new Date(opts.startTime);
+  const dateStr = apptDate.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  const timeStr = apptDate.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+
+  const html = emailLayout({
+    headerBg: "#1e3a5f",
+    headerTitle: "Appointment Confirmed",
+    body: `
+      <p style="font-size:15px;margin:0 0 20px;font-family:${FONT};">Hi ${opts.firstName}, your appointment has been booked. Here are your details:</p>
+
+      <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:20px;margin-bottom:24px;">
+        <p style="color:#64748b;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin:0 0 6px;font-family:${FONT};">Date &amp; Time</p>
+        <p style="color:#0f172a;font-size:20px;font-weight:700;margin:0 0 4px;font-family:${FONT};">${dateStr}</p>
+        <p style="color:#475569;font-size:15px;font-weight:600;margin:0;font-family:${FONT};">${timeStr}</p>
+      </div>
+
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:24px;">
+        <p style="color:#64748b;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin:0 0 6px;font-family:${FONT};">Location</p>
+        <p style="color:#0f172a;font-size:14px;font-weight:600;margin:0 0 2px;font-family:${FONT};">TrueTest Labs</p>
+        <p style="color:#475569;font-size:13px;margin:0 0 2px;font-family:${FONT};">${OFFICE_ADDRESS}</p>
+        <p style="color:#475569;font-size:13px;margin:4px 0 0;font-family:${FONT};">Phone: ${OFFICE_PHONE}</p>
+        <p style="color:#64748b;font-size:12px;margin:8px 0 0;font-family:${FONT};">Hours: Mon–Fri 9:00 AM – 5:00 PM</p>
+      </div>
+
+      <p style="font-size:13px;color:#64748b;margin:0;line-height:1.6;font-family:${FONT};">
+        Please arrive on time and bring a valid photo ID. If you need to reschedule, call us at ${OFFICE_PHONE} as soon as possible.
+      </p>`,
+    footerNote: "You received this because an appointment was booked on your behalf at TrueTest Labs.",
+  });
+
+  const { error: sendError } = await getResend().emails.send({
+    from: FROM_EMAIL,
+    replyTo: REPLY_TO,
+    to: [opts.toEmail],
+    subject: `Appointment Confirmed — ${dateStr} at ${timeStr}`,
+    html,
+  });
+  if (sendError) {
+    console.error("[Email] Resend error (booking confirmation):", sendError);
+    throw new Error(sendError.message);
+  }
+  console.log("[Email] booking confirmation sent to:", opts.toEmail);
+}
+
 /** Send donor compliance instructions for a monitoring schedule (PIN, check-in link, rules) */
 export async function sendDonorInstructionsEmail(scheduleId: string): Promise<string[]> {
   if (!process.env.RESEND_API_KEY) return [];
