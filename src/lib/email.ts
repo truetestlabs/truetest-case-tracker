@@ -234,29 +234,50 @@ export async function sendDraftEmail(draftId: string): Promise<string[]> {
     ? `${draft.case.donor.firstName} ${draft.case.donor.lastName}`
     : "the donor";
 
+  const attachmentNote = isMro
+    ? `<p style="color:#64748b;font-size:13px;margin:16px 0 0;font-family:${FONT};">The MRO report is attached to this email.</p>`
+    : "";
+
   const html = emailLayout({
     headerBg: isMro ? "#5b21b6" : "#1e3a5f",
-    headerTitle: isMro ? "Test Results \u2014 MRO Review" : "Test Results Available",
-    body: summaryBlock(draft.body),
+    headerTitle: isMro ? "MRO Review Complete" : "Test Results Available",
+    body: summaryBlock(draft.body) + attachmentNote,
   });
 
   const emailList = (draft.recipients as string[]) || [];
   if (emailList.length === 0) return [];
 
-  // Attach the result PDF if available
+  // Attach PDFs: for MRO-complete drafts attach the MRO report (correspondence);
+  // for standard results drafts attach the lab result report.
   type Attachment = { filename: string; content: Buffer };
   const attachments: Attachment[] = [];
-  const latestResult = await prisma.document.findFirst({
-    where: { caseId: draft.caseId, documentType: "result_report" },
+
+  const docTypesToAttach: string[] = isMro
+    ? ["correspondence", "result_report"] // MRO report first, then lab result as backup
+    : ["result_report"];
+
+  const docsToAttach = await prisma.document.findMany({
+    where: {
+      caseId: draft.caseId,
+      documentType: { in: docTypesToAttach },
+      ...(draft.testOrderId ? { testOrderId: draft.testOrderId } : {}),
+    },
     orderBy: { uploadedAt: "desc" },
-    select: { filePath: true, fileName: true },
+    select: { documentType: true, filePath: true, fileName: true },
   });
-  if (latestResult?.filePath && latestResult?.fileName) {
-    try {
-      const { buffer: pdfBuffer } = await downloadFile(latestResult.filePath);
-      attachments.push({ filename: latestResult.fileName, content: pdfBuffer });
-    } catch (e) {
-      console.warn("[Email] Could not attach result PDF:", e);
+
+  // For MRO drafts: attach MRO correspondence doc; always attach lab result report too
+  const seen = new Set<string>();
+  for (const docType of docTypesToAttach) {
+    const doc = docsToAttach.find((d) => d.documentType === docType && !seen.has(d.filePath ?? ""));
+    if (doc?.filePath && doc?.fileName) {
+      seen.add(doc.filePath);
+      try {
+        const { buffer: pdfBuffer } = await downloadFile(doc.filePath);
+        attachments.push({ filename: doc.fileName, content: pdfBuffer });
+      } catch (e) {
+        console.warn(`[Email] Could not attach ${docType}:`, e);
+      }
     }
   }
 
