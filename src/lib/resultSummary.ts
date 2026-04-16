@@ -262,7 +262,27 @@ The test was processed at Quest Diagnostics' DHHS-certified laboratory in Lenexa
 
 ---
 
-EXAMPLE M — Negative Hair Drug Test WITH EtG Alcohol Add-On (combined panel):
+EXAMPLE M — Positive Hair Phenibut with Negative EtG Add-On (novel substance, hair-only monitoring):
+
+Paul Sloan — Hair Drug Test with EtG Alcohol Summary
+Collected: April 8, 2026 | Reported: April 15, 2026 | Type: Head Hair + EtG Add-On
+
+Result: POSITIVE — Phenibut
+EtG (Alcohol): NEGATIVE
+
+Paul Sloan's head hair drug test, which included a phenibut add-on and an Ethyl Glucuronide (EtG) alcohol add-on, returned positive for phenibut at a confirmed quantitative value of 312 pg/mg (confirm limit: 200 pg/mg). The EtG alcohol biomarker returned negative at a cutoff of 20 pg/mg, indicating no detectable alcohol exposure above the threshold during the testing window.
+
+This specimen was collected from head hair, providing a detection window of approximately 3 months prior to the April 8th collection date — covering roughly early January through early April 2026.
+
+Important Limitation: As with all drug tests, this result cannot determine the exact time of use, the dose consumed, or the frequency of consumption. The result confirms the presence of phenibut above the confirmed threshold during the approximately 3-month detection window.
+
+The results were confirmed by LC-MS/MS and certified by the laboratory director at United States Drug Testing Laboratories (CLIA #14D0712964).
+
+Monitoring Recommendation: Given these results, ongoing monitoring is recommended. Because phenibut is not included in standard sweat patch or urine drug panels, repeat hair testing with the phenibut add-on is the appropriate monitoring tool for this substance. Hair testing provides a detection window of approximately 3 months, with repeat testing every 90 days offering ongoing coverage. Please feel free to reach out to discuss a monitoring program tailored to the needs of this case.
+
+---
+
+EXAMPLE N — Negative Hair Drug Test WITH EtG Alcohol Add-On (combined panel):
 
 Ameet Patel — Hair Drug Test with EtG Alcohol Summary
 Collected: April 7, 2026 | Reported: April 10, 2026 | Type: Head Hair + EtG Add-On
@@ -326,7 +346,7 @@ HAIR:
 - Not specified: flag it
 - Cocaine + norcocaine present: note norcocaine = biological metabolism, consistent with ingestion. Calculate ratio vs 3% threshold
 - Hydrocodone positive in hair: include MRO referral
-- Hair + EtG alcohol add-on (combined panel, see Example M):
+- Hair + EtG alcohol add-on (combined panel, see Examples M and N):
     * Header: "Hair Drug Test with EtG Alcohol Summary" / Type: "Head Hair + EtG Add-On"
     * Result line includes "(including EtG alcohol)" when negative
     * Call out the EtG as an ADD-ON in the first narrative sentence
@@ -342,13 +362,30 @@ DILUTE SPECIMENS:
 - When creatinine is below the acceptable range but the lab does NOT designate the specimen as dilute (e.g., specific gravity is within range so the lab withholds the designation): report the actual validity values in the Specimen Validity section without any dilute language. You may note that creatinine was below the acceptable threshold factually, but do not call the specimen dilute, do not include the three-type explanation, and do not recommend a retest.
 - Only when the lab has formally printed "DILUTE" on the result: include the three-type explanation (Rejected/Positive/Negative) and recommend immediate retest.
 
-POSITIVE ILLICIT DRUGS (NOT alcohol) — add monitoring recommendation (except in sweat patch summaries):
+MONITORING RECOMMENDATIONS — SUBSTANCE-SPECIFIC RULES:
+
+CRITICAL RULE: Before recommending any monitoring test, verify it can actually detect the substance(s) the donor tested positive for. Never recommend a test that cannot detect the positive substance. The sweat patch is NOT a catch-all monitoring tool.
+
+SWEAT PATCH PANEL — the sweat patch detects ONLY these substance classes:
+  amphetamine, methamphetamine, cocaine/cocaine metabolite, opiates, PCP, THC (marijuana)
+  It does NOT detect: alcohol (EtG, PEth, EtS), phenibut, gabapentin, kratom, benzodiazepines,
+  fentanyl, tramadol, meperidine, zolpidem, or any other substance outside the above list.
+  NEVER recommend sweat patch for a positive result unless the positive substance is on this list.
+
+URINE PANELS — standard urine panels detect most common drugs but do NOT include phenibut,
+  gabapentin, kratom, or other novel/add-on substances unless a specialty panel is ordered.
+  Do not recommend urine monitoring for a substance that isn't on standard urine panels.
+
+POSITIVE STANDARD DRUGS (amphetamine, methamphetamine, cocaine, opiates, PCP, THC) — sweat patch and/or urine are both appropriate:
 "Given these results, ongoing monitoring is recommended. The sweat patch is worn on the skin for approximately one week and detects drug use cumulatively over the wear period, providing ongoing surveillance rather than a single point-in-time snapshot. Random urine testing is also available as an alternative. Both options can be tailored to the specific needs of the case. Please feel free to reach out to discuss the best fit for this monitoring program."
 
-POSITIVE ALCOHOL RESULTS (PEth, EtG, EtS) — use this alcohol-specific monitoring recommendation instead:
+POSITIVE ALCOHOL RESULTS (PEth, EtG, EtS) — alcohol-specific recommendation only. Never recommend sweat patch (sweat patches do not detect alcohol):
 "Given these results, ongoing monitoring is recommended. For alcohol, repeat PEth testing every 3-4 weeks provides a cumulative picture of consumption over time and is the gold-standard biomarker for tracking alcohol use patterns. EtG/EtS urine testing is also available for shorter-term detection (approximately 24-80 hours) and can be used for more frequent spot checks. Both options can be tailored to the specific needs of the case. Please feel free to reach out to discuss the best fit for this monitoring program."
 
-CRITICAL: Never recommend sweat patch in an alcohol test summary (PEth, EtG, EtS). Sweat patches detect drugs only — they do not detect alcohol.
+POSITIVE NOVEL/ADD-ON SUBSTANCES (phenibut, gabapentin, kratom, or any substance not on standard sweat patch or urine panels) — hair testing is the only appropriate recommendation:
+"Given these results, ongoing monitoring is recommended. Because [substance] is not included in standard sweat patch or urine drug panels, repeat hair testing with the [substance] add-on is the appropriate monitoring tool. Hair testing provides a detection window of approximately 3 months, with repeat testing every 90 days offering ongoing coverage. Please feel free to reach out to discuss a monitoring program tailored to the needs of this case."
+
+MIXED POSITIVES (e.g., phenibut positive AND a standard drug positive) — tailor the recommendation to each substance separately. Do not recommend sweat patch for the phenibut component; do not recommend hair-only for a cocaine or THC component if urine/patch would also work.
 
 CLINICAL (non-chain-of-custody) RESULTS:
 Flag as not forensically defensible.
