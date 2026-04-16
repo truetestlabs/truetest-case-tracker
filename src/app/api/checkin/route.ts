@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { rateLimit, getClientIp } from "@/lib/rateLimit";
 
 /**
  * POST /api/checkin  (PUBLIC — no auth required)
@@ -7,11 +8,32 @@ import { prisma } from "@/lib/prisma";
  *
  * Donor enters their schedule PIN and the system tells them whether they're
  * selected today. Every call is logged to the CheckIn table.
+ *
+ * Brute-force defense: 10 req/min/IP handler-level rate limit. With 6-digit
+ * PINs (1M combos), a single IP can explore at most 10/min = ~69 days to
+ * exhaust the space. The middleware also applies a broader 60/min/IP cap.
+ * Per-schedule lockout isn't useful here because a wrong PIN returns null
+ * (no schedule to lock against).
  */
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const pin = String(body.pin || "").trim();
+  // ── 1. Handler-level rate limit (10/min/IP) ──
+  const ip = getClientIp(request.headers);
+  const rl = rateLimit(`checkin:${ip}`, 10, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait a moment." },
+      { status: 429, headers: { "Retry-After": "60" } }
+    );
+  }
 
+  let body: { pin?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  const pin = String(body.pin || "").trim();
   if (!pin || pin.length < 4) {
     return NextResponse.json({ error: "Invalid PIN" }, { status: 400 });
   }
@@ -55,9 +77,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Log the check-in (audit trail)
-  const ipAddress = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-    || request.headers.get("x-real-ip")
-    || null;
+  const ipAddress = ip !== "unknown" ? ip : null;
   const userAgent = request.headers.get("user-agent") || null;
   await prisma.checkIn.create({
     data: {

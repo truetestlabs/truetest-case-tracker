@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { nextWeekday } from "@/lib/randomSchedule";
 import { sendRefusalToTestEmail } from "@/lib/email";
+import { requireAuth } from "@/lib/auth";
 
 /**
  * POST /api/random-selections/[id]/refuse
@@ -15,6 +16,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+
   const { id } = await params;
   const body = await request.json();
   const autoReschedule = !!body.autoReschedule;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateSelections, generateCheckInPin, type PatternType } from "@/lib/randomSchedule";
+import { requireAuth } from "@/lib/auth";
 
 export async function GET(
   _request: NextRequest,
@@ -27,6 +28,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+
   const { id: caseId } = await params;
   const body = await request.json();
 

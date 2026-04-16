@@ -8,6 +8,8 @@ import type { ExtractedLabResult } from "@/lib/resultExtract";
 import { runLabResultCrosschecks } from "@/lib/labResultCrosscheck";
 import { detectCocMisclassification } from "@/lib/detectCocMisclassification";
 import { uploadFile } from "@/lib/storage";
+import { requireAuth } from "@/lib/auth";
+import { logAudit, auditContext } from "@/lib/audit";
 
 // Allow longer execution for AI summary generation on upload
 export const maxDuration = 60;
@@ -139,6 +141,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Defense-in-depth auth check (middleware also gates this)
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+  const user = auth.user;
+
   const { id: caseId } = await params;
 
   try {
@@ -272,10 +279,19 @@ export async function POST(
         documentType: documentType as "court_order" | "chain_of_custody" | "result_report" | "invoice" | "agreement" | "correspondence" | "other",
         fileName: displayName,
         filePath: storagePath,
-        uploadedBy: "admin",
+        uploadedBy: user.email,
         notes: null,
         ...(extractedData ? { extractedData } : {}),
       },
+    });
+
+    // Audit log
+    logAudit({
+      userId: user.id,
+      action: "document.upload",
+      resource: "Document",
+      resourceId: document.id,
+      metadata: { caseId, documentType, fileName: displayName, ...auditContext(request) },
     });
 
     // Log it
@@ -284,7 +300,7 @@ export async function POST(
         caseId,
         oldStatus: "—",
         newStatus: "document_uploaded",
-        changedBy: "admin",
+        changedBy: user.email,
         note: `Uploaded ${documentType.replace("_", " ")}: ${originalFileName}`,
       },
     });
@@ -320,7 +336,7 @@ export async function POST(
             testOrderId: order.id,
             oldStatus: order.testStatus,
             newStatus: "specimen_collected",
-            changedBy: "admin",
+            changedBy: user.email,
             note: usedParsedDate
               ? `Auto-advanced: chain of custody uploaded. Collection date ${effectiveCollectionDate.toLocaleDateString("en-US")} extracted from COC.`
               : "Auto-advanced: chain of custody uploaded. Collection date set to upload time (could not parse date from PDF).",
@@ -367,7 +383,7 @@ export async function POST(
             testOrderId: order.id,
             oldStatus: order.testStatus,
             newStatus: newStatus,
-            changedBy: "admin",
+            changedBy: user.email,
             note: isPaid
               ? "Auto-advanced: lab results uploaded (paid)"
               : "Auto-held: lab results uploaded but payment outstanding",
@@ -424,7 +440,7 @@ export async function POST(
               testOrderId: order.id,
               oldStatus: newStatus,
               newStatus: "needs_review",
-              changedBy: "admin",
+              changedBy: user.email,
               note:
                 `Lab result cross-check flagged ${findings.length} mismatch${findings.length === 1 ? "" : "es"}: ` +
                 findings.map((f) => `${f.severity.toUpperCase()} ${f.type} — ${f.message}`).join(" | "),
@@ -443,7 +459,7 @@ export async function POST(
               caseId,
               oldStatus: "closed",
               newStatus: "active",
-              changedBy: "admin",
+              changedBy: user.email,
               note: "Auto-reopened: new lab results uploaded on closed case",
             },
           });
@@ -461,7 +477,7 @@ export async function POST(
           testOrderId: testOrderId || null,
           oldStatus: "—",
           newStatus: "coc_misclassified",
-          changedBy: "admin",
+          changedBy: user.email,
           note: `COC misclassified upload flagged: "${document.fileName}". ${cocMisclassificationWarning}`,
         },
       });
@@ -484,6 +500,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Defense-in-depth auth check
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+  const user = auth.user;
+
   const { id: caseId } = await params;
   const { searchParams } = new URL(request.url);
   const documentId = searchParams.get("documentId");
@@ -499,6 +520,14 @@ export async function DELETE(
     }
 
     await prisma.document.delete({ where: { id: documentId } });
+
+    logAudit({
+      userId: user.id,
+      action: "document.delete",
+      resource: "Document",
+      resourceId: documentId,
+      metadata: { caseId, fileName: doc.fileName, documentType: doc.documentType, ...auditContext(request) },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

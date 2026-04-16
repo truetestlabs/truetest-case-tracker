@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendSms, formatAppointmentConfirmation } from "@/lib/sms";
+import { requireAuth } from "@/lib/auth";
 
 /**
  * POST /api/appointments/sms
@@ -12,6 +13,9 @@ import { sendSms, formatAppointmentConfirmation } from "@/lib/sms";
  * is unaffected.
  */
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+
   try {
     const { appointmentId } = await request.json();
     if (!appointmentId) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -20,6 +21,9 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
 // POST /api/accounts/[id]/default-recipients
 export async function POST(req: NextRequest, { params }: Ctx) {
+  const auth = await requireAuth(req);
+  if (auth.response) return auth.response;
+
   const { id } = await params;
   try {
     const body = await req.json();
@@ -46,6 +50,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
 // DELETE /api/accounts/[id]/default-recipients?recipientId=xxx
 export async function DELETE(req: NextRequest, { params }: Ctx) {
+  const auth = await requireAuth(req);
+  if (auth.response) return auth.response;
+
   const { id } = await params;
   const recipientId = new URL(req.url).searchParams.get("recipientId");
   if (!recipientId) {

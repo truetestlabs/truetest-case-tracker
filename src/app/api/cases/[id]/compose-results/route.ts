@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getEmailRecipients, sendMroReferralEmail } from "@/lib/email";
+import { requireAuth } from "@/lib/auth";
 
 /**
  * GET /api/cases/[id]/compose-results?mro=true|false
@@ -135,6 +136,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+
   const { id: caseId } = await params;
   const { searchParams } = new URL(request.url);
   const mroReview = searchParams.get("mro") === "true";

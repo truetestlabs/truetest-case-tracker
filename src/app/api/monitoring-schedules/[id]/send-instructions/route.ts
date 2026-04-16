@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendDonorInstructionsEmail } from "@/lib/email";
+import { requireAuth } from "@/lib/auth";
 
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(_request);
+  if (auth.response) return auth.response;
+
   const { id } = await params;
 
   try {

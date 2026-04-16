@@ -19,6 +19,33 @@ import { rateLimit, getClientIp } from "@/lib/rateLimit";
 // hits go through Vercel's CDN and shouldn't be throttled.
 const PUBLIC_API_PREFIXES = ["/api/public", "/api/kiosk", "/api/checkin"];
 
+// ── Security headers applied to every response ──
+const SECURITY_HEADERS: Record<string, string> = {
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  "X-Frame-Options": "DENY",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Content-Security-Policy": [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",   // Next.js needs inline + eval in dev; tighten with nonces later
+    "style-src 'self' 'unsafe-inline'",                   // Next.js CSS-in-JS
+    "img-src 'self' data: blob: https://*.supabase.co",
+    "font-src 'self'",
+    "connect-src 'self' https://*.supabase.co",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join("; "),
+};
+
+function applySecurityHeaders(response: NextResponse): NextResponse {
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    response.headers.set(key, value);
+  }
+  return response;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -59,15 +86,17 @@ export async function middleware(request: NextRequest) {
     const ip = getClientIp(request.headers);
     const rl = rateLimit(`mw:${pathname}:${ip}`, 60, 60_000);
     if (!rl.ok) {
-      return new NextResponse(
-        JSON.stringify({ error: "Too many requests" }),
-        {
-          status: 429,
-          headers: {
-            "Content-Type": "application/json",
-            "Retry-After": "60",
-          },
-        }
+      return applySecurityHeaders(
+        new NextResponse(
+          JSON.stringify({ error: "Too many requests" }),
+          {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Retry-After": "60",
+            },
+          }
+        )
       );
     }
   }
@@ -103,7 +132,7 @@ export async function middleware(request: NextRequest) {
 
   // Public routes pass through regardless of auth status
   if (isPublic) {
-    return response;
+    return applySecurityHeaders(response);
   }
 
   // Protected route — redirect to login if no session
@@ -111,10 +140,10 @@ export async function middleware(request: NextRequest) {
     const loginUrl = new URL("/login", request.url);
     // Preserve the intended destination so we can redirect back after login
     loginUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(loginUrl);
+    return applySecurityHeaders(NextResponse.redirect(loginUrl));
   }
 
-  return response;
+  return applySecurityHeaders(response);
 }
 
 export const config = {

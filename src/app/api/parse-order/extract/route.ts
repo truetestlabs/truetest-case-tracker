@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
 
 // Lazy import — pdf-parse doesn't have a proper ESM default export
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -334,6 +335,9 @@ function parseCourtOrderText(text: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+
   try {
     const buffer = await request.arrayBuffer();
     const data = await pdf(Buffer.from(buffer));

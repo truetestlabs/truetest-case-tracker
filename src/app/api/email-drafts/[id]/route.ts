@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
 
 /** PATCH /api/email-drafts/[id] — edit draft before sending */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+
   const { id } = await params;
 
   try {
@@ -31,6 +35,9 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(_request);
+  if (auth.response) return auth.response;
+
   const { id } = await params;
 
   try {

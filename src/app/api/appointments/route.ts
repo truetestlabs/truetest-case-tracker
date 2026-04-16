@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { BUSINESS_HOURS, isSlotFree } from "@/lib/appointments";
 import { createCalendarEvent } from "@/lib/gcal";
+import { requireAuth } from "@/lib/auth";
 
 /**
  * GET /api/appointments?from=ISO&to=ISO — list appointments in a range
@@ -42,6 +43,9 @@ export async function GET(request: NextRequest) {
  * appointment. Returns 409 if a competing booking beat this one.
  */
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+
   try {
     const body = await request.json();
     if (!body.startTime) {

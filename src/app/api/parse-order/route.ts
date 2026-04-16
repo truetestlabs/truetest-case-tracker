@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
 
 // This endpoint receives extracted court order data (parsed client-side or by AI)
 // and creates the full case with contacts, distribution list, and test orders
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+
   try {
     const body = await request.json();
     const parsed = body.parsedData;

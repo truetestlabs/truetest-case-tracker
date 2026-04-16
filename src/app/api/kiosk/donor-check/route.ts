@@ -1,17 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { rateLimit, getClientIp } from "@/lib/rateLimit";
 
 /** GET /api/kiosk/donor-check?firstName=X&lastName=Y
  *  Public endpoint — returns basic donor contact info for returning donor pre-fill,
  *  plus attorney/GAL from their most recent case so Step 3 can be pre-populated.
  *  Does NOT expose full case data.
+ *
+ *  Rate-limited to 20 req/min/IP to prevent donor name enumeration.
  */
 export async function GET(request: NextRequest) {
+  // ── Rate limit (20/min/IP) — prevent donor enumeration ──
+  const ip = getClientIp(request.headers);
+  const rl = rateLimit(`donor-check:${ip}`, 20, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait a moment." },
+      { status: 429, headers: { "Retry-After": "60" } }
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const firstName = searchParams.get("firstName")?.trim();
   const lastName = searchParams.get("lastName")?.trim();
 
-  if (!firstName || !lastName) {
+  if (!firstName || !lastName || firstName.length < 2 || lastName.length < 2) {
     return NextResponse.json({ found: false });
   }
 

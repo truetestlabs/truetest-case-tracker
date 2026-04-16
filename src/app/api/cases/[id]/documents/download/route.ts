@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { downloadFile } from "@/lib/storage";
+import { requireAuth } from "@/lib/auth";
+import { logAudit, auditContext } from "@/lib/audit";
 import archiver from "archiver";
 import { PassThrough } from "stream";
 
@@ -8,6 +10,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Defense-in-depth auth check
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+  const user = auth.user;
+
   const { id: caseId } = await params;
   const { searchParams } = new URL(request.url);
   const documentId = searchParams.get("documentId");
@@ -23,6 +30,14 @@ export async function GET(
       }
 
       const { buffer: fileBuffer, contentType } = await downloadFile(doc.filePath);
+
+      logAudit({
+        userId: user.id,
+        action: "document.download",
+        resource: "Document",
+        resourceId: documentId,
+        metadata: { caseId, fileName: doc.fileName, ...auditContext(request) },
+      });
 
       return new NextResponse(new Uint8Array(fileBuffer), {
         headers: {
@@ -75,6 +90,14 @@ export async function GET(
       const zipName = typeFilter
         ? `${caseData?.caseNumber || "case"}-${typeFilter.replace("_", "-")}.zip`
         : `${caseData?.caseNumber || "case"}-documents.zip`;
+
+      logAudit({
+        userId: user.id,
+        action: "document.download_bulk",
+        resource: "Case",
+        resourceId: caseId,
+        metadata: { documentCount: documents.length, typeFilter, ...auditContext(request) },
+      });
 
       return new NextResponse(zipBuffer, {
         headers: {

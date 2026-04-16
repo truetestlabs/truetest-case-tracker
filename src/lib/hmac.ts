@@ -30,6 +30,53 @@ export function verifyHmac(
 }
 
 /**
+ * Verify HMAC with replay protection. The signer must include a
+ * `timestamp` (Unix seconds) in the signed payload: the HMAC is
+ * computed over `${timestamp}.${rawBody}` and the timestamp is sent
+ * in the `X-TrueTest-Timestamp` header. We reject if the timestamp
+ * is outside ±5 minutes, preventing captured signatures from being
+ * replayed after the window closes.
+ *
+ * Falls back gracefully: if no timestamp header is provided, delegates
+ * to the basic `verifyHmac` (body-only). This lets us roll out the
+ * marketing-site change without a hard cutover.
+ */
+export function verifyHmacWithTimestamp(
+  secret: string,
+  rawBody: string,
+  providedHex: string | null | undefined,
+  timestampHeader: string | null | undefined,
+  maxAgeMs = 5 * 60 * 1000
+): { valid: boolean; reason?: string } {
+  if (!providedHex) return { valid: false, reason: "missing signature" };
+
+  // If no timestamp header, fall back to basic HMAC (backwards compat)
+  if (!timestampHeader) {
+    return { valid: verifyHmac(secret, rawBody, providedHex) };
+  }
+
+  const ts = parseInt(timestampHeader, 10);
+  if (Number.isNaN(ts)) return { valid: false, reason: "invalid timestamp" };
+
+  const nowMs = Date.now();
+  const tsMs = ts * 1000;
+  if (Math.abs(nowMs - tsMs) > maxAgeMs) {
+    return { valid: false, reason: "timestamp expired" };
+  }
+
+  // Signed payload includes the timestamp to bind them together
+  const payload = `${ts}.${rawBody}`;
+  const expected = computeHmacHex(secret, payload);
+  if (expected.length !== providedHex.length) return { valid: false, reason: "bad signature" };
+  try {
+    const ok = timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(providedHex, "hex"));
+    return ok ? { valid: true } : { valid: false, reason: "bad signature" };
+  } catch {
+    return { valid: false, reason: "bad signature" };
+  }
+}
+
+/**
  * Parse an env-var-style allowlist into a Set: comma-separated, trimmed.
  * Used for both CORS origins and IP allowlists.
  */

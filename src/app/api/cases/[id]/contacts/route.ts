@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+
   const { id: caseId } = await params;
   try {
     const body = await request.json();
@@ -55,6 +59,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+
   const { id: caseId } = await params;
 
   try {
@@ -144,6 +151,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+
   const { id: caseId } = await params;
   const { searchParams } = new URL(request.url);
   const caseContactId = searchParams.get("caseContactId");

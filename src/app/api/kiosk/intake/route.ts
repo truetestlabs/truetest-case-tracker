@@ -2,14 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { detectChanges } from "@/lib/kiosk-changes";
 import { approveDraft } from "@/lib/kiosk-approve";
+import { rateLimit, getClientIp } from "@/lib/rateLimit";
+
+const VALID_CASE_TYPES = new Set(["court_ordered", "voluntary", "by_agreement"]);
 
 /** POST /api/kiosk/intake — create an IntakeDraft from the kiosk form */
 export async function POST(request: NextRequest) {
+  // Rate limit: 15 req/min/IP — prevent form-spam pollution
+  const ip = getClientIp(request.headers);
+  const rl = rateLimit(`kiosk-intake:${ip}`, 15, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait a moment." },
+      { status: 429, headers: { "Retry-After": "60" } }
+    );
+  }
+
   try {
     const body = await request.json();
 
     if (!body.firstName?.trim() || !body.lastName?.trim() || !body.caseType) {
       return NextResponse.json({ error: "Name and visit type are required" }, { status: 400 });
+    }
+
+    if (!VALID_CASE_TYPES.has(body.caseType)) {
+      return NextResponse.json({ error: "Invalid visit type" }, { status: 400 });
     }
 
     // Check for existing donor

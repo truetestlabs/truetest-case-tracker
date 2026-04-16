@@ -4,7 +4,7 @@ import { generateCaseNumber } from "@/lib/case-utils";
 import { resolveFormTests, mapReasonToCaseType } from "@/lib/testMapping";
 import type { SpecimenType, Lab } from "@prisma/client";
 import { publicOrderSchema, formatZodError } from "@/lib/validation/schemas";
-import { verifyHmac, parseAllowlist } from "@/lib/hmac";
+import { verifyHmacWithTimestamp, parseAllowlist } from "@/lib/hmac";
 import { rateLimit, getClientIp } from "@/lib/rateLimit";
 
 // ── CORS allowlist ────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
     "Access-Control-Allow-Origin": allowed,
     "Vary": "Origin",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-TrueTest-Signature",
+    "Access-Control-Allow-Headers": "Content-Type, X-TrueTest-Signature, X-TrueTest-Timestamp",
   };
 }
 
@@ -70,10 +70,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── 3. HMAC signature verification ──
+  // ── 3. HMAC signature verification (with replay protection) ──
   // Read the raw body once so we can both verify and parse it.
   const rawBody = await request.text();
   const signature = request.headers.get("x-truetest-signature");
+  const timestamp = request.headers.get("x-truetest-timestamp");
   const secret = process.env.PUBLIC_ORDER_HMAC_SECRET;
   if (!secret) {
     console.error("[public/order] PUBLIC_ORDER_HMAC_SECRET is not set; refusing request");
@@ -82,8 +83,9 @@ export async function POST(request: NextRequest) {
       { status: 503, headers }
     );
   }
-  if (!verifyHmac(secret, rawBody, signature)) {
-    console.warn(`[public/order] rejected: bad/missing HMAC signature from ${ip}`);
+  const hmacResult = verifyHmacWithTimestamp(secret, rawBody, signature, timestamp);
+  if (!hmacResult.valid) {
+    console.warn(`[public/order] rejected: ${hmacResult.reason || "bad signature"} from ${ip}`);
     return NextResponse.json(
       { error: "Invalid signature" },
       { status: 401, headers }
