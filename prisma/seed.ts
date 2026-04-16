@@ -49,9 +49,8 @@ async function main() {
     // HAIR/NAIL PANELS — USDTL
     // ============================================================
     { category: "Hair/Nail", testName: "5 Panel Hair/Nails", panelSize: "5 panel", specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 295, labCost: 79, description: "Can be ordered at Quest PSCs" },
-    { category: "Hair/Nail", testName: "5 Panel with EtG Hair/Nails", panelSize: "5 panel", specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 425, labCost: 135 },
+    { category: "Hair/Nail", testName: "5 Panel with EtG Hair/Nails", panelSize: "5 panel", specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 395, labCost: 135 },
     { category: "Hair/Nail", testName: "EtG Hair/Nails (stand-alone)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 275, labCost: 105 },
-    { category: "Hair/Nail", testName: "7 Panel Hair/Nails", panelSize: "7 panel", specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 205, labCost: 99, description: "5 panel plus Barbiturates, Benzodiazepines" },
     { category: "Hair/Nail", testName: "10 Panel Hair/Nails", panelSize: "10 panel", specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 365, labCost: 147, description: "Amphetamines, Marijuana, Cocaine, Opiates, PCP, Benzodiazepines, Barbiturates, Methadone, Propoxyphene, Oxycodone" },
     { category: "Hair/Nail", testName: "10 Panel with Psilocin Hair/Nail", panelSize: "10 panel", specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 515, labCost: 0 },
     { category: "Hair/Nail", testName: "12 Panel Hair/Nails (Meperidine & Tramadol)", panelSize: "12 panel", specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 410, labCost: 199 },
@@ -67,7 +66,7 @@ async function main() {
     // HAIR/NAIL ADD-ONS — USDTL
     { category: "Hair/Nail Add-On", testName: "Hair/Nails Cotinine (add-on)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 120, labCost: 55, isAddOn: true },
     { category: "Hair/Nail Add-On", testName: "Hair/Nails Cotinine (stand-alone)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 225, labCost: 105 },
-    { category: "Hair/Nail Add-On", testName: "Hair/Nails EtG (add-on)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 130, labCost: 56, isAddOn: true },
+    { category: "Hair/Nail Add-On", testName: "Hair/Nails EtG (add-on)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 100, labCost: 56, isAddOn: true },
     { category: "Hair/Nail Add-On", testName: "Hair/Nails EtG (stand-alone)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 275, labCost: 105 },
     { category: "Hair/Nail Add-On", testName: "Hair/Nails Fentanyl (add-on)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 130, labCost: 56, isAddOn: true },
     { category: "Hair/Nail Add-On", testName: "Hair/Nails Fentanyl (stand-alone)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 225, labCost: 99 },
@@ -77,11 +76,9 @@ async function main() {
     { category: "Hair/Nail Add-On", testName: "Hair/Nails Kratom/Mitragynine (stand-alone)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 225, labCost: 107 },
     { category: "Hair/Nail Add-On", testName: "Hair/Nails Psilocin/Mushrooms (add-on)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 130, labCost: 56, isAddOn: true },
     { category: "Hair/Nail Add-On", testName: "Hair/Nails Psilocin/Mushrooms (stand-alone)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 225, labCost: 107 },
-    { category: "Hair/Nail Add-On", testName: "Hair/Nails Xylazine (add-on)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 130, labCost: 56, isAddOn: true },
+    { category: "Hair/Nail Add-On", testName: "Hair/Nails Xylazine (add-on)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 225, labCost: 56, isAddOn: true },
     { category: "Hair/Nail Add-On", testName: "Hair/Nails Xylazine (stand-alone)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 225, labCost: 107 },
-    { category: "Hair/Nail Add-On", testName: "Hair/Nails Medetomidine (add-on)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 130, labCost: 56, isAddOn: true },
-    { category: "Hair/Nail Add-On", testName: "Hair/Nails Medetomidine (stand-alone)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 225, labCost: 107 },
-    { category: "Hair/Nail Add-On", testName: "Hair/Nails Phenibut (add-on)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 130, labCost: 56, isAddOn: true },
+    { category: "Hair/Nail Add-On", testName: "Hair/Nails Phenibut (add-on)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 225, labCost: 56, isAddOn: true },
     { category: "Hair/Nail Add-On", testName: "Hair/Nails Phenibut (stand-alone)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 225, labCost: 107 },
     { category: "Hair/Nail Add-On", testName: "Hair/Nails Tianeptine (add-on)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 130, labCost: 56, isAddOn: true },
     { category: "Hair/Nail Add-On", testName: "Hair/Nails Tianeptine (stand-alone)", panelSize: null, specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 225, labCost: 107 },
@@ -95,9 +92,9 @@ async function main() {
     // ============================================================
     // CHILDGUARD ENVIRONMENTAL EXPOSURE — USDTL
     // ============================================================
-    { category: "ChildGuard", testName: "ChildGuard 5 Panel (Environmental Exposure)", panelSize: "5 panel", specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 195, labCost: 79, description: "Amphetamines, Marijuana, Cocaine, Opiates, PCP. Detects passive exposure via native drugs AND metabolites." },
-    { category: "ChildGuard", testName: "ChildGuard 7 Panel (Environmental Exposure)", panelSize: "7 panel", specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 225, labCost: 99, description: "5 panel plus Benzodiazepines, Barbiturates" },
-    { category: "ChildGuard", testName: "ChildGuard 9 Panel (Environmental Exposure)", panelSize: "9 panel", specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 300, labCost: 135, description: "7 panel plus Methadone, Propoxyphene" },
+    { category: "ChildGuard", testName: "ChildGuard 5 Panel (Environmental Exposure)", panelSize: "5 panel", specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 225, labCost: 79, description: "Amphetamines, Marijuana, Cocaine, Opiates, PCP. Detects passive exposure via native drugs AND metabolites." },
+    { category: "ChildGuard", testName: "ChildGuard 7 Panel (Environmental Exposure)", panelSize: "7 panel", specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 300, labCost: 99, description: "5 panel plus Benzodiazepines, Barbiturates" },
+    { category: "ChildGuard", testName: "ChildGuard 9 Panel (Environmental Exposure)", panelSize: "9 panel", specimenType: "hair" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 350, labCost: 135, description: "7 panel plus Methadone, Propoxyphene" },
 
     // ============================================================
     // BLOOD TESTS
@@ -116,6 +113,7 @@ async function main() {
     // BREATH ALCOHOL — In-House
     // ============================================================
     { category: "Breath Alcohol", testName: "Breath Alcohol Test (BAT)", panelSize: null, specimenType: "breath" as const, lab: "truetest_inhouse" as const, labTestCode: null, clientPrice: 65, labCost: 0 },
+    { category: "Breath Alcohol", testName: "11070N - BAT - NON-REGULATED (breath alcohol)", panelSize: null, specimenType: "breath" as const, lab: "quest" as const, labTestCode: "11070N", clientPrice: 65, labCost: 0 },
 
     // ============================================================
     // SWEAT PATCH
