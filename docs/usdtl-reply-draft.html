@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>USDTL Reply Draft</title>
+<style>
+  body { background: #ffffff; color: #000000; font-family: -apple-system, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5; max-width: 640px; margin: 40px auto; padding: 0 20px; }
+  p { margin: 0 0 14px; }
+  ol { padding-left: 20px; }
+  li { margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<p>Hi Priti,</p>
+
+<p>Thanks for getting back to us. Yes &mdash; we'll be hosting an HTTPS endpoint that your system will POST results to. We're building it now and want to make sure it's fully compatible with your system before we send over documentation and credentials.</p>
+
+<p>To spec our endpoint correctly, could you help us with a few details?</p>
+
+<ol>
+<li><strong>Message format</strong> &mdash; Will you be sending HL7 v2 ORU^R01 messages over HTTPS, or a different format/version?</li>
+<li><strong>Result PDFs</strong> &mdash; Will the PDF report come embedded in the message (e.g., base64 in an ED segment), or is it delivered separately?</li>
+<li><strong>Matching results back to orders</strong> &mdash; We understand you assign the accession number on your end. Is there a field where we can include our internal order ID on the requisition so it comes back in your result message? That would make matching seamless on our side.</li>
+<li><strong>Authentication</strong> &mdash; How will your system authenticate against our endpoint &mdash; shared secret (HMAC), API key, mutual TLS, or IP allowlist?</li>
+<li><strong>Acknowledgment</strong> &mdash; What ACK format do you expect back, and what's your retry/timeout behavior if our endpoint is momentarily unavailable?</li>
+<li><strong>Test environment</strong> &mdash; Do you have a sandbox with sample messages we can validate against before going live?</li>
+</ol>
+
+<p>Once we have these answers we'll have the endpoint and documentation ready quickly. Happy to jump on a call if that's easier.</p>
+
+<p>Best,<br>Michael</p>
+
+</body>
+</html>
