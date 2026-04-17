@@ -16,31 +16,27 @@ export function ConditionalLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-30 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Desktop sidebar — normal flex flow, no transforms (transforms create
-          a stacking context that traps fixed-position children like the draft
-          review modal inside the sidebar width) */}
-      <div className="hidden md:flex flex-shrink-0">
-        <Sidebar onNavigate={() => setSidebarOpen(false)} />
+      {/* Sidebar — always in flex flow on desktop, hidden behind hamburger on mobile */}
+      <div className="hidden md:block flex-shrink-0">
+        <Sidebar />
       </div>
 
-      {/* Mobile sidebar — fixed drawer, only mounted when open */}
+      {/* Mobile overlay + drawer */}
       {sidebarOpen && (
-        <div className="fixed inset-y-0 left-0 z-40 md:hidden">
-          <Sidebar onNavigate={() => setSidebarOpen(false)} />
-        </div>
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-30 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <div className="fixed inset-y-0 left-0 z-40 md:hidden">
+            <Sidebar onNavigate={() => setSidebarOpen(false)} />
+          </div>
+        </>
       )}
 
       <main className="flex-1 overflow-auto min-w-0">
-        {/* Mobile top bar */}
-        <div className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-20">
+        {/* Mobile top bar — hamburger + logo */}
+        <div className="flex md:hidden items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-20">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 rounded-lg text-gray-600 hover:bg-gray-100"
