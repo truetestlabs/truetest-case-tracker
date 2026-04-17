@@ -53,7 +53,7 @@
 
 ## Lab result PDFs — hard requirement
 
-For **every** lab integration (USDTL and any future lab), we must retrieve and store the **unaltered, lab-produced signed PDF** of the result report. That original PDF is what gets attached to client results emails, the MRO referral email, and stored in Supabase Storage as a `result_report` document. Never regenerate, re-render, or modify it. AI summaries live in the email body or a separate doc — the lab PDF passes through byte-for-byte. If a lab can't provide the signed PDF (only structured data), they aren't a viable partner.
+For **every** lab integration (USDTL and any future lab), we must retrieve and store the **unaltered, lab-produced final PDF** of the result report. That original PDF is what gets attached to client results emails, the MRO referral email, and stored in Supabase Storage as a `result_report` document. Never regenerate, re-render, or modify it. AI summaries live in the email body or a separate doc — the lab PDF passes through byte-for-byte. Note: lab reports are **not** signed — MRO signatures are a separate DOT-regulated step that happens downstream. If a lab can't provide the final PDF (only structured data), they aren't a viable partner.
 
 ## UI rules
 

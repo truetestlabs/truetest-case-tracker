@@ -174,7 +174,13 @@ export async function PATCH(
         //
         // Only fire when the caller isn't already changing testStatus in
         // the same PATCH — otherwise we'd clobber an explicit override.
-        if (existing.testStatus === "results_held" && !updateData.testStatus) {
+        // Note: the Edit Test Order modal always ships the current testStatus
+        // in its PATCH payload, so we treat "same as existing" as "not changing"
+        // to avoid blocking the auto-advance in that flow.
+        const callerChangingStatus =
+          updateData.testStatus !== undefined &&
+          updateData.testStatus !== existing.testStatus;
+        if (existing.testStatus === "results_held" && !callerChangingStatus) {
           updateData.testStatus = "results_received";
           data.testStatus = "results_received";
           if (!existing.resultsReceivedDate) {
