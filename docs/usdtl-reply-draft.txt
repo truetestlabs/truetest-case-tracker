@@ -1,0 +1,22 @@
+Hi Priti,
+
+Thanks for getting back to us. Yes — we'll be hosting an HTTPS endpoint that your system will POST results to. We're building it now and want to make sure it's fully compatible with your system before we send over documentation and credentials.
+
+To spec our endpoint correctly, could you help us with a few details?
+
+1. Message format — Will you be sending HL7 v2 ORU^R01 messages over HTTPS, or a different format/version?
+
+2. Result PDFs — Will the PDF report come embedded in the message (e.g., base64 in an ED segment), or is it delivered separately?
+
+3. Matching results back to orders — We understand you assign the accession number on your end. Is there a field where we can include our internal order ID on the requisition so it comes back in your result message? That would make matching seamless on our side.
+
+4. Authentication — How will your system authenticate against our endpoint — shared secret (HMAC), API key, mutual TLS, or IP allowlist?
+
+5. Acknowledgment — What ACK format do you expect back, and what's your retry/timeout behavior if our endpoint is momentarily unavailable?
+
+6. Test environment — Do you have a sandbox with sample messages we can validate against before going live?
+
+Once we have these answers we'll have the endpoint and documentation ready quickly. Happy to jump on a call if that's easier.
+
+Best,
+Michael
