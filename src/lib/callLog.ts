@@ -13,8 +13,13 @@ export async function createInboundCallLog(params: {
   fromNumber: string;
   toNumber?: string;
 }) {
-  return prisma.callLog.create({
-    data: {
+  // Upsert: if the ring-group TwiML falls through to the agent via
+  // <Redirect>, the same CallSid hits /api/voice/incoming a second
+  // time. We want one CallLog row per physical call.
+  return prisma.callLog.upsert({
+    where: { twilioCallSid: params.twilioCallSid },
+    update: {},
+    create: {
       twilioCallSid: params.twilioCallSid,
       fromNumber: params.fromNumber,
       toNumber: params.toNumber,

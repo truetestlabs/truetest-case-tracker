@@ -58,6 +58,10 @@ Inbound calls to Phone.com ring Matt + Colleen first; after no-answer they forwa
 - **Twilio setup:** on the inbound voice number, set Voice webhook → `https://<app>/api/voice/incoming` (POST), Status Callback → `https://<app>/api/voice/status` (POST, event `completed`).
 - **DOT/HIPAA posture:** agent never reads results aloud and doesn't confirm whether a specific person is a client. It takes a message and routes to the MRO for any result discussion.
 
+### Post-port ring group (Phase 1.5)
+
+When the Phone.com numbers port to Twilio, flip the inbound Voice webhook from `/api/voice/incoming` to `/api/voice/ring-group`. That route rings every number in `RING_GROUP_NUMBERS` (E.164, comma-separated) for `RING_GROUP_TIMEOUT_SEC` seconds (default 20), then falls through to the agent via `<Redirect>`. `RING_GROUP_CALLER_ID` optionally overrides what staff see on their cell. With no env set, the route is a straight passthrough to the agent — safe to deploy before the port.
+
 ## Domain & DNS
 
 - truetestlabs.com is on GoDaddy (no Cloudflare). Edge redirects not possible until Pages cutover.
