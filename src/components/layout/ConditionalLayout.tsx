@@ -25,10 +25,14 @@ export function ConditionalLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Sidebar — always visible on md+, slide-in drawer on mobile */}
+      {/* NOTE: no transform on md+ to avoid creating a stacking context that
+          traps fixed-position children (the draft review modal) inside the
+          sidebar width. On mobile we use translate for the slide-in effect,
+          but md:transform-none resets it so fixed children escape correctly. */}
       <div
-        className={`fixed md:relative z-40 h-full transition-transform duration-200 md:translate-x-0 ${
+        className={`fixed md:static z-40 h-full flex-shrink-0 transition-transform duration-200 md:transform-none ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } md:flex flex-shrink-0`}
+        }`}
       >
         <Sidebar onNavigate={() => setSidebarOpen(false)} />
       </div>
