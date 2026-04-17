@@ -24,18 +24,19 @@ export function ConditionalLayout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* Sidebar — always visible on md+, slide-in drawer on mobile */}
-      {/* NOTE: no transform on md+ to avoid creating a stacking context that
-          traps fixed-position children (the draft review modal) inside the
-          sidebar width. On mobile we use translate for the slide-in effect,
-          but md:transform-none resets it so fixed children escape correctly. */}
-      <div
-        className={`fixed md:static z-40 h-full flex-shrink-0 transition-transform duration-200 md:transform-none ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
+      {/* Desktop sidebar — normal flex flow, no transforms (transforms create
+          a stacking context that traps fixed-position children like the draft
+          review modal inside the sidebar width) */}
+      <div className="hidden md:flex flex-shrink-0">
         <Sidebar onNavigate={() => setSidebarOpen(false)} />
       </div>
+
+      {/* Mobile sidebar — fixed drawer, only mounted when open */}
+      {sidebarOpen && (
+        <div className="fixed inset-y-0 left-0 z-40 md:hidden">
+          <Sidebar onNavigate={() => setSidebarOpen(false)} />
+        </div>
+      )}
 
       <main className="flex-1 overflow-auto min-w-0">
         {/* Mobile top bar */}
