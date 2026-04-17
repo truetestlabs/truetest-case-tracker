@@ -51,6 +51,10 @@
 - truetestlabs.com is on GoDaddy (no Cloudflare). Edge redirects not possible until Pages cutover.
 - After Pages cutover, `_redirects` in `truetest-site` is the canonical place for path redirects.
 
+## Lab result PDFs — hard requirement
+
+For **every** lab integration (USDTL and any future lab), we must retrieve and store the **unaltered, lab-produced signed PDF** of the result report. That original PDF is what gets attached to client results emails, the MRO referral email, and stored in Supabase Storage as a `result_report` document. Never regenerate, re-render, or modify it. AI summaries live in the email body or a separate doc — the lab PDF passes through byte-for-byte. If a lab can't provide the signed PDF (only structured data), they aren't a viable partner.
+
 ## UI rules
 
 Before editing any UI component: describe layout, colors, spacing, mobile behavior, and button states. Get approval before implementing.
