@@ -68,7 +68,7 @@ function calloutBox(opts: { bg: string; border: string; titleColor: string; text
   </div>`;
 }
 
-const MRO_INTERNAL_TO = "mgammel@mac.com";
+const MRO_INTERNAL_TO = "mrochains@gmail.com";
 
 type Recipient = { email: string; name: string };
 
