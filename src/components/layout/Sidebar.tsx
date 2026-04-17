@@ -17,6 +17,7 @@ const navigation = [
   { name: "Contacts", href: "/contacts", icon: UsersIcon },
   { name: "Accounts", href: "/accounts", icon: BuildingIcon },
   { name: "Audit Log", href: "/dashboard/audit-log", icon: ShieldIcon },
+  { name: "AI Calls", href: "/dashboard/calls", icon: HeadsetIcon },
 ];
 
 const BOOKING_URL = "https://book.squareup.com/appointments/vktpg026o844b6/location/NRHN4SKCVGFSD/services/362SUMWGC5H55J2MCVTJF4FK";
@@ -677,6 +678,16 @@ function ClipboardIcon({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
       <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+    </svg>
+  );
+}
+
+function HeadsetIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 14v-2a9 9 0 0 1 18 0v2" />
+      <path d="M21 14v3a2 2 0 0 1-2 2h-1v-5h3z" />
+      <path d="M3 14v3a2 2 0 0 0 2 2h1v-5H3z" />
     </svg>
   );
 }

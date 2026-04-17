@@ -46,6 +46,18 @@
 - **Anthropic:** `ANTHROPIC_API_KEY`
 - **Supabase:** `DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 
+## AI phone agent (Phase 1)
+
+Inbound calls to Phone.com ring Matt + Colleen first; after no-answer they forward to a Twilio number wired to this app. The agent greets, takes a message, classifies intent/segment/urgency, texts the caller a confirmation, and logs everything to `CallLog`.
+
+- **Routes:** `POST /api/voice/incoming` (TwiML entrypoint), `POST /api/voice/turn?callLogId=...` (per-utterance), `POST /api/voice/status` (completion callback). All three validate `X-Twilio-Signature`.
+- **Agent lib:** `src/lib/voiceAgent.ts` — system prompt, tool definitions (`take_message`, `end_call`), per-turn Claude loop (Haiku 4.5) + post-call summary (Sonnet 4.6).
+- **TTS:** Twilio `<Say voice="Polly.Joanna-Neural">`. Good enough for Phase 1; upgrade to ElevenLabs or OpenAI Realtime (Phase 2) when we want lower latency and more natural prosody — requires a companion WebSocket service since Vercel serverless can't hold persistent streams.
+- **Dashboard:** `/dashboard/calls` — staff-visible transcript, summary, outcome, recap status.
+- **Extra env:** `STAFF_NOTIFY_NUMBERS` (comma-separated E.164, optional — each gets an SMS summary after every completed call). Set `VOICE_SKIP_SIGNATURE=1` for local ngrok testing only.
+- **Twilio setup:** on the inbound voice number, set Voice webhook → `https://<app>/api/voice/incoming` (POST), Status Callback → `https://<app>/api/voice/status` (POST, event `completed`).
+- **DOT/HIPAA posture:** agent never reads results aloud and doesn't confirm whether a specific person is a client. It takes a message and routes to the MRO for any result discussion.
+
 ## Domain & DNS
 
 - truetestlabs.com is on GoDaddy (no Cloudflare). Edge redirects not possible until Pages cutover.
