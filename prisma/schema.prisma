@@ -798,7 +798,13 @@ model AuditLog {
 
 model CallLog {
   id              String    @id @default(cuid())
-  twilioCallSid   String    @unique
+  // Unique ID from whichever voice provider handled the call. For
+  // Twilio-native calls this is the CallSid; for Vapi-hosted calls
+  // this is the Vapi call.id. We don't store both because every call
+  // belongs to exactly one logical stream.
+  externalCallId  String    @unique
+  provider        String    @default("vapi") // vapi | twilio
+  assistantId     String?   // Vapi assistant ID, for audit / multi-assistant setups
   fromNumber      String
   toNumber        String?
 

@@ -55,7 +55,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const call = await createInboundCallLog({
-      twilioCallSid: callSid,
+      externalCallId: callSid,
+      provider: "twilio",
       fromNumber: from,
       toNumber: to,
     });

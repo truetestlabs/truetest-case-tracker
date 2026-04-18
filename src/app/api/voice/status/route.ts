@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   finalizeCall,
-  getCallLogBySid,
+  getCallLogByExternalId,
   markRecapSent,
   markStaffNotified,
   readTranscript,
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  const log = await getCallLogBySid(callSid);
+  const log = await getCallLogByExternalId(callSid);
   if (!log) {
     console.warn("[voice/status] no CallLog for sid", callSid);
     return NextResponse.json({ ok: true });

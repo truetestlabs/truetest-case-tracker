@@ -46,21 +46,38 @@
 - **Anthropic:** `ANTHROPIC_API_KEY`
 - **Supabase:** `DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 
-## AI phone agent (Phase 1)
+## AI phone agent
 
-Inbound calls to Phone.com ring Matt + Colleen first; after no-answer they forward to a Twilio number wired to this app. The agent greets, takes a message, classifies intent/segment/urgency, texts the caller a confirmation, and logs everything to `CallLog`.
+Callers reach a virtual receptionist that greets, takes a message, classifies intent/segment/urgency, texts the caller a confirmation, and logs everything to `CallLog`. Two runtime paths co-exist on this branch:
 
-- **Routes:** `POST /api/voice/incoming` (TwiML entrypoint), `POST /api/voice/turn?callLogId=...` (per-utterance), `POST /api/voice/status` (completion callback). All three validate `X-Twilio-Signature`.
-- **Agent lib:** `src/lib/voiceAgent.ts` — system prompt, tool definitions (`take_message`, `end_call`), per-turn Claude loop (Haiku 4.5) + post-call summary (Sonnet 4.6).
-- **TTS:** Twilio `<Say voice="Polly.Joanna-Neural">`. Good enough for Phase 1; upgrade to ElevenLabs or OpenAI Realtime (Phase 2) when we want lower latency and more natural prosody — requires a companion WebSocket service since Vercel serverless can't hold persistent streams.
-- **Dashboard:** `/dashboard/calls` — staff-visible transcript, summary, outcome, recap status.
-- **Extra env:** `STAFF_NOTIFY_NUMBERS` (comma-separated E.164, optional — each gets an SMS summary after every completed call). Set `VOICE_SKIP_SIGNATURE=1` for local ngrok testing only.
-- **Twilio setup:** on the inbound voice number, set Voice webhook → `https://<app>/api/voice/incoming` (POST), Status Callback → `https://<app>/api/voice/status` (POST, event `completed`).
-- **DOT/HIPAA posture:** agent never reads results aloud and doesn't confirm whether a specific person is a client. It takes a message and routes to the MRO for any result discussion.
+### Vapi (primary — production path)
 
-### Post-port ring group (Phase 1.5)
+Vapi is a managed voice-AI platform: they run STT (Deepgram Nova-3), LLM (Anthropic Sonnet 4.6), TTS (ElevenLabs Sarah, turbo v2.5), turn-taking, and barge-in. Our server only answers webhooks for tool calls and end-of-call reports. Sub-second latency, natural voice, caller-can-interrupt.
 
-When the Phone.com numbers port to Twilio, flip the inbound Voice webhook from `/api/voice/incoming` to `/api/voice/ring-group`. That route rings every number in `RING_GROUP_NUMBERS` (E.164, comma-separated) for `RING_GROUP_TIMEOUT_SEC` seconds (default 20), then falls through to the agent via `<Redirect>`. `RING_GROUP_CALLER_ID` optionally overrides what staff see on their cell. With no env set, the route is a straight passthrough to the agent — safe to deploy before the port.
+- **Assistant config:** `src/lib/vapiAgent.ts` — builds the full JSON from the shared system prompt in `src/lib/voiceAgentPrompt.ts`. Voice, model, transcriber, tools, analysis plan all live here.
+- **Webhooks:**
+  - `POST /api/vapi/tool` — dispatches `take_message` + `end_call` tool calls.
+  - `POST /api/vapi/events` — consumes `end-of-call-report` (populates transcript, summary, Vapi structured analysis), then fires recap SMS + staff SMS.
+  - `GET /api/vapi/config` — auth-required; returns the assistant JSON for paste into the Vapi dashboard or `POST https://api.vapi.ai/assistant`.
+- **Env vars:**
+  - `VAPI_WEBHOOK_SECRET` — shared secret echoed as `x-vapi-secret` on every webhook. Reject if missing/wrong.
+  - `PUBLIC_APP_URL` — absolute origin used in the generated config (otherwise we fall back to the request origin).
+  - `STAFF_NOTIFY_NUMBERS` — comma-separated E.164 list that gets an SMS summary after every completed call.
+- **Setup:**
+  1. Sign up for Vapi, buy a phone number (or BYO a Twilio number and connect it).
+  2. `GET /api/vapi/config` while signed in, paste the JSON into Vapi → Assistants → Create.
+  3. In the Vapi dashboard, set the phone number's assistant to the new one and confirm the server URL shows `/api/vapi/events`.
+  4. Set `VAPI_WEBHOOK_SECRET` in Vercel to match the value Vapi sends.
+  5. Place a test call. Verify transcript + summary land on `/dashboard/calls` and the recap SMS arrives.
+- **DOT/HIPAA posture:** agent never reads results aloud and doesn't confirm whether a specific person is a client. `hipaaEnabled: true` in the Vapi config disables their retention of transcripts/recordings beyond the webhook delivery.
+
+### Twilio-native fallback (reference / Phase 1 path)
+
+Earlier pure-Vercel implementation using TwiML `<Gather>` + Polly voices + Claude Haiku per turn. Left in place as a reference and as a fallback if we ever need to run without a third-party voice platform. Higher per-turn latency (~2–4s) and no barge-in — not recommended for production traffic.
+
+- **Routes:** `POST /api/voice/incoming`, `POST /api/voice/turn?callLogId=...`, `POST /api/voice/status`. All three validate `X-Twilio-Signature`.
+- **Ring-group:** `POST /api/voice/ring-group` dials `RING_GROUP_NUMBERS` for `RING_GROUP_TIMEOUT_SEC`s, then `<Redirect>`s to `/api/voice/incoming`. For post-port Twilio-only setups.
+- **Extra env:** `VOICE_SKIP_SIGNATURE=1` for local ngrok testing only.
 
 ## Domain & DNS
 

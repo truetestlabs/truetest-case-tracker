@@ -9,18 +9,22 @@ import type { TranscriptTurn } from "./voiceAgent";
  */
 
 export async function createInboundCallLog(params: {
-  twilioCallSid: string;
+  externalCallId: string;
+  provider: "twilio" | "vapi";
   fromNumber: string;
   toNumber?: string;
+  assistantId?: string;
 }) {
-  // Upsert: if the ring-group TwiML falls through to the agent via
-  // <Redirect>, the same CallSid hits /api/voice/incoming a second
-  // time. We want one CallLog row per physical call.
+  // Upsert: the ring-group TwiML + <Redirect> fallback, and Vapi's
+  // retry behavior on webhooks, can both deliver the same external
+  // ID twice. One row per physical call.
   return prisma.callLog.upsert({
-    where: { twilioCallSid: params.twilioCallSid },
+    where: { externalCallId: params.externalCallId },
     update: {},
     create: {
-      twilioCallSid: params.twilioCallSid,
+      externalCallId: params.externalCallId,
+      provider: params.provider,
+      assistantId: params.assistantId,
       fromNumber: params.fromNumber,
       toNumber: params.toNumber,
       aiDisclosed: true,
@@ -33,8 +37,8 @@ export async function getCallLog(id: string) {
   return prisma.callLog.findUnique({ where: { id } });
 }
 
-export async function getCallLogBySid(sid: string) {
-  return prisma.callLog.findUnique({ where: { twilioCallSid: sid } });
+export async function getCallLogByExternalId(externalCallId: string) {
+  return prisma.callLog.findUnique({ where: { externalCallId } });
 }
 
 export async function readTranscript(id: string): Promise<TranscriptTurn[]> {

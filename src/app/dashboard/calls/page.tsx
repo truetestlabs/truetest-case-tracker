@@ -7,7 +7,8 @@ type TranscriptEntry = { role: "agent" | "caller" | "system"; text: string; at: 
 
 type Call = {
   id: string;
-  twilioCallSid: string;
+  externalCallId: string;
+  provider: string;
   fromNumber: string;
   callerName: string | null;
   callbackNumber: string | null;
@@ -292,8 +293,11 @@ function CallDetail({ call, onClose }: { call: Call; onClose: () => void }) {
           )}
         </div>
 
-        <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 rounded-b-xl text-xs text-gray-500">
-          Call SID: <span className="font-mono">{call.twilioCallSid}</span>
+        <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 rounded-b-xl text-xs text-gray-500 flex items-center justify-between">
+          <span>
+            {call.provider === "vapi" ? "Vapi call" : "Twilio call"}:{" "}
+            <span className="font-mono">{call.externalCallId}</span>
+          </span>
         </div>
       </div>
     </div>
