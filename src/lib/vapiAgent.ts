@@ -212,7 +212,7 @@ export function buildVapiAssistantConfig(args: BuildArgs): VapiAssistantConfig {
     serverUrlSecret: args.webhookSecret,
 
     // ---- Conversational polish ----
-    backgroundSound: "office",
+    backgroundSound: "off",
     responseDelaySeconds: 0.4, // small pause before speaking — feels more human than instant
     llmRequestDelaySeconds: 0.1,
     numWordsToInterruptAssistant: 2, // caller needs ~2 words before we yield
