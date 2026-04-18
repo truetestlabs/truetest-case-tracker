@@ -129,6 +129,7 @@ export default function CaseDetailPage() {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0);
   const [showAllLogs, setShowAllLogs] = useState(false);
+  const [showClosedTests, setShowClosedTests] = useState(false);
   const [notifications, setNotifications] = useState<Array<{
     id: string;
     newStatus: string;
@@ -185,6 +186,14 @@ export default function CaseDetailPage() {
     (cc) => cc.roleInCase === "petitioner_attorney" || cc.roleInCase === "respondent_attorney"
   );
   const gals = caseData.caseContacts.filter((cc) => cc.roleInCase === "gal");
+
+  // Split test orders into active vs terminal (closed/cancelled) so the UI
+  // can collapse historical tests behind a toggle. All logic elsewhere still
+  // reads caseData.testOrders directly — this is render-layer filtering only.
+  const isTerminalTest = (t: CaseData["testOrders"][number]) =>
+    t.testStatus === "closed" || t.testStatus === "cancelled";
+  const activeTests = caseData.testOrders.filter((t) => !isTerminalTest(t));
+  const closedTests = caseData.testOrders.filter(isTerminalTest);
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -321,7 +330,9 @@ export default function CaseDetailPage() {
 
             {/* Test Orders */}
             <div className="px-6 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50">
-              <h3 className="text-sm font-semibold text-gray-700">Test Orders ({caseData.testOrders.length})</h3>
+              <h3 className="text-sm font-semibold text-gray-700">
+                Test Orders ({activeTests.length}{closedTests.length > 0 ? ` · ${closedTests.length} closed` : ""})
+              </h3>
               <div className="flex items-center gap-2">
                 <AddTestOrder caseId={caseData.id} onAdded={loadCase} />
               </div>
@@ -330,8 +341,11 @@ export default function CaseDetailPage() {
               <div className="px-6 py-8 text-center text-gray-400">No test orders yet</div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {caseData.testOrders.map((test) => (
-                  <div key={test.id} className="px-6 py-3">
+                {activeTests.length === 0 && (
+                  <div className="px-6 py-6 text-center text-gray-400 text-sm">No active test orders</div>
+                )}
+                {(showClosedTests ? [...activeTests, ...closedTests] : activeTests).map((test) => (
+                  <div key={test.id} className={`px-6 py-3 ${isTerminalTest(test) ? "opacity-60" : ""}`}>
                     <div className="flex items-center justify-between">
                       <div>
                         <p
@@ -349,6 +363,11 @@ export default function CaseDetailPage() {
                           {test.collectionDate && (
                             <span className="text-gray-600">
                               {test.testDescription?.toLowerCase().includes("sweat patch") ? "Applied" : "Collected"}: {new Date(test.collectionDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            </span>
+                          )}
+                          {isTerminalTest(test) && (
+                            <span className="text-gray-500 italic">
+                              {test.testStatus === "cancelled" ? "Cancelled" : "Closed"}
                             </span>
                           )}
                         </div>
@@ -381,6 +400,16 @@ export default function CaseDetailPage() {
                     )}
                   </div>
                 ))}
+                {closedTests.length > 0 && (
+                  <div className="px-6 py-2 bg-gray-50 text-center">
+                    <button
+                      onClick={() => setShowClosedTests((v) => !v)}
+                      className="text-xs text-gray-500 hover:text-gray-700 underline"
+                    >
+                      {showClosedTests ? "Hide" : "Show"} {closedTests.length} closed test{closedTests.length === 1 ? "" : "s"}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -483,7 +512,10 @@ export default function CaseDetailPage() {
               <p className="text-sm text-gray-400 py-4 text-center">No tests ordered</p>
             ) : (
               <div className="space-y-3">
-                {caseData.testOrders.map((test) => {
+                {activeTests.length === 0 && !showClosedTests && (
+                  <p className="text-sm text-gray-400 py-2 text-center">No active tests</p>
+                )}
+                {(showClosedTests ? [...activeTests, ...closedTests] : activeTests).map((test) => {
                   const state = getPaymentState(test.paymentMethod);
                   const label = getPaymentLabel(test.paymentMethod);
                   const payColor = state === "unpaid" ? "text-red-600" : state === "invoiced" ? "text-blue-600" : "text-green-600";
@@ -609,6 +641,16 @@ export default function CaseDetailPage() {
                     </div>
                   );
                 })}
+                {closedTests.length > 0 && (
+                  <div className="pt-1 text-center">
+                    <button
+                      onClick={() => setShowClosedTests((v) => !v)}
+                      className="text-xs text-gray-500 hover:text-gray-700 underline"
+                    >
+                      {showClosedTests ? "Hide" : "Show"} {closedTests.length} closed test{closedTests.length === 1 ? "" : "s"}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </section>
