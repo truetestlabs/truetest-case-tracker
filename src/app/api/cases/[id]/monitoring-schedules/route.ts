@@ -15,7 +15,15 @@ export async function GET(
       testCatalog: { select: { testName: true, specimenType: true } },
       selections: {
         orderBy: { selectedDate: "asc" },
-        include: { testOrder: { select: { id: true, testStatus: true } } },
+        include: {
+          testOrder: { select: { id: true, testStatus: true } },
+          documents: {
+            where: { documentType: "monitoring_order" },
+            select: { id: true, fileName: true },
+            orderBy: { uploadedAt: "desc" },
+            take: 1,
+          },
+        },
       },
     },
   });

@@ -7,11 +7,14 @@ type Selection = {
   selectedDate: string;
   status: string;
   notifiedAt: string | null;
+  acknowledgedAt: string | null;
   testOrder: { id: string; testStatus: string } | null;
+  documents: { id: string; fileName: string }[];
 };
 
 type Schedule = {
   id: string;
+  caseId: string;
   checkInPin: string;
   collectionType: string;
   patternType: string;
@@ -108,6 +111,58 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
     } else {
       alert(data.error || "Failed to send instructions");
     }
+  }
+
+  async function attachOrderPdf(selectionId: string, scheduleCaseId: string) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/pdf";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        // 1. Presigned upload URL
+        const uploadRes = await fetch("/api/upload-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            caseId: scheduleCaseId,
+            fileName: file.name,
+            contentType: "application/pdf",
+            documentType: "monitoring_order",
+          }),
+        });
+        if (!uploadRes.ok) {
+          alert("Could not start upload");
+          return;
+        }
+        const { uploadUrl, storagePath, headers } = await uploadRes.json();
+
+        // 2. PUT file directly to Supabase
+        const putRes = await fetch(uploadUrl, { method: "POST", headers, body: file });
+        if (!putRes.ok) {
+          alert("Upload failed");
+          return;
+        }
+
+        // 3. Record the document on the selection
+        const metaRes = await fetch(`/api/monitoring/selections/${selectionId}/documents`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ storagePath, fileName: file.name }),
+        });
+        if (!metaRes.ok) {
+          alert("Uploaded but failed to attach to selection");
+          return;
+        }
+        loadSchedules();
+        onChanged?.();
+      } catch (err) {
+        console.error(err);
+        alert("Attach failed");
+      }
+    };
+    input.click();
   }
 
   async function toggleActive(id: string, active: boolean) {
@@ -222,11 +277,29 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
                     <p className="text-xs text-gray-400 mb-2">No upcoming selections</p>
                   ) : (
                     <div className="space-y-1 mb-3 max-h-64 overflow-y-auto">
-                      {upcoming.map((sel) => (
-                        <div key={sel.id} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-100 last:border-0">
+                      {upcoming.map((sel) => {
+                        const hasPdf = sel.documents.length > 0;
+                        return (
+                        <div key={sel.id} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-100 last:border-0 flex-wrap gap-1">
                           <span className="text-gray-700">{formatDate(sel.selectedDate)}</span>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${selectionStatusColor(sel.status)}`}>{sel.status}</span>
+                            {sel.acknowledgedAt && (
+                              <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700" title="Donor acknowledged in portal">
+                                ✓ acked
+                              </span>
+                            )}
+                            {hasPdf && (
+                              <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700" title={sel.documents[0].fileName}>
+                                PDF attached
+                              </span>
+                            )}
+                            <button
+                              onClick={() => attachOrderPdf(sel.id, s.caseId)}
+                              className="text-xs px-2 py-0.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-50"
+                            >
+                              {hasPdf ? "Replace PDF" : "Attach Order PDF"}
+                            </button>
                             {(sel.status === "pending" || sel.status === "notified") && (
                               <button
                                 onClick={() => refuseSelection(sel.id)}
@@ -237,7 +310,7 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
                             )}
                           </div>
                         </div>
-                      ))}
+                      );})}
                     </div>
                   )}
                   {past.length > 0 && (

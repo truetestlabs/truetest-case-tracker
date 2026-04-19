@@ -6,7 +6,7 @@ import { Sidebar } from "./Sidebar";
 
 export function ConditionalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isStandalone = pathname === "/login" || pathname === "/intake" || pathname === "/checkin" || pathname?.startsWith("/kiosk") || pathname?.startsWith("/reports/") === true;
+  const isStandalone = pathname === "/login" || pathname === "/intake" || pathname === "/checkin" || pathname === "/portal" || pathname?.startsWith("/kiosk") || pathname?.startsWith("/reports/") === true;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 

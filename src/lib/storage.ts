@@ -100,6 +100,37 @@ export function getDirectUploadInfo(
 }
 
 /**
+ * Create a short-lived signed URL for a private Supabase Storage object.
+ * Used by the donor portal so the donor can view the attached order PDF
+ * without exposing the bucket publicly.
+ *
+ * @param storagePath - path inside the documents bucket
+ * @param expiresInSec - lifetime of the signed URL (default 600s / 10 min)
+ * @returns a fully-qualified URL the browser can GET
+ */
+export async function createSignedUrl(
+  storagePath: string,
+  expiresInSec: number = 600
+): Promise<string> {
+  const encoded = storagePath.split("/").map(encodeURIComponent).join("/");
+  const signUrl = `${getSupabaseUrl()}/storage/v1/object/sign/${BUCKET}/${encoded}`;
+  const res = await fetch(signUrl, {
+    method: "POST",
+    headers: { ...headers(), "Content-Type": "application/json" },
+    body: JSON.stringify({ expiresIn: expiresInSec }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Storage sign failed: ${res.status} — ${err}`);
+  }
+  const json = (await res.json()) as { signedURL?: string; signedUrl?: string };
+  // Supabase returns a relative path in `signedURL` (older) or `signedUrl` (newer)
+  const rel = json.signedURL || json.signedUrl;
+  if (!rel) throw new Error("Storage sign returned no URL");
+  return rel.startsWith("http") ? rel : `${getSupabaseUrl()}/storage/v1${rel}`;
+}
+
+/**
  * Download a file from Supabase Storage.
  * @returns { buffer, contentType }
  */

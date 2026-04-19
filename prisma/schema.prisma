@@ -133,6 +133,7 @@ enum DocumentType {
   invoice
   agreement
   correspondence
+  monitoring_order
   other
 }
 
@@ -428,8 +429,14 @@ model Document {
   testOrder       TestOrder?   @relation("TestOrderDocuments", fields: [testOrderId], references: [id])
   labResults      LabResult[]
 
+  // Monitoring order PDF (Quest ESP) attached to a random selection so the
+  // donor can view/download it in the portal on selection day.
+  randomSelectionId String?
+  randomSelection   RandomSelection? @relation("RandomSelectionDocuments", fields: [randomSelectionId], references: [id], onDelete: SetNull)
+
   @@index([caseId])
   @@index([documentType])
+  @@index([randomSelectionId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -725,6 +732,7 @@ model RandomSelection {
   status               String          @default("pending") // pending | notified | completed | refused | cancelled
 
   notifiedAt           DateTime?
+  acknowledgedAt       DateTime?       // donor confirmed receipt via portal/PIN — silences escalating notifications
   completedAt          DateTime?
 
   testOrderId          String?         @unique
@@ -734,6 +742,9 @@ model RandomSelection {
   replacesSelectionId  String?         @unique
   replacesSelection    RandomSelection? @relation("Replacement", fields: [replacesSelectionId], references: [id])
   replacementSelection RandomSelection? @relation("Replacement")
+
+  // Quest ESP order PDF(s) attached by staff for donor viewing
+  documents            Document[]      @relation("RandomSelectionDocuments")
 
   createdAt            DateTime        @default(now())
 
