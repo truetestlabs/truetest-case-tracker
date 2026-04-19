@@ -72,6 +72,33 @@ export default function PortalPage() {
   const [recoverChannel, setRecoverChannel] = useState<"sms" | "email">("sms");
   const [recoverSent, setRecoverSent] = useState(false);
 
+  // Auto-logout after 60s of inactivity on the authed view. A donor who
+  // leaves the phone sitting on the "selected today" screen shouldn't
+  // expose their status indefinitely. Resets on any tap/scroll/keypress.
+  useEffect(() => {
+    if (stage !== "authed") return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const reset = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        logout(false);
+      }, 60_000);
+    };
+    const events: Array<keyof WindowEventMap> = [
+      "pointerdown",
+      "touchstart",
+      "keydown",
+      "scroll",
+    ];
+    reset();
+    for (const ev of events) window.addEventListener(ev, reset, { passive: true });
+    return () => {
+      if (timer) clearTimeout(timer);
+      for (const ev of events) window.removeEventListener(ev, reset);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage]);
+
   // On mount: try the session cookie first; fall through to PIN if none.
   useEffect(() => {
     let cancelled = false;
