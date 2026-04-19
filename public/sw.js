@@ -11,7 +11,11 @@
  * sensitive and should always hit the network.
  */
 
-const CACHE = "ttl-portal-v1";
+// Bumping this version string triggers an SW update on all installed
+// clients (new bytes → new SW → install event refires → shell re-cached).
+// Bump whenever the portal shell changes materially (Phase A: 8-digit PIN,
+// new recovery flow, new OTP screen).
+const CACHE = "ttl-portal-v2-phase-a";
 const SHELL = ["/portal", "/icon-192.png", "/icon-512.png", "/logo.png", "/manifest.json"];
 
 self.addEventListener("install", (event) => {
@@ -26,11 +30,18 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    )
+    (async () => {
+      // Wipe every previous cache — we can't safely keep old shells because
+      // a version bump means the app HTML references new /_next chunks.
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+      await self.clients.claim();
+      // Tell every open portal tab/PWA to reload so they pick up the new
+      // HTML shell + JS bundle instead of whatever stale copy they rendered.
+      const clients = await self.clients.matchAll({ type: "window" });
+      clients.forEach((c) => c.navigate(c.url).catch(() => {}));
+    })()
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
