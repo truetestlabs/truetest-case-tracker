@@ -707,6 +707,54 @@ export async function sendBookingConfirmationEmail(opts: {
   console.log("[Email] booking confirmation sent to:", opts.toEmail);
 }
 
+/**
+ * Donor-portal one-time login code. Short transactional email sent when a
+ * donor signs in from a brand-new device. Plain 6-digit code, 5-min expiry.
+ */
+export async function sendPortalOtpEmail(opts: {
+  toEmail: string;
+  code: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn("[Email] RESEND_API_KEY not set — skipping portal OTP email");
+    return { ok: false, error: "resend_not_configured" };
+  }
+
+  const html = emailLayout({
+    headerBg: "#1e3a5f",
+    headerTitle: "Your Portal Sign-In Code",
+    body: `
+      <p style="font-size:15px;margin:0 0 20px;font-family:${FONT};">Enter this code in the TrueTest Labs portal to finish signing in:</p>
+
+      <div style="background:#f1f5f9;border:2px solid #1e3a5f;border-radius:8px;padding:24px;margin:0 0 24px;text-align:center;">
+        <p style="color:#1e3a5f;font-size:34px;font-weight:700;letter-spacing:8px;margin:0;font-family:'SF Mono', Menlo, Consolas, monospace;">${opts.code}</p>
+      </div>
+
+      <p style="font-size:14px;color:#475569;margin:0 0 16px;line-height:1.6;font-family:${FONT};">
+        This code expires in 5 minutes. You only need to enter a code the first time you sign in on a new device — after that, this device will remember you.
+      </p>
+
+      <p style="font-size:13px;color:#94a3b8;margin:0;line-height:1.6;font-family:${FONT};">
+        Didn't try to sign in? Ignore this email — your account is safe.
+      </p>`,
+    footerNote: "This is an automated security email. Do not reply.",
+  });
+
+  const { error: sendError } = await getResend().emails.send({
+    from: FROM_EMAIL,
+    replyTo: REPLY_TO,
+    to: [opts.toEmail],
+    subject: `Your TrueTest Labs sign-in code: ${opts.code}`,
+    html,
+  });
+  if (sendError) {
+    console.error("[Email] Resend error (portal OTP):", sendError);
+    return { ok: false, error: sendError.message };
+  }
+  console.log("[Email] portal OTP sent to:", opts.toEmail);
+  return { ok: true };
+}
+
 /** Send donor compliance instructions for a monitoring schedule (PIN, check-in link, rules) */
 export async function sendDonorInstructionsEmail(scheduleId: string): Promise<string[]> {
   if (!process.env.RESEND_API_KEY) return [];

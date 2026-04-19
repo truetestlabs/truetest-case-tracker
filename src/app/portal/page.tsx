@@ -62,7 +62,7 @@ export default function PortalPage() {
   const [pin, setPin] = useState("");
   const [code, setCode] = useState("");
   const [otpScheduleId, setOtpScheduleId] = useState<string | null>(null);
-  const [phoneMasked, setPhoneMasked] = useState<string | null>(null);
+  const [emailMasked, setEmailMasked] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [session, setSession] = useState<PortalSession | null>(null);
@@ -160,7 +160,7 @@ export default function PortalPage() {
         // OTP challenge — untrusted device.
         const j = await res.json();
         setOtpScheduleId(j.scheduleId);
-        setPhoneMasked(j.phoneMasked || null);
+        setEmailMasked(j.emailMasked || null);
         setStage("otp");
         setError("");
         return;
@@ -184,7 +184,7 @@ export default function PortalPage() {
   async function submitOtp(e: React.FormEvent) {
     e.preventDefault();
     if (!otpScheduleId || !/^\d{6}$/.test(code)) {
-      setError("Enter the 6-digit code we texted you.");
+      setError("Enter the 6-digit code we emailed you.");
       return;
     }
     setLoading(true);
@@ -319,7 +319,7 @@ export default function PortalPage() {
     setPin("");
     setCode("");
     setOtpScheduleId(null);
-    setPhoneMasked(null);
+    setEmailMasked(null);
     setError("");
     setAckState("idle");
     setStage("pin");
@@ -504,12 +504,19 @@ export default function PortalPage() {
           </form>
         ) : stage === "otp" ? (
           <form onSubmit={submitOtp} className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <div className="mb-4 rounded-lg bg-blue-50 border border-blue-200 px-4 py-3">
+              <p className="text-sm font-semibold text-blue-900">
+                We just emailed you a one-time 6-digit code
+              </p>
+              <p className="text-xs text-blue-800 mt-1">
+                {emailMasked
+                  ? `Sent to ${emailMasked}. Enter it below to finish signing in — this only happens the first time on a new device.`
+                  : "Check your email and enter the code below to finish signing in. This only happens the first time on a new device."}
+              </p>
+            </div>
             <label htmlFor="code" className="block text-sm font-medium text-slate-700 mb-1">
               Enter the 6-digit code
             </label>
-            {phoneMasked && (
-              <p className="text-xs text-slate-500 mb-2">Sent to {phoneMasked}</p>
-            )}
             <input
               id="code"
               type="text"
@@ -637,7 +644,7 @@ export default function PortalPage() {
                 <button
                   onClick={() => logout(true)}
                   className="flex-1 px-4 py-2 border border-slate-300 text-slate-600 rounded-lg text-xs hover:bg-slate-50"
-                  title="Forget this device — next sign-in will require a new SMS code"
+                  title="Forget this device — next sign-in will require a new email code"
                 >
                   Not my device
                 </button>

@@ -6,6 +6,14 @@ import { issueOtp } from "@/lib/portalOtp";
 import { logPortalEvent, tarpit } from "@/lib/portalAudit";
 import { buildSessionPayload } from "@/lib/portalPayload";
 
+/** Partially obscure an email for display — e.g. `m••••@mac.com`. */
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return email;
+  const visible = local.slice(0, 1);
+  return `${visible}${"•".repeat(Math.max(1, Math.min(6, local.length - 1)))}@${domain}`;
+}
+
 /**
  * POST /api/portal/login  (PUBLIC — no staff session)
  *
@@ -16,9 +24,10 @@ import { buildSessionPayload } from "@/lib/portalPayload";
  *   3. PIN matches + deviceId is a trusted,
  *      non-revoked device for this schedule  → success: set session cookie,
  *                                              return the session payload
- *   4. PIN matches + no trusted device       → 202 "otp_required": issue SMS
- *                                              OTP to donor phone on file;
- *                                              client prompts for the code
+ *   4. PIN matches + no trusted device       → 202 "otp_required": issue
+ *                                              email OTP to donor email on
+ *                                              file; client prompts for the
+ *                                              code
  *
  * Rate-limiting:
  *   - 10/min/IP on this route
@@ -61,7 +70,7 @@ export async function POST(request: NextRequest) {
     include: {
       case: {
         select: {
-          donor: { select: { firstName: true, lastName: true, phone: true } },
+          donor: { select: { firstName: true, lastName: true, phone: true, email: true } },
         },
       },
       testCatalog: { select: { testName: true } },
@@ -101,23 +110,24 @@ export async function POST(request: NextRequest) {
     !trustedDevice.revokedAt;
 
   if (!deviceOk) {
-    // Untrusted device — challenge with an SMS OTP to the donor's phone.
+    // Untrusted device — challenge with an email OTP to the donor's address.
+    const email = schedule.case.donor?.email || null;
     const phone = schedule.case.donor?.phone || null;
-    if (!phone) {
+    if (!email) {
       logPortalEvent({
         scheduleId: schedule.id,
         action: "login",
         success: false,
-        reason: "no_donor_phone",
+        reason: "no_donor_email",
         ipAddress: ip,
         userAgent,
       });
       return NextResponse.json(
-        { error: "No phone on file for this donor. Contact the lab to update your contact info." },
+        { error: "No email on file for this donor. Contact the lab to update your contact info." },
         { status: 409 }
       );
     }
-    const r = await issueOtp(schedule.id, phone);
+    const r = await issueOtp(schedule.id, email, phone);
     if (!r.ok) {
       logPortalEvent({
         scheduleId: schedule.id,
@@ -139,12 +149,11 @@ export async function POST(request: NextRequest) {
       ipAddress: ip,
       userAgent,
     });
-    const last4 = phone.replace(/\D/g, "").slice(-4);
     return NextResponse.json(
       {
         otpRequired: true,
         scheduleId: schedule.id,
-        phoneMasked: last4 ? `•••-•••-${last4}` : null,
+        emailMasked: maskEmail(email),
       },
       { status: 202 }
     );
