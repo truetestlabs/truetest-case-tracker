@@ -2,6 +2,48 @@
 
 import { useState } from "react";
 
+// Convert base64url VAPID key into the Uint8Array PushManager expects.
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+async function subscribeToPush(pin: string) {
+  if (typeof window === "undefined") return;
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!vapidKey) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    const sub =
+      existing ||
+      (await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        // Cast to BufferSource — TS's DOM lib types bicker about ArrayBufferLike
+        // vs ArrayBuffer for PushSubscribeOptions.applicationServerKey.
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
+      }));
+    const raw = sub.toJSON();
+    if (!raw.endpoint || !raw.keys) return;
+    await fetch("/api/portal/push-subscriptions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pin,
+        subscription: { endpoint: raw.endpoint, keys: raw.keys },
+        userAgent: navigator.userAgent,
+      }),
+    });
+  } catch (err) {
+    console.warn("[portal] push subscribe failed:", err);
+  }
+}
+
 type PortalSelection = {
   id: string;
   status: string;
@@ -52,6 +94,17 @@ export default function PortalPage() {
       const data: PortalSession = await res.json();
       setSession(data);
       setAckState(data.selection?.acknowledgedAt ? "done" : "idle");
+
+      // Best-effort: ask for notification permission and register the push
+      // subscription so future selection-day notifications can reach them
+      // even when the portal isn't open. Silent if unsupported or denied.
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        Notification.requestPermission().then((perm) => {
+          if (perm === "granted") subscribeToPush(pin);
+        });
+      } else if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        subscribeToPush(pin);
+      }
     } catch {
       setError("Network error. Please try again.");
     } finally {

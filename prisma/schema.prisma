@@ -718,6 +718,7 @@ model MonitoringSchedule {
 
   selections           RandomSelection[]
   checkIns             CheckIn[]
+  pushSubscriptions    PushSubscription[]
 
   @@index([caseId])
   @@index([active])
@@ -745,11 +746,56 @@ model RandomSelection {
 
   // Quest ESP order PDF(s) attached by staff for donor viewing
   documents            Document[]      @relation("RandomSelectionDocuments")
+  notificationJobs     NotificationJob[]
 
   createdAt            DateTime        @default(now())
 
   @@index([scheduleId, selectedDate])
   @@index([selectedDate, status])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// NotificationJob — one row per scheduled push/SMS/email/voice attempt on
+// a donor's selection day. Seeded at 6am local by /api/cron/seed-notifications
+// and dispatched by /api/cron/run-notifications every 5 min. Any job whose
+// parent selection has `acknowledgedAt` is skipped at dispatch time.
+// ─────────────────────────────────────────────────────────────────────────
+model NotificationJob {
+  id              String           @id @default(cuid())
+  selectionId     String
+  selection       RandomSelection  @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+
+  channel         String           // push | sms | email | voice
+  sendAt          DateTime
+  status          String           @default("pending") // pending | sent | skipped | failed
+  sentAt          DateTime?
+  errorMessage    String?
+
+  createdAt       DateTime         @default(now())
+
+  @@index([status, sendAt])
+  @@index([selectionId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PushSubscription — a donor's Web Push endpoint stored per schedule so
+// escalating notifications on selection days can reach them even when the
+// portal tab is closed. VAPID keys are managed in env.
+// ─────────────────────────────────────────────────────────────────────────
+model PushSubscription {
+  id              String             @id @default(cuid())
+  scheduleId      String
+  schedule        MonitoringSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  endpoint        String             @unique
+  p256dh          String
+  auth            String
+  userAgent       String?
+
+  createdAt       DateTime           @default(now())
+  lastUsedAt      DateTime?
+
+  @@index([scheduleId])
 }
 
 model CheckIn {

@@ -45,6 +45,9 @@
 - **Google Calendar:** `GOOGLE_CALENDAR_ID`, `GOOGLE_SERVICE_ACCOUNT_KEY`
 - **Anthropic:** `ANTHROPIC_API_KEY`
 - **Supabase:** `DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- **Donor portal push:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (server); `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (browser). Generate with `npx web-push generate-vapid-keys`.
+- **Vercel Cron:** `CRON_SECRET` — set matching secret on Vercel; cron routes 401 unless `Authorization: Bearer $CRON_SECRET` matches. Donor notification crons: `/api/cron/seed-notifications` (daily 11 UTC), `/api/cron/run-notifications` (every 5 min, 12–19 UTC).
+- **App URL:** `NEXT_PUBLIC_APP_URL` — used in SMS/email bodies so donors can click through to `/portal`.
 
 ## Domain & DNS
 

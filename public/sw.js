@@ -62,3 +62,40 @@ self.addEventListener("fetch", (event) => {
     caches.match(req).then((hit) => hit || fetch(req))
   );
 });
+
+// ── Web Push ──────────────────────────────────────────────────────────────
+// Server sends JSON { title, body, url } via web-push; we show it as a
+// system notification and, on click, open (or focus) the portal.
+
+self.addEventListener("push", (event) => {
+  let payload = { title: "TrueTest Labs", body: "You have an update.", url: "/portal" };
+  try {
+    if (event.data) payload = { ...payload, ...event.data.json() };
+  } catch {
+    // If the server sent a plain string, use it as the body.
+    try { payload.body = event.data.text(); } catch {}
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      tag: "ttl-selection",
+      renotify: true,
+      data: { url: payload.url || "/portal" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/portal";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const c of clients) {
+        if (c.url.includes("/portal") && "focus" in c) return c.focus();
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});

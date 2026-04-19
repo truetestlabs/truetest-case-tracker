@@ -19,6 +19,7 @@
     "@supabase/supabase-js": "^2.49.0",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/archiver": "^7.0.0",
+    "@types/web-push": "^3.6.4",
     "archiver": "^7.0.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -32,6 +33,7 @@
     "react-dom": "^19.1.0",
     "resend": "^6.10.0",
     "twilio": "^5.13.1",
+    "web-push": "^3.6.7",
     "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   },
