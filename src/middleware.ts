@@ -17,7 +17,7 @@ import { rateLimit, getClientIp } from "@/lib/rateLimit";
 // Public routes that get an IP-based rate limit (60 req / minute / IP).
 // We deliberately limit only API routes, not the public HTML pages — page
 // hits go through Vercel's CDN and shouldn't be throttled.
-const PUBLIC_API_PREFIXES = ["/api/public", "/api/kiosk", "/api/checkin"];
+const PUBLIC_API_PREFIXES = ["/api/public", "/api/kiosk", "/api/checkin", "/api/portal"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -28,14 +28,23 @@ export async function middleware(request: NextRequest) {
     "/kiosk",
     "/intake",
     "/checkin",
+    "/portal",
     "/api/kiosk",
     "/api/checkin",
+    "/api/portal",
     "/api/public",
     "/api/test-catalog",
   ];
 
+  // Portal session/acknowledge endpoints live under /api/monitoring but are
+  // PIN- or session-gated inside the handler rather than by staff auth.
+  const isPortalMonitoringCall =
+    pathname.startsWith("/api/monitoring/selections") && pathname.endsWith("/acknowledge");
+
   // Check if this path is public
-  const isPublic = publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  const isPublic =
+    publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
+    isPortalMonitoringCall;
 
   // Static assets and Next.js internals — always pass through
   if (

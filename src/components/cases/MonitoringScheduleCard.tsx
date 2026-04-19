@@ -113,6 +113,30 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
     }
   }
 
+  async function resendPin(id: string) {
+    if (!confirm("Text and email the donor their PIN + portal link?")) return;
+    const res = await fetch(`/api/monitoring-schedules/${id}/resend-pin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channels: ["sms", "email"] }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "Failed to send PIN reminder");
+      return;
+    }
+    const parts: string[] = [];
+    if (data.result?.sms?.ok) parts.push("SMS ✓");
+    else if (data.result?.sms?.error === "no_phone_on_file") parts.push("SMS skipped (no phone on file)");
+    else if (data.result?.sms?.error) parts.push(`SMS failed (${data.result.sms.error})`);
+
+    if (data.result?.email?.to?.length) parts.push(`Email → ${data.result.email.to.join(", ")}`);
+    else if (data.result?.email?.error === "no_email_on_file") parts.push("Email skipped (no email on file)");
+    else if (data.result?.email?.error) parts.push(`Email failed (${data.result.email.error})`);
+
+    alert(`PIN reminder sent:\n${parts.join("\n")}`);
+  }
+
   async function attachOrderPdf(selectionId: string, scheduleCaseId: string) {
     const input = document.createElement("input");
     input.type = "file";
@@ -229,6 +253,13 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
                   className="text-[10px] px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
                 >
                   ✉ Instructions
+                </button>
+                <button
+                  onClick={() => resendPin(s.id)}
+                  className="text-[10px] px-2 py-1 rounded bg-slate-700 text-white hover:bg-slate-800"
+                  title="Text + email the donor their PIN"
+                >
+                  🔑 Resend PIN
                 </button>
                 <button
                   onClick={() => toggleActive(s.id, s.active)}

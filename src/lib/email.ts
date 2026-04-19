@@ -729,7 +729,9 @@ export async function sendDonorInstructionsEmail(scheduleId: string): Promise<st
   const donor = schedule.case.donor;
   const donorEmail: string = donor.email!;
   const donorName = `${donor.firstName} ${donor.lastName}`;
-  const checkinUrl = (process.env.APP_URL || "https://truetest-case-tracker.vercel.app").replace(/\/$/, "") + "/checkin";
+  const portalUrl =
+    (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://truetest-case-tracker.vercel.app").replace(/\/$/, "") +
+    "/portal";
   const patternSummary =
     schedule.patternType === "range_count" ? `${schedule.targetCount} random tests through ${schedule.endDate ? new Date(schedule.endDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "an ongoing period"}`
     : schedule.patternType === "per_month" ? `${schedule.targetCount} random test${schedule.targetCount === 1 ? "" : "s"} per month`
@@ -749,17 +751,30 @@ export async function sendDonorInstructionsEmail(scheduleId: string): Promise<st
         <p style="color:#475569;font-size:13px;margin:4px 0 0;font-family:${FONT};">Schedule: <strong>${patternSummary}</strong></p>
       </div>
 
+      <!-- Portal link -->
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;margin-bottom:24px;text-align:center;">
+        <p style="color:#1e3a8a;font-size:13px;font-weight:600;margin:0 0 10px;font-family:${FONT};">Your Donor Portal</p>
+        <p style="margin:0 0 12px;">
+          <a href="${portalUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:12px 22px;border-radius:6px;font-family:${FONT};">Open My Portal</a>
+        </p>
+        <p style="color:#1e3a8a;font-size:12px;margin:0;font-family:${FONT};word-break:break-all;">
+          <a href="${portalUrl}" style="color:#1e3a8a;text-decoration:underline;">${portalUrl}</a>
+        </p>
+        <p style="color:#475569;font-size:12px;margin:10px 0 0;font-family:${FONT};">Bookmark this page — it's where you'll check in every weekday.</p>
+      </div>
+
       <!-- How it works -->
       <h2 style="color:#0f172a;font-size:16px;font-weight:700;margin:0 0 12px;font-family:${FONT};">How It Works</h2>
       <ol style="color:#334155;font-size:14px;line-height:1.8;margin:0 0 24px;padding-left:20px;font-family:${FONT};">
-        <li><strong>Call in EVERY weekday (Monday–Friday)</strong> between 6:00 AM and 12:00 PM.</li>
-        <li>Visit <a href="${checkinUrl}" style="color:#2563eb;text-decoration:underline;">${checkinUrl}</a> and enter your PIN.</li>
-        <li>The system will tell you one of two things:
+        <li><strong>Check in EVERY weekday (Monday–Friday)</strong> between 6:00 AM and 12:00 PM.</li>
+        <li>Open your portal at <a href="${portalUrl}" style="color:#2563eb;text-decoration:underline;">${portalUrl}</a> and sign in with your PIN.</li>
+        <li>The portal will tell you one of two things:
           <ul style="margin:8px 0 0;padding-left:20px;">
             <li><strong style="color:#dc2626;">"You are selected today"</strong> — report to TrueTest Labs that same day by 5:00 PM</li>
             <li><strong style="color:#059669;">"No test today"</strong> — no further action needed; check again tomorrow</li>
           </ul>
         </li>
+        <li>The first time you sign in on a new phone or browser, we'll text you a 6-digit code to confirm it's you, then remember that device for next time.</li>
       </ol>
 
       <!-- Compliance -->
@@ -931,4 +946,74 @@ export async function sendPaymentReceivedEmail(
   console.log("[Email] payment-received sent, id:", sendData?.id);
 
   return emailList;
+}
+
+/**
+ * Short "here's your PIN" reminder — sent when a donor forgot or deleted
+ * the original instructions email. Same PIN block as the full instructions
+ * email but without the compliance wall of text. Returns the email
+ * address it was sent to, or [] if no donor email is on file.
+ */
+export async function sendPinReminderEmail(scheduleId: string): Promise<string[]> {
+  if (!process.env.RESEND_API_KEY) return [];
+
+  const schedule = await prisma.monitoringSchedule.findUnique({
+    where: { id: scheduleId },
+    include: {
+      testCatalog: { select: { testName: true } },
+      case: {
+        select: {
+          caseNumber: true,
+          donor: { select: { firstName: true, lastName: true, email: true } },
+        },
+      },
+    },
+  });
+
+  if (!schedule || !schedule.case.donor?.email) return [];
+
+  const donor = schedule.case.donor;
+  const donorEmail: string = donor.email!;
+  const portalUrl =
+    (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://truetest-case-tracker.vercel.app").replace(/\/$/, "") + "/portal";
+
+  const html = emailLayout({
+    headerTitle: "Your Check-In PIN",
+    body: `
+      <p style="color:#334155;font-size:15px;margin:0 0 4px;font-family:${FONT};">Hello ${donor.firstName},</p>
+      <p style="color:#475569;font-size:14px;margin:0 0 20px;line-height:1.6;font-family:${FONT};">You (or TrueTest Labs staff on your behalf) requested a PIN reminder. Use this PIN to sign in to the donor portal.</p>
+
+      <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:20px;margin-bottom:24px;">
+        <p style="color:#64748b;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin:0 0 6px;font-family:${FONT};">Your Check-In PIN</p>
+        <p style="color:#0f172a;font-size:36px;font-weight:700;font-family:monospace;letter-spacing:4px;margin:0 0 12px;">${schedule.checkInPin}</p>
+        <p style="color:#475569;font-size:13px;margin:0;font-family:${FONT};">Case: <strong>${schedule.case.caseNumber}</strong> &bull; Test: <strong>${schedule.testCatalog.testName}</strong></p>
+      </div>
+
+      <!-- Portal button -->
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;margin-bottom:20px;text-align:center;">
+        <p style="margin:0 0 12px;">
+          <a href="${portalUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:12px 22px;border-radius:6px;font-family:${FONT};">Open My Portal</a>
+        </p>
+        <p style="color:#1e3a8a;font-size:12px;margin:0;font-family:${FONT};word-break:break-all;">
+          <a href="${portalUrl}" style="color:#1e3a8a;text-decoration:underline;">${portalUrl}</a>
+        </p>
+      </div>
+
+      <p style="color:#64748b;font-size:12px;margin:0;font-family:${FONT};">For security, if this is the first time signing in on this device, we'll also text you a 6-digit verification code. Keep this PIN confidential.</p>`,
+    footerNote: "This is a PIN reminder. If you didn't request it, contact TrueTest Labs.",
+  });
+
+  const { data: sendData, error: sendError } = await getResend().emails.send({
+    from: FROM_EMAIL,
+    replyTo: REPLY_TO,
+    to: donorEmail,
+    subject: "Your TrueTest Labs PIN",
+    html,
+  });
+  if (sendError) {
+    console.error("[Email] Resend error (pin reminder):", sendError);
+    throw new Error(sendError.message);
+  }
+  console.log("[Email] pin-reminder sent, id:", sendData?.id);
+  return [donorEmail];
 }

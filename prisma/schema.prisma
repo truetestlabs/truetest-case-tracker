@@ -694,7 +694,12 @@ model MonitoringSchedule {
   collectionType       CollectionType  @default(unobserved)
 
   // Donor check-in
-  checkInPin           String          @unique  // 6-digit PIN donor enters at /checkin
+  checkInPin           String          @unique  // 6- or 8-digit PIN donor enters at /portal
+
+  // PIN brute-force protection — set when this schedule hits the OTP-fail
+  // threshold; login is rejected with 423 until pinLockedUntil passes.
+  pinLockedUntil       DateTime?
+  pinFailCount         Int             @default(0)
 
   // Pattern
   patternType          String          // "range_count" | "per_month" | "per_week"
@@ -719,9 +724,75 @@ model MonitoringSchedule {
   selections           RandomSelection[]
   checkIns             CheckIn[]
   pushSubscriptions    PushSubscription[]
+  trustedDevices       TrustedDevice[]
+  portalOtps           PortalOtp[]
 
   @@index([caseId])
   @@index([active])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TrustedDevice — a browser/phone that has cleared PIN + SMS OTP once. The
+// random `deviceId` is written to an HTTP-only cookie and presented on
+// future logins to skip the OTP challenge. Staff can revoke a device from
+// the schedule detail if a donor reports theft.
+// ─────────────────────────────────────────────────────────────────────────
+model TrustedDevice {
+  id         String             @id @default(cuid())
+  scheduleId String
+  schedule   MonitoringSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  deviceId   String             @unique  // random 32-byte id, written to cookie
+  userAgent  String?
+  ipAddress  String?
+
+  createdAt  DateTime           @default(now())
+  lastSeenAt DateTime           @default(now())
+  revokedAt  DateTime?
+
+  @@index([scheduleId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PortalOtp — pending one-time SMS code issued when a donor logs in from an
+// untrusted device. Code itself is SHA256-hashed; we only ever compare
+// hashes. TTL is 5 minutes and max 5 verify attempts per row.
+// ─────────────────────────────────────────────────────────────────────────
+model PortalOtp {
+  id          String             @id @default(cuid())
+  scheduleId  String
+  schedule    MonitoringSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  phone       String             // E.164, for per-phone request rate limiting
+  codeHash    String             // SHA256(code)
+  expiresAt   DateTime
+  attempts    Int                @default(0)
+  consumedAt  DateTime?
+  createdAt   DateTime           @default(now())
+
+  @@index([phone, expiresAt])
+  @@index([scheduleId, expiresAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PortalLoginAttempt — every donor-portal auth event (login, OTP request,
+// OTP verify, session check). Success or failure. Drives the per-IP and
+// per-schedule anomaly alerts and gives us a queryable audit trail for
+// the donor flow (AuditLog is keyed on User, which portal visitors aren't).
+// ─────────────────────────────────────────────────────────────────────────
+model PortalLoginAttempt {
+  id          String   @id @default(cuid())
+  scheduleId  String?  // null when PIN didn't match a known schedule
+  action      String   // "login" | "otp_request" | "otp_verify" | "logout"
+  success     Boolean
+  reason      String?  // "invalid_pin" | "locked" | "otp_required" | "bad_otp" | "otp_expired" | "ok"
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([scheduleId, createdAt])
+  @@index([ipAddress, createdAt])
+  @@index([createdAt])
 }
 
 model RandomSelection {

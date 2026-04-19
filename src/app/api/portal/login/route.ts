@@ -1,31 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createSignedUrl } from "@/lib/storage";
 import { rateLimit, getClientIp } from "@/lib/rateLimit";
+import { setPortalSession, PORTAL_DEVICE_COOKIE } from "@/lib/portalSession";
+import { issueOtp } from "@/lib/portalOtp";
+import { logPortalEvent, tarpit } from "@/lib/portalAudit";
+import { buildSessionPayload } from "@/lib/portalPayload";
 
 /**
- * POST /api/portal/login  (PUBLIC — no session)
+ * POST /api/portal/login  (PUBLIC — no staff session)
  *
- * Donor-facing portal login. Given a 6-digit PIN, returns:
- *   - donor name
- *   - whether they're selected today
- *   - today's selection id + acknowledgment state
- *   - a short-lived signed URL for the attached order PDF (if any)
+ * Donor login flow. The client posts `{ pin, deviceId? }`. Possible outcomes:
  *
- * Rate-limited: 10 attempts / minute / IP. PIN brute-force on a 6-digit
- * space is cheap without this brake.
+ *   1. `pinLockedUntil > now`                → 423 "locked"
+ *   2. PIN doesn't match                     → 404 "invalid_pin" (tarpit)
+ *   3. PIN matches + deviceId is a trusted,
+ *      non-revoked device for this schedule  → success: set session cookie,
+ *                                              return the session payload
+ *   4. PIN matches + no trusted device       → 202 "otp_required": issue SMS
+ *                                              OTP to donor phone on file;
+ *                                              client prompts for the code
+ *
+ * Rate-limiting:
+ *   - 10/min/IP on this route
+ *   - Per-schedule lockout is enforced in portalOtp.verifyOtp
  */
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request.headers);
+  const userAgent = request.headers.get("user-agent") || null;
+
   const gate = rateLimit(`portal-login:${ip}`, 10, 60_000);
   if (!gate.ok) {
+    logPortalEvent({ action: "login", success: false, reason: "ip_rate_limited", ipAddress: ip, userAgent });
     return NextResponse.json(
       { error: "Too many attempts. Please wait a minute and try again." },
       { status: 429 }
     );
   }
 
-  let body: { pin?: string };
+  let body: { pin?: string; deviceId?: string };
   try {
     body = await request.json();
   } catch {
@@ -33,6 +45,13 @@ export async function POST(request: NextRequest) {
   }
 
   const pin = String(body.pin || "").trim();
+  // Allow client to pass deviceId explicitly (from localStorage fallback) or
+  // rely on the device cookie below.
+  const submittedDeviceId =
+    String(body.deviceId || "").trim() ||
+    request.cookies.get(PORTAL_DEVICE_COOKIE)?.value ||
+    null;
+
   if (!pin || pin.length < 4) {
     return NextResponse.json({ error: "Invalid PIN" }, { status: 400 });
   }
@@ -40,78 +59,128 @@ export async function POST(request: NextRequest) {
   const schedule = await prisma.monitoringSchedule.findUnique({
     where: { checkInPin: pin },
     include: {
-      case: { select: { donor: { select: { firstName: true, lastName: true } } } },
+      case: {
+        select: {
+          donor: { select: { firstName: true, lastName: true, phone: true } },
+        },
+      },
       testCatalog: { select: { testName: true } },
     },
   });
 
   if (!schedule || !schedule.active) {
+    await tarpit(10 - gate.remaining);
+    logPortalEvent({ action: "login", success: false, reason: "invalid_pin", ipAddress: ip, userAgent });
     return NextResponse.json({ error: "Invalid PIN" }, { status: 404 });
   }
 
-  // Today in UTC (matches how selections are stored).
-  const now = new Date();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const tomorrow = new Date(today);
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-
-  const selection = await prisma.randomSelection.findFirst({
-    where: {
+  // Lockout gate — someone hit the OTP fail threshold recently.
+  if (schedule.pinLockedUntil && schedule.pinLockedUntil.getTime() > Date.now()) {
+    logPortalEvent({
       scheduleId: schedule.id,
-      selectedDate: { gte: today, lt: tomorrow },
-      status: { in: ["pending", "notified", "completed"] },
-    },
-    include: {
-      documents: {
-        where: { documentType: "monitoring_order" },
-        orderBy: { uploadedAt: "desc" },
-        take: 1,
-        select: { id: true, fileName: true, filePath: true },
+      action: "login",
+      success: false,
+      reason: "locked",
+      ipAddress: ip,
+      userAgent,
+    });
+    return NextResponse.json(
+      { error: "This PIN is temporarily locked. Try again later or contact the lab." },
+      { status: 423 }
+    );
+  }
+
+  // Trusted-device fast path.
+  const trustedDevice = submittedDeviceId
+    ? await prisma.trustedDevice.findUnique({ where: { deviceId: submittedDeviceId } })
+    : null;
+
+  const deviceOk =
+    trustedDevice &&
+    trustedDevice.scheduleId === schedule.id &&
+    !trustedDevice.revokedAt;
+
+  if (!deviceOk) {
+    // Untrusted device — challenge with an SMS OTP to the donor's phone.
+    const phone = schedule.case.donor?.phone || null;
+    if (!phone) {
+      logPortalEvent({
+        scheduleId: schedule.id,
+        action: "login",
+        success: false,
+        reason: "no_donor_phone",
+        ipAddress: ip,
+        userAgent,
+      });
+      return NextResponse.json(
+        { error: "No phone on file for this donor. Contact the lab to update your contact info." },
+        { status: 409 }
+      );
+    }
+    const r = await issueOtp(schedule.id, phone);
+    if (!r.ok) {
+      logPortalEvent({
+        scheduleId: schedule.id,
+        action: "otp_request",
+        success: false,
+        reason: r.reason || "issue_failed",
+        ipAddress: ip,
+        userAgent,
+      });
+      return NextResponse.json(
+        { error: "Too many code requests. Try again in an hour." },
+        { status: 429 }
+      );
+    }
+    logPortalEvent({
+      scheduleId: schedule.id,
+      action: "otp_request",
+      success: true,
+      ipAddress: ip,
+      userAgent,
+    });
+    const last4 = phone.replace(/\D/g, "").slice(-4);
+    return NextResponse.json(
+      {
+        otpRequired: true,
+        scheduleId: schedule.id,
+        phoneMasked: last4 ? `•••-•••-${last4}` : null,
       },
+      { status: 202 }
+    );
+  }
+
+  // Trusted device — issue session cookie + return payload.
+  await prisma.trustedDevice.update({
+    where: { id: trustedDevice!.id },
+    data: {
+      lastSeenAt: new Date(),
+      userAgent: userAgent ?? trustedDevice!.userAgent,
+      ipAddress: ip === "unknown" ? null : ip,
     },
   });
 
-  // Log the check-in (audit trail — same table as /api/checkin).
-  const userAgent = request.headers.get("user-agent") || null;
+  const payload = await buildSessionPayload(schedule.id);
+  const res = NextResponse.json(payload);
+  setPortalSession(res, schedule.id, trustedDevice!.deviceId);
+
   await prisma.checkIn.create({
     data: {
       scheduleId: schedule.id,
-      wasSelected: !!selection,
-      selectionId: selection?.id || null,
+      wasSelected: !!payload?.selection,
+      selectionId: payload?.selection?.id || null,
       ipAddress: ip === "unknown" ? null : ip,
       userAgent,
     },
   });
-
-  const donorName = schedule.case.donor
-    ? `${schedule.case.donor.firstName} ${schedule.case.donor.lastName}`
-    : "Donor";
-
-  // Build signed URL for the attached order PDF, if present.
-  let orderPdfUrl: string | null = null;
-  const doc = selection?.documents[0];
-  if (doc) {
-    try {
-      orderPdfUrl = await createSignedUrl(doc.filePath, 600); // 10 min
-    } catch (err) {
-      console.error("[portal/login] sign failed for", doc.filePath, err);
-      // Non-fatal — show the page without the PDF rather than 500.
-    }
-  }
-
-  return NextResponse.json({
-    donorName,
-    testName: schedule.testCatalog.testName,
-    selected: !!selection,
-    selection: selection
-      ? {
-          id: selection.id,
-          status: selection.status,
-          acknowledgedAt: selection.acknowledgedAt,
-          orderPdf: doc && orderPdfUrl
-            ? { fileName: doc.fileName, url: orderPdfUrl }
-            : null,
-        }
-      : null,
+  logPortalEvent({
+    scheduleId: schedule.id,
+    action: "login",
+    success: true,
+    reason: "trusted_device",
+    ipAddress: ip,
+    userAgent,
   });
+  return res;
 }
+

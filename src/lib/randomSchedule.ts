@@ -5,6 +5,8 @@
  * respecting optional minimum-spacing constraints.
  */
 
+import { randomInt } from "crypto";
+
 export type PatternType = "range_count" | "per_month" | "per_week" | "every_n_days";
 
 export type GenerateParams = {
@@ -275,7 +277,9 @@ export function nextWeekday(from: Date, addBusinessDays = 1): Date {
   return d;
 }
 
-/** Generate a 6-digit PIN. */
+/** Generate an 8-digit PIN using crypto-strength randomness. */
 export function generateCheckInPin(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  // 10000000–99999999 → always 8 digits, no leading-zero ambiguity.
+  const n = randomInt(10_000_000, 100_000_000);
+  return String(n);
 }

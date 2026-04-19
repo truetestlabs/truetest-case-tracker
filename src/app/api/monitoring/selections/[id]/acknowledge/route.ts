@@ -1,60 +1,84 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getPortalSession } from "@/lib/portalSession";
+import { getClientIp } from "@/lib/rateLimit";
+import { logPortalEvent } from "@/lib/portalAudit";
 
 /**
  * POST /api/monitoring/selections/[id]/acknowledge
  *
- * PUBLIC — no session. Authorization is PIN-based: the caller must present
- * the schedule's check-in PIN in the body, and it must match the schedule
- * that owns this selection. Stamps `acknowledgedAt` so Phase 3's
- * notification cron stops escalating.
+ * PUBLIC — no staff session. Authorization is either:
+ *   - a valid portal session cookie whose scheduleId owns this selection, or
+ *   - the schedule's PIN submitted in the body (legacy callers).
  *
- * Also advances a pending selection to "notified" (matching the intent of
- * "donor knows"), mirroring the existing /api/checkin behavior.
+ * Stamps `acknowledgedAt` (idempotent) and advances pending → notified,
+ * matching the /api/checkin intent. Phase 3's notification cron reads
+ * acknowledgedAt to stop escalating.
  *
- * Body: { pin: string }
+ * Body: { pin?: string }
  */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: selectionId } = await params;
+  const ip = getClientIp(request.headers);
+  const userAgent = request.headers.get("user-agent") || null;
 
-  let body: { pin?: string };
+  let body: { pin?: string } = {};
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    // Body optional when authenticated via session cookie.
   }
-
-  const pin = String(body.pin || "").trim();
-  if (!pin) {
-    return NextResponse.json({ error: "PIN required" }, { status: 400 });
-  }
+  const pin = String(body?.pin || "").trim();
 
   const selection = await prisma.randomSelection.findUnique({
     where: { id: selectionId },
-    include: { schedule: { select: { checkInPin: true, active: true } } },
+    include: { schedule: { select: { id: true, checkInPin: true, active: true } } },
   });
 
   if (!selection || !selection.schedule.active) {
     return NextResponse.json({ error: "Selection not found" }, { status: 404 });
   }
-  if (selection.schedule.checkInPin !== pin) {
-    return NextResponse.json({ error: "Invalid PIN" }, { status: 403 });
+
+  // Authorize — session cookie first, PIN fallback.
+  const sess = await getPortalSession(request);
+  const authBySession = sess?.scheduleId === selection.schedule.id;
+  const authByPin = !!pin && pin === selection.schedule.checkInPin;
+
+  if (!authBySession && !authByPin) {
+    logPortalEvent({
+      scheduleId: selection.schedule.id,
+      action: "acknowledge",
+      success: false,
+      reason: "unauthorized",
+      ipAddress: ip,
+      userAgent,
+      metadata: { selectionId },
+    });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  // Idempotent: don't clobber an existing acknowledgedAt.
   const now = new Date();
   const updated = await prisma.randomSelection.update({
     where: { id: selectionId },
     data: {
       acknowledgedAt: selection.acknowledgedAt ?? now,
-      // Advance pending → notified on first ack (matches /api/checkin intent).
       status: selection.status === "pending" ? "notified" : selection.status,
       notifiedAt: selection.notifiedAt ?? now,
     },
     select: { id: true, acknowledgedAt: true, status: true, notifiedAt: true },
+  });
+
+  logPortalEvent({
+    scheduleId: selection.schedule.id,
+    action: "acknowledge",
+    success: true,
+    reason: authBySession ? "session" : "pin",
+    ipAddress: ip,
+    userAgent,
+    metadata: { selectionId },
   });
 
   return NextResponse.json({ ok: true, selection: updated });
