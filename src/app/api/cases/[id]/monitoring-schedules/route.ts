@@ -19,7 +19,7 @@ export async function GET(
           testOrder: { select: { id: true, testStatus: true } },
           documents: {
             where: { documentType: "monitoring_order" },
-            select: { id: true, fileName: true },
+            select: { id: true, fileName: true, extractedData: true },
             orderBy: { uploadedAt: "desc" },
             take: 1,
           },

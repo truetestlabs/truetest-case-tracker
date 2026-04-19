@@ -9,7 +9,11 @@ type Selection = {
   notifiedAt: string | null;
   acknowledgedAt: string | null;
   testOrder: { id: string; testStatus: string } | null;
-  documents: { id: string; fileName: string }[];
+  documents: {
+    id: string;
+    fileName: string;
+    extractedData: { qPassportId?: string | null } | null;
+  }[];
 };
 
 type Schedule = {
@@ -54,7 +58,15 @@ function selectionStatusColor(status: string): string {
 }
 
 function formatDate(d: string | Date) {
-  return new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  // selectedDate is stored as midnight UTC of the intended calendar day.
+  // Rendering in browser-local tz shifts it back 5-6h, showing the prior day.
+  return new Date(d).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 function formatDateTime(d: string | Date) {
@@ -310,6 +322,7 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
                     <div className="space-y-1 mb-3 max-h-64 overflow-y-auto">
                       {upcoming.map((sel) => {
                         const hasPdf = sel.documents.length > 0;
+                        const qPassportId = sel.documents[0]?.extractedData?.qPassportId || null;
                         return (
                         <div key={sel.id} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-100 last:border-0 flex-wrap gap-1">
                           <span className="text-gray-700">{formatDate(sel.selectedDate)}</span>
@@ -321,8 +334,11 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
                               </span>
                             )}
                             {hasPdf && (
-                              <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700" title={sel.documents[0].fileName}>
-                                PDF attached
+                              <span
+                                className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700"
+                                title={sel.documents[0].fileName}
+                              >
+                                {qPassportId ? `PDF · ${qPassportId}` : "PDF attached"}
                               </span>
                             )}
                             <button

@@ -2,6 +2,23 @@
 
 import { useEffect, useState } from "react";
 
+// Format the 4 AM CT unlock instant as a reader-friendly date string
+// ("Monday, April 20"). Rendering in the Chicago timezone matters:
+// the unlock gate is defined in CT, so the phone's local zone must
+// not drift the shown date.
+function formatUnlockDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      timeZone: "America/Chicago",
+    });
+  } catch {
+    return "";
+  }
+}
+
 // Convert base64url VAPID key into the Uint8Array PushManager expects.
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -41,11 +58,33 @@ async function subscribeToPush() {
   }
 }
 
+type OrderFields = {
+  qPassportId: string | null;
+  collectionSite: {
+    name: string | null;
+    address: string | null;
+    phone: string | null;
+    hours: string | null;
+  };
+  expiresOn: string | null;
+  testType: string | null;
+  collectionService: string | null;
+  donorName: string | null;
+  orderedDate: string | null;
+};
+
+type PortalOrderPdf = {
+  fileName: string;
+  unlocked: boolean;
+  unlockAtISO: string;
+  fields: OrderFields | null;
+};
+
 type PortalSelection = {
   id: string;
   status: string;
   acknowledgedAt: string | null;
-  orderPdf: { fileName: string; url: string } | null;
+  orderPdf: PortalOrderPdf | null;
 };
 
 type PortalSession = {
@@ -331,6 +370,21 @@ export default function PortalPage() {
     }
   }
 
+  async function downloadOrderPdf() {
+    try {
+      const res = await fetch("/api/portal/selection/pdf", { credentials: "include" });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(j?.error || "Could not open your order PDF. Please try again.");
+        return;
+      }
+      const { url } = (await res.json()) as { url: string };
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      alert("Network error. Please try again.");
+    }
+  }
+
   async function logout(revokeDevice: boolean) {
     try {
       await fetch("/api/portal/logout", {
@@ -607,30 +661,88 @@ export default function PortalPage() {
               </div>
 
               {session.selection.orderPdf ? (
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
-                  <div className="bg-slate-50 px-4 py-2 flex items-center justify-between gap-2 border-b border-slate-200">
-                    <p className="text-xs font-semibold text-slate-700 truncate">
-                      Order: {session.selection.orderPdf.fileName}
+                !session.selection.orderPdf.unlocked ? (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                    <p className="text-sm font-semibold text-slate-800">
+                      📄 Your order details unlock at 4:00 AM CT
                     </p>
-                    <a
-                      href={session.selection.orderPdf.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      download
-                      className="text-xs px-2 py-1 rounded bg-blue-600 text-white font-medium hover:bg-blue-700 flex-shrink-0"
-                    >
-                      Download
-                    </a>
+                    <p className="text-sm text-slate-600 mt-1">
+                      {formatUnlockDate(session.selection.orderPdf.unlockAtISO)}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-2">
+                      Come back after that time to see your collection site and download your order.
+                    </p>
                   </div>
-                  <iframe
-                    src={session.selection.orderPdf.url}
-                    title="Today's collection order"
-                    className="w-full h-[420px] bg-white"
-                  />
-                  <p className="bg-amber-50 text-amber-900 text-xs px-4 py-2 border-t border-amber-200">
-                    Show the barcode on this order at the collection site.
-                  </p>
-                </div>
+                ) : (
+                  <div className="space-y-3">
+                    {session.selection.orderPdf.fields?.qPassportId && (
+                      <div className="border-2 border-slate-300 rounded-lg p-3 text-center">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          Order Number
+                        </p>
+                        <p className="text-2xl font-mono font-bold text-slate-900 mt-1 tracking-wider">
+                          {session.selection.orderPdf.fields.qPassportId}
+                        </p>
+                      </div>
+                    )}
+                    {session.selection.orderPdf.fields?.collectionSite.name && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                          Collection Site
+                        </p>
+                        <p className="text-base font-bold text-slate-900">
+                          {session.selection.orderPdf.fields.collectionSite.name}
+                        </p>
+                        {session.selection.orderPdf.fields.collectionSite.address && (
+                          <a
+                            href={`https://maps.google.com/?q=${encodeURIComponent(
+                              session.selection.orderPdf.fields.collectionSite.address
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block text-sm text-blue-700 hover:text-blue-900 underline mt-1"
+                          >
+                            {session.selection.orderPdf.fields.collectionSite.address}
+                          </a>
+                        )}
+                        {session.selection.orderPdf.fields.collectionSite.phone && (
+                          <a
+                            href={`tel:${session.selection.orderPdf.fields.collectionSite.phone.replace(/\D/g, "")}`}
+                            className="block text-sm text-blue-700 hover:text-blue-900 mt-0.5"
+                          >
+                            {session.selection.orderPdf.fields.collectionSite.phone}
+                          </a>
+                        )}
+                        {session.selection.orderPdf.fields.collectionSite.hours && (
+                          <p className="text-xs text-slate-600 mt-1">
+                            {session.selection.orderPdf.fields.collectionSite.hours}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {session.selection.orderPdf.fields?.expiresOn && (
+                      <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                        Expires: {session.selection.orderPdf.fields.expiresOn}
+                      </p>
+                    )}
+                    {session.selection.orderPdf.fields?.testType && (
+                      <p className="text-xs text-slate-600">
+                        Test: {session.selection.orderPdf.fields.testType}
+                      </p>
+                    )}
+                    <button
+                      onClick={downloadOrderPdf}
+                      className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"
+                    >
+                      📄 Download Order PDF
+                    </button>
+                    {!session.selection.orderPdf.fields && (
+                      <p className="text-xs text-slate-500 text-center">
+                        Tap Download to view your order details.
+                      </p>
+                    )}
+                  </div>
+                )
               ) : (
                 <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
                   <p className="text-sm text-slate-600">

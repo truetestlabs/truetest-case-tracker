@@ -5,8 +5,23 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { createSignedUrl } from "@/lib/storage";
 import { setPortalSession } from "@/lib/portalSession";
+import { isUnlockedForSelection, unlockInstantForSelection } from "@/lib/dateChicago";
+import type { OrderFields } from "@/lib/extractOrder";
+
+export type PortalOrderPdf = {
+  fileName: string;
+  /** True iff Date.now() >= 4:00 AM America/Chicago on selection day. */
+  unlocked: boolean;
+  /** ISO instant of the 4 AM CT unlock — used by the UI to render a clock. */
+  unlockAtISO: string;
+  /**
+   * Extracted fields shown on the donor's authed view when unlocked.
+   * Intentionally omitted when !unlocked so the payload itself leaks
+   * nothing about the contents before unlock.
+   */
+  fields: OrderFields | null;
+};
 
 export type PortalPayload = {
   donorName: string;
@@ -16,11 +31,16 @@ export type PortalPayload = {
     id: string;
     status: string;
     acknowledgedAt: Date | null;
-    orderPdf: { fileName: string; url: string } | null;
+    orderPdf: PortalOrderPdf | null;
   } | null;
 };
 
-/** Today's selection + signed order PDF URL for the given schedule. */
+/** Today's selection + order-PDF metadata for the given schedule.
+ *
+ * Note: the signed download URL is NOT embedded here. The donor requests
+ * it on demand via GET /api/portal/selection/pdf so (a) the 10-min TTL
+ * doesn't expire while the portal sits open, and (b) we get a per-tap
+ * audit row. */
 export async function buildSessionPayload(scheduleId: string): Promise<PortalPayload | null> {
   const schedule = await prisma.monitoringSchedule.findUnique({
     where: { id: scheduleId },
@@ -47,24 +67,29 @@ export async function buildSessionPayload(scheduleId: string): Promise<PortalPay
         where: { documentType: "monitoring_order" },
         orderBy: { uploadedAt: "desc" },
         take: 1,
-        select: { id: true, fileName: true, filePath: true },
+        select: { id: true, fileName: true, filePath: true, extractedData: true },
       },
     },
   });
 
-  let orderPdfUrl: string | null = null;
-  const doc = selection?.documents[0];
-  if (doc) {
-    try {
-      orderPdfUrl = await createSignedUrl(doc.filePath, 600);
-    } catch (err) {
-      console.error("[portal] sign failed for", doc.filePath, err);
-    }
-  }
-
   const donorName = schedule.case.donor
     ? `${schedule.case.donor.firstName} ${schedule.case.donor.lastName}`
     : "Donor";
+
+  let orderPdf: PortalOrderPdf | null = null;
+  const doc = selection?.documents[0];
+  if (doc && selection) {
+    const unlocked = isUnlockedForSelection(selection.selectedDate);
+    orderPdf = {
+      fileName: doc.fileName,
+      unlocked,
+      unlockAtISO: unlockInstantForSelection(selection.selectedDate).toISOString(),
+      // Defense in depth: never surface extracted fields until unlock,
+      // even though the donor would have had to authenticate to reach
+      // this code path.
+      fields: unlocked ? ((doc.extractedData as OrderFields | null) ?? null) : null,
+    };
+  }
 
   return {
     donorName,
@@ -75,7 +100,7 @@ export async function buildSessionPayload(scheduleId: string): Promise<PortalPay
           id: selection.id,
           status: selection.status,
           acknowledgedAt: selection.acknowledgedAt,
-          orderPdf: doc && orderPdfUrl ? { fileName: doc.fileName, url: orderPdfUrl } : null,
+          orderPdf,
         }
       : null,
   };
