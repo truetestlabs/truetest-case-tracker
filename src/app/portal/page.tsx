@@ -92,7 +92,55 @@ type PortalSession = {
   testName: string;
   selected: boolean;
   selection: PortalSelection | null;
+  serverDay: string;
+  serverNowISO: string;
 };
+
+// Diagnostic clock shown above the portal card. Renders the donor's
+// current America/Chicago time (ticking once a second) and, when
+// authed, the server's view of "today" in the same zone. Disagreement
+// between the two is the telltale sign the server's "today" query
+// missed a current-day selection.
+function PortalClock({ serverDay }: { serverDay: string | null }) {
+  const [now, setNow] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const dateStr = now.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "America/Chicago",
+  });
+  const timeStr = now.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: "America/Chicago",
+  });
+  // Chicago Y-M-D on the client to compare with serverDay.
+  const clientDay = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const drift = serverDay && clientDay !== serverDay;
+  return (
+    <div className="text-center mb-3">
+      <p className="text-xs font-mono text-slate-500">
+        {dateStr} · {timeStr} CT
+      </p>
+      {serverDay && (
+        <p className={`text-xs font-mono mt-0.5 ${drift ? "text-red-600" : "text-slate-400"}`}>
+          Server day: {serverDay}
+          {drift ? ` ≠ ${clientDay} (drift!)` : ""}
+        </p>
+      )}
+    </div>
+  );
+}
 
 type Stage = "loading" | "pin" | "otp" | "authed" | "recover";
 
@@ -413,10 +461,13 @@ export default function PortalPage() {
       style={{ backgroundColor: "#f8fafc" }}
     >
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <p className="text-xs font-semibold tracking-widest text-slate-500 uppercase">TrueTest Labs</p>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">Donor Portal</h1>
         </div>
+
+        <PortalClock serverDay={session?.serverDay ?? null} />
+
 
         {stage === "loading" ? (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 text-center text-sm text-slate-500">

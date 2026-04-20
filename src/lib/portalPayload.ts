@@ -7,6 +7,7 @@ import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { setPortalSession } from "@/lib/portalSession";
 import {
+  chicagoDateKey,
   chicagoTodayAsUtcMidnight,
   isUnlockedForSelection,
   unlockInstantForSelection,
@@ -37,6 +38,13 @@ export type PortalPayload = {
     acknowledgedAt: Date | null;
     orderPdf: PortalOrderPdf | null;
   } | null;
+  /** Server's view of "today" in America/Chicago (YYYY-MM-DD). Surfaced
+   *  to the client so the portal can show a live diagnostic clock and
+   *  flag any drift between the donor's phone clock and the server's. */
+  serverDay: string;
+  /** ISO instant the server computed the payload at — pairs with
+   *  serverDay for the diagnostic clock. */
+  serverNowISO: string;
 };
 
 /** Today's selection + order-PDF metadata for the given schedule.
@@ -59,7 +67,8 @@ export async function buildSessionPayload(scheduleId: string): Promise<PortalPay
   // server's UTC day — selectedDate is stored as UTC-midnight of the
   // intended Chicago day, and the UTC day rolls over at ~7 PM CT. Using
   // UTC here would skip the donor's current-day selection all evening.
-  const today = chicagoTodayAsUtcMidnight();
+  const now = new Date();
+  const today = chicagoTodayAsUtcMidnight(now);
   const tomorrow = new Date(today);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
@@ -110,6 +119,8 @@ export async function buildSessionPayload(scheduleId: string): Promise<PortalPay
           orderPdf,
         }
       : null,
+    serverDay: chicagoDateKey(now),
+    serverNowISO: now.toISOString(),
   };
 }
 
