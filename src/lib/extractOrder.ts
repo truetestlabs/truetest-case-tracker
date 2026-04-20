@@ -32,6 +32,13 @@ export interface OrderFields {
   collectionService: string | null;
   donorName: string | null;
   orderedDate: string | null;
+  /**
+   * Whether the order is a direct-observed collection. `null` when the
+   * form has no observed field at all (e.g. a lab whose template doesn't
+   * include it) — the portal card then treats it as "not observed" but
+   * we preserve the distinction for audit.
+   */
+  observed: boolean | null;
 }
 
 const EMPTY: OrderFields = {
@@ -42,6 +49,7 @@ const EMPTY: OrderFields = {
   collectionService: null,
   donorName: null,
   orderedDate: null,
+  observed: null,
 };
 
 const PROMPT = `You are extracting structured data from a drug-test collection order PDF.
@@ -63,7 +71,8 @@ Return a single JSON object matching this exact TypeScript schema:
   "testType": string | null,
   "collectionService": string | null,
   "donorName": string | null,
-  "orderedDate": string | null
+  "orderedDate": string | null,
+  "observed": boolean | null
 }
 
 Rules:
@@ -71,6 +80,11 @@ Rules:
 - qPassportId is the barcode number at the top of the form (e.g. "Q21903933").
 - collectionSite.address must be a single line (merge multi-line addresses with ", ").
 - Preserve the raw string form for expiresOn and orderedDate — do not normalize.
+- observed is true only when the form clearly indicates a direct-observed
+  collection (e.g. a checked "Observed" or "Direct observed collection"
+  box, or the collection service says "Observed"). Use false when the
+  form has an observed field that is explicitly un-checked / "No". Use
+  null only when the form has no observed field at all.
 - Output ONLY the JSON object. No markdown fences, no prose.`;
 
 function sanitize(raw: unknown): OrderFields {
@@ -81,6 +95,8 @@ function sanitize(raw: unknown): OrderFields {
     : {}) as Record<string, unknown>;
   const str = (v: unknown): string | null =>
     typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+  const bool = (v: unknown): boolean | null =>
+    typeof v === "boolean" ? v : null;
   return {
     qPassportId: str(r.qPassportId),
     collectionSite: {
@@ -94,6 +110,7 @@ function sanitize(raw: unknown): OrderFields {
     collectionService: str(r.collectionService),
     donorName: str(r.donorName),
     orderedDate: str(r.orderedDate),
+    observed: bool(r.observed),
   };
 }
 
