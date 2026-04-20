@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
         }
         await sendSms(
           donor.phone,
-          `TrueTest Labs: You're selected for a drug test today. Open ${portalUrl || "the donor portal"} to see your order. Reply STOP to opt out.`
+          `TrueTest Labs: You're selected for a drug test and must test today. Open ${portalUrl || "the donor portal"} to see your collection site. Reply STOP to opt out.`
         );
       } else if (job.channel === "email") {
         if (!donor?.email) {
@@ -130,8 +130,8 @@ export async function GET(request: NextRequest) {
         }
         await sendPlainEmail(
           donor.email,
-          "TrueTest Labs — You're selected for testing today",
-          `<p>Hi ${donorName},</p><p>You're selected for a <strong>${testName}</strong> test today. Please open your donor portal to view today's collection order and mark it acknowledged:</p><p><a href="${portalUrl || "/portal"}">${portalUrl || "Open portal"}</a></p><p>— TrueTest Labs</p>`
+          "TrueTest Labs — You must test today",
+          `<p>Hi ${donorName},</p><p>You've been selected for a <strong>${testName}</strong> drug test and <strong>must test today</strong>. Open your donor portal below to see your collection site and acknowledge the notification:</p><p><a href="${portalUrl || "/portal"}">${portalUrl || "Open portal"}</a></p><p>— TrueTest Labs</p>`
         );
       } else {
         // Unknown channel (e.g. voice) — mark skipped rather than failed so
