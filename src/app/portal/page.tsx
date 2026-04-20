@@ -97,16 +97,12 @@ type PortalSession = {
   upcomingSelections: Array<{ selectedDate: string; status: string }>;
 };
 
-// Render an ISO selectedDate (UTC-midnight of a Chicago calendar day)
-// as a Chicago-local "YYYY-MM-DD" key. Guarantees the diagnostic panel
-// labels match the server's notion of the day even near midnight.
+// selectedDate is stored as UTC-midnight where the UTC Y/M/D already
+// encode the intended Chicago calendar day. Read the UTC components
+// directly — applying an America/Chicago tz conversion would subtract
+// ~5h and shift every label to the prior day (e.g. Apr 20 → Apr 19).
 function isoToChicagoDay(iso: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Chicago",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(iso));
+  return iso.slice(0, 10);
 }
 
 // Diagnostic clock shown above the portal card. Renders the donor's
