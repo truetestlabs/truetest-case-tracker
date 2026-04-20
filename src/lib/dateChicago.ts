@@ -108,6 +108,38 @@ export function chicagoDateKey(d: Date): string {
 }
 
 /**
+ * Human-readable America/Chicago date for a stored UTC instant —
+ * e.g. "Tuesday, April 21, 2026". Use for donor/client-facing emails
+ * and SMS where the row holds a real timestamp (appointmentDate,
+ * collectionDate). Do NOT use for date-key rows like `selectedDate`,
+ * which are already UTC-midnight markers of a Chicago day — see
+ * `chicagoDateKey` or `iso.slice(0,10)` for those.
+ */
+export function formatChicagoLongDate(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: CHICAGO_TZ,
+  });
+}
+
+/**
+ * America/Chicago clock time for a stored UTC instant, suffixed " CT"
+ * — e.g. "3:30 PM CT". Same caveat as `formatChicagoLongDate`: only for
+ * rows that hold a real instant, never for date-key rows.
+ */
+export function formatChicagoTime(d: Date): string {
+  const t = d.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: CHICAGO_TZ,
+  });
+  return `${t} CT`;
+}
+
+/**
  * Given a UTC-midnight marker of a Chicago calendar day (the same
  * representation `selectedDate` uses), return the actual UTC instant
  * corresponding to 00:00:00 America/Chicago on that day. Use for

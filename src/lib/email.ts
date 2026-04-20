@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { downloadFile } from "@/lib/storage";
+import { formatChicagoLongDate, formatChicagoTime } from "@/lib/dateChicago";
 
 // Lazy client — only instantiated when actually sending, so missing key doesn't break build
 function getResend() {
@@ -522,8 +523,9 @@ export async function sendNoShowEmail(
     ? `${caseData.donor.firstName} ${caseData.donor.lastName}`
     : "the donor";
 
-  const apptLine = testOrder?.appointmentDate
-    ? `<p style="color:#64748b;font-size:13px;margin:0 0 24px;">Scheduled appointment: <strong>${new Date(testOrder.appointmentDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</strong></p>`
+  const apptDate = testOrder?.appointmentDate ? new Date(testOrder.appointmentDate) : null;
+  const apptLine = apptDate
+    ? `<p style="color:#64748b;font-size:13px;margin:0 0 24px;">Scheduled appointment: <strong>${formatChicagoLongDate(apptDate)} at ${formatChicagoTime(apptDate)}</strong></p>`
     : "";
 
   const html = emailLayout({
@@ -655,17 +657,8 @@ export async function sendBookingConfirmationEmail(opts: {
   if (!process.env.RESEND_API_KEY) return;
 
   const apptDate = new Date(opts.startTime);
-  const dateStr = apptDate.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-  const timeStr = apptDate.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
+  const dateStr = formatChicagoLongDate(apptDate);
+  const timeStr = formatChicagoTime(apptDate);
 
   const html = emailLayout({
     headerBg: "#1e3a5f",
