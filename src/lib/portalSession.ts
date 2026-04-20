@@ -32,6 +32,13 @@ export const PORTAL_DEVICE_COOKIE = "ttl_portal_device";
 // skips OTP as long as it isn't revoked.
 const SESSION_TTL_SEC = 60 * 60 * 24 * 30;
 
+// 4 hours. Server-side idle-timeout: if the gap between TrustedDevice
+// `lastSeenAt` and now exceeds this, the cookie is rejected and the
+// donor is pushed back to the PIN screen. Handles the "clicked an
+// email link hours later and walked straight in" case — the 30d cookie
+// by itself was too lenient for an authenticated clinical view.
+const SESSION_IDLE_TTL_SEC = 60 * 60 * 4;
+
 type SessionPayload = {
   scheduleId: string;
   deviceId: string;
@@ -164,7 +171,15 @@ export async function getPortalSession(request: NextRequest) {
   if (device.scheduleId !== payload.scheduleId) return null;
   if (!device.schedule.active) return null;
 
-  // Touch last-seen for staff visibility.
+  // Idle-timeout check. Must run BEFORE we touch lastSeenAt, otherwise
+  // every visit resets the gap to zero and the window can never elapse.
+  // Treat the check as "time since the previous visit" — if it exceeds
+  // SESSION_IDLE_TTL_SEC, force PIN re-entry. The TrustedDevice row
+  // stays intact so the donor still skips OTP on the same browser.
+  const idleMs = Date.now() - device.lastSeenAt.getTime();
+  if (idleMs > SESSION_IDLE_TTL_SEC * 1000) return null;
+
+  // Touch last-seen for staff visibility + the idle gate above.
   prisma.trustedDevice
     .update({ where: { id: device.id }, data: { lastSeenAt: new Date() } })
     .catch(() => {}); // fire-and-forget

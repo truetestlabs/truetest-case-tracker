@@ -62,6 +62,7 @@ For **every** lab integration (USDTL and any future lab), we must retrieve and s
 ## Donor portal auth (Phase A, 2026-04-19)
 
 - **Flow:** PIN → (if new device) SMS 6-digit OTP to donor phone → HMAC-signed `ttl_portal_session` cookie (30d, HttpOnly/Secure/SameSite=Strict) + `ttl_portal_device` companion cookie (~13mo, holds the `TrustedDevice.deviceId`). On next visit, `/api/portal/session` auto-loads the session from the cookie — no PIN prompt.
+- **Idle timeout:** server-side 4h window measured against `TrustedDevice.lastSeenAt`. If the donor's last portal request was >4h ago, the cookie is rejected and the PIN screen shows again. The TrustedDevice row stays put so OTP is still skipped on re-auth from the same browser. Tune via `SESSION_IDLE_TTL_SEC` in `src/lib/portalSession.ts`.
 - **Lockout:** 5 cumulative OTP failures on a schedule → `MonitoringSchedule.pinLockedUntil = now+1h`, return 423. Cleared on next successful OTP.
 - **Tarpit:** failed PIN/OTP attempts sleep progressively (500ms → 1s → 2.5s).
 - **SMS OTP rate:** 3 code requests per phone per hour (Twilio bill shield).
