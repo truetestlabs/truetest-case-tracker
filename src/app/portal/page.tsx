@@ -893,7 +893,8 @@ export default function PortalPage() {
               Diagnostic · your upcoming dates
             </p>
             <p className="text-[11px] font-mono text-slate-500 mb-2">
-              Server today: {session.serverDay}
+              Server today: {session.serverDay} · now:{" "}
+              {session.serverNowISO}
             </p>
             {session.upcomingSelections.length === 0 ? (
               <p className="text-xs text-slate-600">
@@ -901,13 +902,13 @@ export default function PortalPage() {
                 regenerate it.
               </p>
             ) : (
-              <ul className="text-xs font-mono text-slate-700 space-y-1">
+              <ul className="text-[11px] font-mono text-slate-700 space-y-1 break-all">
                 {session.upcomingSelections.map((u, i) => {
                   const day = isoToChicagoDay(u.selectedDate);
                   const isToday = day === session.serverDay;
                   return (
                     <li key={i} className={isToday ? "font-bold text-red-700" : ""}>
-                      {day} · {u.status}
+                      CT:{day} · raw:{u.selectedDate} · {u.status}
                       {isToday ? " ← today" : ""}
                     </li>
                   );
