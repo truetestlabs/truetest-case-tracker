@@ -6,7 +6,11 @@ import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { setPortalSession } from "@/lib/portalSession";
-import { isUnlockedForSelection, unlockInstantForSelection } from "@/lib/dateChicago";
+import {
+  chicagoTodayAsUtcMidnight,
+  isUnlockedForSelection,
+  unlockInstantForSelection,
+} from "@/lib/dateChicago";
 import type { OrderFields } from "@/lib/extractOrder";
 
 export type PortalOrderPdf = {
@@ -51,8 +55,11 @@ export async function buildSessionPayload(scheduleId: string): Promise<PortalPay
   });
   if (!schedule) return null;
 
-  const now = new Date();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  // "Today" must be the donor's America/Chicago calendar day, not the
+  // server's UTC day — selectedDate is stored as UTC-midnight of the
+  // intended Chicago day, and the UTC day rolls over at ~7 PM CT. Using
+  // UTC here would skip the donor's current-day selection all evening.
+  const today = chicagoTodayAsUtcMidnight();
   const tomorrow = new Date(today);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 

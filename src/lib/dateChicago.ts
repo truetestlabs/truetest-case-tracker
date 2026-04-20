@@ -69,3 +69,25 @@ export function unlockInstantForSelection(selectedDate: Date): Date {
 export function isUnlockedForSelection(selectedDate: Date, now: Date = new Date()): boolean {
   return now.getTime() >= unlockInstantForSelection(selectedDate).getTime();
 }
+
+/**
+ * UTC-midnight Date corresponding to today's America/Chicago calendar day.
+ * Matches the convention `selectedDate` is stored under ("UTC midnight of
+ * the intended Chicago calendar day"), so a range query `gte today()` /
+ * `lt tomorrow()` selects rows for the donor's local "today" rather than
+ * the UTC "today" — which rolls over ~7 PM CT and would otherwise skip
+ * the current day's selection during Chicago evening hours.
+ */
+export function chicagoTodayAsUtcMidnight(now: Date = new Date()): Date {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: CHICAGO_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = fmt.formatToParts(now);
+  const p = Object.fromEntries(parts.map((x) => [x.type, x.value])) as Record<string, string>;
+  return new Date(
+    Date.UTC(parseInt(p.year, 10), parseInt(p.month, 10) - 1, parseInt(p.day, 10))
+  );
+}
