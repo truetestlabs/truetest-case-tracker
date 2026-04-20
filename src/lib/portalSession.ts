@@ -32,12 +32,14 @@ export const PORTAL_DEVICE_COOKIE = "ttl_portal_device";
 // skips OTP as long as it isn't revoked.
 const SESSION_TTL_SEC = 60 * 60 * 24 * 30;
 
-// 4 hours. Server-side idle-timeout: if the gap between TrustedDevice
+// TEMP: 60 seconds for live testing on this branch. Flip back to
+// `60 * 60 * 4` (4 hours) before merging — see CLAUDE.md Phase A auth.
+// Server-side idle-timeout: if the gap between TrustedDevice
 // `lastSeenAt` and now exceeds this, the cookie is rejected and the
 // donor is pushed back to the PIN screen. Handles the "clicked an
 // email link hours later and walked straight in" case — the 30d cookie
 // by itself was too lenient for an authenticated clinical view.
-const SESSION_IDLE_TTL_SEC = 60 * 60 * 4;
+const SESSION_IDLE_TTL_SEC = 60;
 
 type SessionPayload = {
   scheduleId: string;
