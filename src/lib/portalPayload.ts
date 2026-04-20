@@ -44,7 +44,12 @@ export type PortalPayload = {
   serverDay: string;
   /** ISO instant the server computed the payload at — pairs with
    *  serverDay for the diagnostic clock. */
-  serverNowISO: string;
+   serverNowISO: string;
+  /** Next ~10 selections on/after today for this schedule. Temporary
+   *  diagnostic so the donor/staff can see whether today's row exists
+   *  in the DB at all. Each selectedDate is the same UTC-midnight form
+   *  stored in the DB (represents a Chicago calendar day). */
+  upcomingSelections: Array<{ selectedDate: string; status: string }>;
 };
 
 /** Today's selection + order-PDF metadata for the given schedule.
@@ -88,6 +93,20 @@ export async function buildSessionPayload(scheduleId: string): Promise<PortalPay
     },
   });
 
+  // Diagnostic: surface the next handful of selections on/after today so
+  // the donor can see at a glance whether today's row exists in the DB.
+  // If today isn't in the list, the "No Test Today" card is correctly
+  // reporting the DB's state — not a bug in the query.
+  const upcoming = await prisma.randomSelection.findMany({
+    where: {
+      scheduleId: schedule.id,
+      selectedDate: { gte: today },
+    },
+    orderBy: { selectedDate: "asc" },
+    take: 10,
+    select: { selectedDate: true, status: true },
+  });
+
   const donorName = schedule.case.donor
     ? `${schedule.case.donor.firstName} ${schedule.case.donor.lastName}`
     : "Donor";
@@ -121,6 +140,10 @@ export async function buildSessionPayload(scheduleId: string): Promise<PortalPay
       : null,
     serverDay: chicagoDateKey(now),
     serverNowISO: now.toISOString(),
+    upcomingSelections: upcoming.map((u) => ({
+      selectedDate: u.selectedDate.toISOString(),
+      status: u.status,
+    })),
   };
 }
 
