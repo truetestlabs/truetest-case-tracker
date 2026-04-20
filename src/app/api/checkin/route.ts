@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { chicagoTodayAsUtcMidnight } from "@/lib/dateChicago";
 
 /**
  * POST /api/checkin  (PUBLIC — no auth required)
@@ -29,9 +30,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid PIN" }, { status: 404 });
   }
 
-  // Today in UTC (matches how selections are stored)
-  const now = new Date();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  // "Today" is the donor's America/Chicago calendar day. selectedDate is
+  // stored as UTC-midnight of that Chicago day; using a UTC clock here
+  // would skip the current-day selection from ~7 PM CT to midnight CT
+  // each night.
+  const today = chicagoTodayAsUtcMidnight();
   const tomorrow = new Date(today);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 

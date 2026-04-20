@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { chicagoDateKey, utcInstantForChicagoDayStart } from "@/lib/dateChicago";
 
 export type ComplianceEntry = {
   date: string; // YYYY-MM-DD
@@ -84,19 +85,28 @@ export async function buildComplianceReport(
 
   if (!schedule) return null;
 
+  // `from`/`to` are UTC-midnight markers of America/Chicago calendar days.
   const from = utcMidnight(fromDate);
   const to = utcMidnight(toDate);
 
-  // Query check-ins in range
+  // checkedInAt is a real timestamp — its range must be the UTC instants
+  // bounding the Chicago calendar days [from, to], not UTC midnights.
+  // Using UTC midnights here would drop evening (7 PM–midnight CT)
+  // check-ins on `to` and pick up late-evening check-ins from the day
+  // before `from`.
+  const checkInRangeStart = utcInstantForChicagoDayStart(from);
+  const checkInRangeEnd = utcInstantForChicagoDayStart(addDays(to, 1));
+
   const checkIns = await prisma.checkIn.findMany({
     where: {
       scheduleId,
-      checkedInAt: { gte: from, lt: addDays(to, 1) },
+      checkedInAt: { gte: checkInRangeStart, lt: checkInRangeEnd },
     },
     orderBy: { checkedInAt: "asc" },
   });
 
-  // Query selections in range
+  // selectedDate is stored as UTC-midnight of the Chicago day, so the
+  // UTC-midnight boundaries work directly here.
   const selections = await prisma.randomSelection.findMany({
     where: {
       scheduleId,
@@ -104,10 +114,11 @@ export async function buildComplianceReport(
     },
   });
 
-  // Build maps keyed by date
+  // Bucket check-ins by the donor's Chicago calendar day so a 9 PM CT
+  // check-in is counted on its own day, not bumped to tomorrow.
   const checkInByDate = new Map<string, { time: string }>();
   for (const ci of checkIns) {
-    const k = dateKey(utcMidnight(ci.checkedInAt));
+    const k = chicagoDateKey(ci.checkedInAt);
     if (!checkInByDate.has(k)) {
       checkInByDate.set(k, {
         time: new Date(ci.checkedInAt).toLocaleTimeString("en-US", {

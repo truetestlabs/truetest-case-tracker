@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { chicagoTodayAsUtcMidnight } from "@/lib/dateChicago";
 
 type Selection = {
   id: string;
@@ -213,8 +214,10 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
   if (loading) return <div className="text-sm text-gray-400 py-3">Loading schedules...</div>;
   if (schedules.length === 0) return null;
 
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  // Anchor to Chicago's calendar day (selectedDate is UTC-midnight of the
+  // intended Chicago day). A UTC-midnight anchor would classify today's
+  // selection as "past" during Chicago evening hours (after UTC rollover).
+  const today = chicagoTodayAsUtcMidnight();
 
   return (
     <div className="space-y-4">

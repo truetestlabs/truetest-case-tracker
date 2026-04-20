@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getPortalSession } from "@/lib/portalSession";
 import { createSignedUrl } from "@/lib/storage";
-import { isUnlockedForSelection } from "@/lib/dateChicago";
+import { chicagoTodayAsUtcMidnight, isUnlockedForSelection } from "@/lib/dateChicago";
 import { logPortalEvent } from "@/lib/portalAudit";
 import { getClientIp, rateLimit } from "@/lib/rateLimit";
 
@@ -31,8 +31,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
-  const now = new Date();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  // "Today" is the donor's America/Chicago calendar day — matches how
+  // selectedDate is stored. A UTC-based boundary here would 404 the PDF
+  // fetch for anyone hitting the endpoint after UTC midnight (~7 PM CT).
+  const today = chicagoTodayAsUtcMidnight();
   const tomorrow = new Date(today);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
