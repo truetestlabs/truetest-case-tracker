@@ -71,6 +71,25 @@ For **every** lab integration (USDTL and any future lab), we must retrieve and s
 - **Headers:** HSTS, X-Frame-Options:DENY, CSP, Referrer-Policy, Permissions-Policy set for all routes via `next.config.ts`.
 - **Middleware:** `/portal` and `/api/portal/*` are now in the public-paths list so Supabase staff auth doesn't intercept donor traffic.
 
+## Date/time rendering for donors & clients
+
+All Vercel/Node servers run UTC. Never hand a stored `DateTime` instant
+(appointmentDate, collectionDate, etc.) to `toLocaleString`/
+`toLocaleDateString`/`toLocaleTimeString` without an explicit `timeZone`,
+or the output will render in UTC — e.g. "3:30 PM CT" becomes "8:30 PM UTC".
+
+Use the helpers in `src/lib/dateChicago.ts`:
+
+- `formatChicagoLongDate(d)` → `"Tuesday, April 21, 2026"`
+- `formatChicagoTime(d)` → `"3:30 PM CT"`
+- `chicagoDateKey(d)` → `"YYYY-MM-DD"` of the Chicago day the instant falls in
+
+Date-key rows (`RandomSelection.selectedDate`, any field stored as
+UTC-midnight of a Chicago calendar day) are different — their UTC
+Y/M/D already **is** the Chicago day. Read them with `iso.slice(0,10)`
+or UTC getters; **do not** pass them through the Chicago formatters,
+which would subtract ~5h and shift to the prior day.
+
 ## UI rules
 
 Before editing any UI component: describe layout, colors, spacing, mobile behavior, and button states. Get approval before implementing.

@@ -108,6 +108,66 @@ export function chicagoDateKey(d: Date): string {
 }
 
 /**
+ * Human-readable America/Chicago date for a stored UTC instant —
+ * e.g. "Tuesday, April 21, 2026". Use for donor/client-facing emails
+ * and SMS where the row holds a real timestamp (appointmentDate,
+ * collectionDate). Do NOT use for date-key rows like `selectedDate`,
+ * which are already UTC-midnight markers of a Chicago day — see
+ * `chicagoDateKey` or `iso.slice(0,10)` for those.
+ */
+export function formatChicagoLongDate(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: CHICAGO_TZ,
+  });
+}
+
+/**
+ * America/Chicago clock time for a stored UTC instant, suffixed " CT"
+ * — e.g. "3:30 PM CT". Same caveat as `formatChicagoLongDate`: only for
+ * rows that hold a real instant, never for date-key rows.
+ */
+export function formatChicagoTime(d: Date): string {
+  const t = d.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: CHICAGO_TZ,
+  });
+  return `${t} CT`;
+}
+
+/**
+ * Compact America/Chicago date for a stored UTC instant —
+ * e.g. "Apr 20, 2026". For inline list views (document cards, test
+ * rows) where the long weekday form is too verbose. Same caveats as
+ * `formatChicagoLongDate`.
+ */
+export function formatChicagoShortDate(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: CHICAGO_TZ,
+  });
+}
+
+/**
+ * "Today" in America/Chicago, represented as noon UTC of that calendar
+ * day — e.g. `2026-04-20T12:00:00Z` on April 20 CT. Use as a safe
+ * fallback when a date needs to be saved without a real timestamp
+ * (e.g. CoC upload where the printed date couldn't be parsed). Noon
+ * UTC renders as the same calendar day in every continental-US tz,
+ * which avoids the "date shifted a day" bug that `new Date()` hits
+ * during the 7 PM CT → midnight UTC window.
+ */
+export function chicagoTodayAtUtcNoon(now: Date = new Date()): Date {
+  return new Date(`${chicagoDateKey(now)}T12:00:00Z`);
+}
+
+/**
  * Given a UTC-midnight marker of a Chicago calendar day (the same
  * representation `selectedDate` uses), return the actual UTC instant
  * corresponding to 00:00:00 America/Chicago on that day. Use for
