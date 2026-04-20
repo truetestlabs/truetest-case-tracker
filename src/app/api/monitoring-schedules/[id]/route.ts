@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { chicagoTodayAsUtcMidnight } from "@/lib/dateChicago";
 
 export async function PATCH(
   request: NextRequest,
@@ -36,9 +37,11 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    // Cancel all future pending selections
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    // Cancel all future pending selections. "Today" is the staff member's
+    // Chicago calendar day so a cancellation done in the evening (after
+    // UTC midnight) still cancels the current Chicago day's selection
+    // instead of starting from tomorrow.
+    const today = chicagoTodayAsUtcMidnight();
     await prisma.randomSelection.updateMany({
       where: {
         scheduleId: id,

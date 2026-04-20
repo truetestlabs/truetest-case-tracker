@@ -91,3 +91,42 @@ export function chicagoTodayAsUtcMidnight(now: Date = new Date()): Date {
     Date.UTC(parseInt(p.year, 10), parseInt(p.month, 10) - 1, parseInt(p.day, 10))
   );
 }
+
+/**
+ * "YYYY-MM-DD" for the America/Chicago calendar day containing the given
+ * instant. Use for bucketing timestamped rows (check-ins, audits) by the
+ * donor's local day rather than by UTC day.
+ */
+export function chicagoDateKey(d: Date): string {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CHICAGO_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return fmt.format(d);
+}
+
+/**
+ * Given a UTC-midnight marker of a Chicago calendar day (the same
+ * representation `selectedDate` uses), return the actual UTC instant
+ * corresponding to 00:00:00 America/Chicago on that day. Use for
+ * timestamp range queries (e.g. `checkedInAt`) that need to span the
+ * donor's real local day.
+ *
+ * Converges in two passes across DST transitions — same approach as
+ * `unlockInstantForSelection`.
+ */
+export function utcInstantForChicagoDayStart(utcMidnight: Date): Date {
+  const y = utcMidnight.getUTCFullYear();
+  const m = utcMidnight.getUTCMonth();
+  const d = utcMidnight.getUTCDate();
+  const target = Date.UTC(y, m, d, 0, 0, 0);
+
+  let guess = target;
+  for (let i = 0; i < 2; i++) {
+    const offset = chicagoOffsetMs(guess);
+    guess = target - offset;
+  }
+  return new Date(guess);
+}

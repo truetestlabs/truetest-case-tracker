@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildComplianceReport, reportToCSV } from "@/lib/compliance";
 import { generateComplianceReportPDF } from "@/lib/pdf/compliance-report";
+import { chicagoTodayAsUtcMidnight } from "@/lib/dateChicago";
 
 export async function GET(
   request: NextRequest,
@@ -22,8 +23,13 @@ export async function GET(
     return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
   }
 
+  // `from`/`to` are UTC-midnight markers of America/Chicago calendar days —
+  // the same representation used for `selectedDate`. The literal
+  // "YYYY-MM-DDT00:00:00Z" form gives us exactly that. Default `to` is
+  // Chicago's current day (not UTC "now"), so an evening report doesn't
+  // silently advance to tomorrow.
   const from = fromParam ? new Date(fromParam + "T00:00:00Z") : schedule.startDate;
-  const to = toParam ? new Date(toParam + "T00:00:00Z") : new Date();
+  const to = toParam ? new Date(toParam + "T00:00:00Z") : chicagoTodayAsUtcMidnight();
 
   try {
     const report = await buildComplianceReport(id, from, to);
