@@ -17,6 +17,7 @@ import { TestOrderDocuments } from "@/components/cases/TestOrderDocuments";
 import { CaseDocuments } from "@/components/cases/CaseDocuments";
 import { EditTestOrderModal } from "@/components/cases/EditTestOrderModal";
 import { LabResultCard, type LabResultData } from "@/components/cases/LabResultCard";
+import { formatChicagoShortDate } from "@/lib/dateChicago";
 
 type CaseData = {
   id: string;
@@ -362,7 +363,7 @@ export default function CaseDetailPage() {
                           {test.collectionType === "observed" && <span className="font-medium text-orange-600">Observed</span>}
                           {test.collectionDate && (
                             <span className="text-gray-600">
-                              {test.testDescription?.toLowerCase().includes("sweat patch") ? "Applied" : "Collected"}: {new Date(test.collectionDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              {test.testDescription?.toLowerCase().includes("sweat patch") ? "Applied" : "Collected"}: {formatChicagoShortDate(new Date(test.collectionDate))}
                             </span>
                           )}
                           {isTerminalTest(test) && (
@@ -487,7 +488,7 @@ export default function CaseDetailPage() {
                         >
                           <div>
                             <p className="text-xs font-semibold text-slate-700">{doc.fileName}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{new Date(doc.uploadedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{formatChicagoShortDate(new Date(doc.uploadedAt))}</p>
                           </div>
                           <span className="text-xs text-blue-600 font-medium">{isExpanded ? "Hide" : "View Summary"}</span>
                         </button>

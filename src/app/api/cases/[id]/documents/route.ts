@@ -8,6 +8,7 @@ import type { ExtractedLabResult } from "@/lib/resultExtract";
 import { runLabResultCrosschecks } from "@/lib/labResultCrosscheck";
 import { detectCocMisclassification } from "@/lib/detectCocMisclassification";
 import { uploadFile } from "@/lib/storage";
+import { chicagoTodayAtUtcNoon } from "@/lib/dateChicago";
 
 // Allow longer execution for AI summary generation on upload
 export const maxDuration = 60;
@@ -300,9 +301,13 @@ export async function POST(
         },
       });
 
-      // Prefer the date printed on the COC; fall back to upload time only if
-      // parsing failed or the parsed value was outside the sanity bounds.
-      const effectiveCollectionDate = parsedCocDate ?? new Date();
+      // Prefer the date printed on the COC; fall back to today (Chicago)
+      // if parsing failed or the parsed value was outside the sanity
+      // bounds. Use noon-UTC of the Chicago day so the stored instant
+      // renders as the same calendar day in every timezone — a plain
+      // `new Date()` captures the upload moment and, during the 7 PM CT
+      // → midnight UTC window, produces tomorrow's UTC day.
+      const effectiveCollectionDate = parsedCocDate ?? chicagoTodayAtUtcNoon();
       const usedParsedDate = parsedCocDate !== null;
 
       for (const order of testOrders) {

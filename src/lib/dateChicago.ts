@@ -140,6 +140,34 @@ export function formatChicagoTime(d: Date): string {
 }
 
 /**
+ * Compact America/Chicago date for a stored UTC instant —
+ * e.g. "Apr 20, 2026". For inline list views (document cards, test
+ * rows) where the long weekday form is too verbose. Same caveats as
+ * `formatChicagoLongDate`.
+ */
+export function formatChicagoShortDate(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: CHICAGO_TZ,
+  });
+}
+
+/**
+ * "Today" in America/Chicago, represented as noon UTC of that calendar
+ * day — e.g. `2026-04-20T12:00:00Z` on April 20 CT. Use as a safe
+ * fallback when a date needs to be saved without a real timestamp
+ * (e.g. CoC upload where the printed date couldn't be parsed). Noon
+ * UTC renders as the same calendar day in every continental-US tz,
+ * which avoids the "date shifted a day" bug that `new Date()` hits
+ * during the 7 PM CT → midnight UTC window.
+ */
+export function chicagoTodayAtUtcNoon(now: Date = new Date()): Date {
+  return new Date(`${chicagoDateKey(now)}T12:00:00Z`);
+}
+
+/**
  * Given a UTC-midnight marker of a Chicago calendar day (the same
  * representation `selectedDate` uses), return the actual UTC instant
  * corresponding to 00:00:00 America/Chicago on that day. Use for
