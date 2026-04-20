@@ -71,6 +71,7 @@ type OrderFields = {
   collectionService: string | null;
   donorName: string | null;
   orderedDate: string | null;
+  observed: boolean | null;
 };
 
 type PortalOrderPdf = {
@@ -710,14 +711,11 @@ export default function PortalPage() {
                 <p className="text-slate-500 text-sm">Test</p>
                 <p className="text-base font-semibold text-slate-800">{session.testName}</p>
               </div>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-red-900 font-semibold text-sm">
-                  Report to TrueTest Labs today by 5:00 PM
+              <div className="bg-red-600 text-white rounded-lg p-4">
+                <p className="font-bold text-base">You must test today.</p>
+                <p className="text-red-100 text-sm mt-1">
+                  Sign in at the collection site below before they close.
                 </p>
-                <p className="text-red-800 text-sm mt-1">
-                  2256 Landmeier Rd Ste A, Elk Grove Village, IL 60007
-                </p>
-                <p className="text-red-800 text-sm mt-1">Phone: (847) 258-3966</p>
               </div>
 
               {session.selection.orderPdf ? (
@@ -778,6 +776,26 @@ export default function PortalPage() {
                             {session.selection.orderPdf.fields.collectionSite.hours}
                           </p>
                         )}
+                      </div>
+                    )}
+                    {session.selection.orderPdf.fields?.observed === true && (
+                      <div className="bg-amber-50 border-2 border-amber-400 rounded-lg p-4">
+                        <p className="text-sm font-bold text-amber-900">
+                          Observed collection
+                        </p>
+                        <p className="text-sm text-amber-900 mt-1">
+                          Please call the site{" "}
+                          {session.selection.orderPdf.fields.collectionSite.phone ? (
+                            <a
+                              href={`tel:${session.selection.orderPdf.fields.collectionSite.phone.replace(/\D/g, "")}`}
+                              className="underline font-semibold"
+                            >
+                              ({session.selection.orderPdf.fields.collectionSite.phone})
+                            </a>
+                          ) : null}{" "}
+                          before arriving to confirm same-gender collection
+                          staff will be available.
+                        </p>
                       </div>
                     )}
                     {session.selection.orderPdf.fields?.expiresOn && (
