@@ -94,7 +94,20 @@ type PortalSession = {
   selection: PortalSelection | null;
   serverDay: string;
   serverNowISO: string;
+  upcomingSelections: Array<{ selectedDate: string; status: string }>;
 };
+
+// Render an ISO selectedDate (UTC-midnight of a Chicago calendar day)
+// as a Chicago-local "YYYY-MM-DD" key. Guarantees the diagnostic panel
+// labels match the server's notion of the day even near midnight.
+function isoToChicagoDay(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
 
 // Diagnostic clock shown above the portal card. Renders the donor's
 // current America/Chicago time (ticking once a second) and, when
@@ -871,6 +884,36 @@ export default function PortalPage() {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {stage === "authed" && session && session.upcomingSelections && (
+          <div className="mt-4 bg-slate-50 border border-slate-200 rounded-lg p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+              Diagnostic · your upcoming dates
+            </p>
+            <p className="text-[11px] font-mono text-slate-500 mb-2">
+              Server today: {session.serverDay}
+            </p>
+            {session.upcomingSelections.length === 0 ? (
+              <p className="text-xs text-slate-600">
+                No upcoming selections on file for this schedule. Staff may need to
+                regenerate it.
+              </p>
+            ) : (
+              <ul className="text-xs font-mono text-slate-700 space-y-1">
+                {session.upcomingSelections.map((u, i) => {
+                  const day = isoToChicagoDay(u.selectedDate);
+                  const isToday = day === session.serverDay;
+                  return (
+                    <li key={i} className={isToday ? "font-bold text-red-700" : ""}>
+                      {day} · {u.status}
+                      {isToday ? " ← today" : ""}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         )}
       </div>
