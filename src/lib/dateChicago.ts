@@ -1,12 +1,33 @@
 /**
- * Selection-day unlock gate — the donor-portal order PDF unlocks at 4:00 AM
- * America/Chicago on the day they were randomly selected. Staff can stage
- * the PDF the day before; the donor can't see any of its contents until
- * 4 AM CT the morning of. This preserves the blind-random property of the
- * selection (no previewing tomorrow's collection site tonight).
+ * Chicago-timezone date helpers. All Vercel/Node servers run UTC; every
+ * donor/client-facing surface should render in America/Chicago. The
+ * helpers here split into two categories — they are NOT interchangeable:
  *
- * We roll our own tz math instead of pulling in a tz lib: we only ever
- * need one zone and two operations, Intl.DateTimeFormat handles DST.
+ *   1. Instant formatters — for real UTC timestamps like `appointmentDate`,
+ *      `collectionDate`, `createdAt`. These apply
+ *      `timeZone: "America/Chicago"` so a 3:30 PM CT appointment renders
+ *      as "3:30 PM CT", not "8:30 PM UTC". Helpers:
+ *      `formatChicagoLongDate`, `formatChicagoShortDate`,
+ *      `formatChicagoTime`.
+ *
+ *   2. Date-key formatters — for UTC-midnight markers of a Chicago
+ *      calendar day (`RandomSelection.selectedDate`,
+ *      `MonitoringSchedule.endDate`, `<input type="date">` values).
+ *      These read the stored UTC Y/M/D directly (via ISO slice or
+ *      `timeZone: "UTC"`) because the stored UTC Y/M/D *is* the
+ *      intended Chicago day. Helpers: `chicagoDateKey`,
+ *      `formatChicagoLongDateKey`, `formatChicagoShortDateKey`.
+ *
+ * Mixing these up will cause dates to display off by one day.
+ * Passing a date-key through an instant formatter subtracts 5-6h and
+ * renders the prior Chicago day; passing a real instant through a
+ * date-key formatter renders the UTC clock reading as the calendar
+ * day (wrong after ~7 PM CT, once UTC has rolled to the next day).
+ *
+ * We roll our own tz math instead of pulling in a tz lib: we only
+ * ever need one zone and a handful of operations, and
+ * `Intl.DateTimeFormat` handles DST. See `unlockInstantForSelection`
+ * for the 4 AM CT selection-day unlock gate.
  */
 
 const CHICAGO_TZ = "America/Chicago";
@@ -108,6 +129,54 @@ export function chicagoDateKey(d: Date): string {
     day: "2-digit",
   });
   return fmt.format(d);
+}
+
+/**
+ * Long-form human-readable date for a UTC-midnight date-key — e.g.
+ * `"Tuesday, May 20, 2026"`. Use for fields stored as UTC midnight of
+ * a Chicago calendar day: `RandomSelection.selectedDate`,
+ * `MonitoringSchedule.endDate`, replacement dates derived from
+ * `nextWeekday(selectedDate, ...)`, and anything else built from a
+ * `<input type="date">` value.
+ *
+ * **Do NOT pass a real UTC instant to this** (`appointmentDate`,
+ * `collectionDate`, `createdAt`, etc.). For those, use
+ * `formatChicagoLongDate` — it applies the Chicago offset. Passing a
+ * real instant here would render the raw UTC clock reading as the
+ * calendar day, which shifts to the next day after ~7 PM CT.
+ *
+ * Implementation note: we use `timeZone: "UTC"` because the stored
+ * value is `YYYY-MM-DDT00:00:00Z` and we want exactly that Y/M/D on
+ * the label. Using `America/Chicago` would subtract 5-6 hours from
+ * midnight UTC and render the prior day.
+ */
+export function formatChicagoLongDateKey(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/**
+ * Compact human-readable date for a UTC-midnight date-key — e.g.
+ * `"May 20, 2026"`. Same input contract as `formatChicagoLongDateKey`
+ * (date-keys only, never real instants); drop the weekday for inline
+ * list views or short sentences embedded in paragraphs.
+ *
+ * Same `timeZone: "UTC"` rationale as `formatChicagoLongDateKey` — see
+ * that helper and the file header for the instant-vs-date-key split.
+ * For real timestamps, use `formatChicagoShortDate`.
+ */
+export function formatChicagoShortDateKey(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 /**
