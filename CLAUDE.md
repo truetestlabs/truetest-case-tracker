@@ -10,6 +10,7 @@
 
 - `npm run build` runs `prisma generate && next build`
 - TypeScript/ESLint checks are **skipped in Vercel build** (`ignoreBuildErrors: true` in `next.config.ts`) to avoid OOM on Vercel workers. Run `npx tsc --noEmit` locally before pushing.
+- After pulling schema changes, run `npx prisma generate` locally to refresh the client. TS errors referencing fields the schema clearly has are almost always stale-client issues — the Vercel build runs `prisma generate` automatically, so this only bites locally.
 - If Vercel build fails in under 2 minutes, suspect an env var issue (not OOM). Check `npx vercel env ls`.
 
 ## Stack & key files
@@ -71,24 +72,58 @@ For **every** lab integration (USDTL and any future lab), we must retrieve and s
 - **Headers:** HSTS, X-Frame-Options:DENY, CSP, Referrer-Policy, Permissions-Policy set for all routes via `next.config.ts`.
 - **Middleware:** `/portal` and `/api/portal/*` are now in the public-paths list so Supabase staff auth doesn't intercept donor traffic.
 
-## Date/time rendering for donors & clients
+## Date and time formatting
 
-All Vercel/Node servers run UTC. Never hand a stored `DateTime` instant
-(appointmentDate, collectionDate, etc.) to `toLocaleString`/
-`toLocaleDateString`/`toLocaleTimeString` without an explicit `timeZone`,
-or the output will render in UTC — e.g. "3:30 PM CT" becomes "8:30 PM UTC".
+All Vercel/Node servers run UTC; every donor/client/staff-facing surface
+should render in America/Chicago. **Always go through the helpers in
+`src/lib/dateChicago.ts`.** Never call `.toLocaleDateString()`,
+`.toLocaleTimeString()`, `.toLocaleString()`, or `Intl.DateTimeFormat`
+directly without an explicit `timeZone` parameter — a formatter with no
+`timeZone` uses the process TZ, which is UTC on Vercel and shifts every
+stored instant 5-6h earlier on render.
 
-Use the helpers in `src/lib/dateChicago.ts`:
+Two categories of fields, two categories of helpers. They are **not**
+interchangeable — mixing them up will cause dates to display off by one
+day.
+
+**Real instants** (stored as UTC timestamps of a real moment in time —
+`createdAt`, `updatedAt`, `appointmentDate`, `collectionDate`,
+`changedAt`, `uploadedAt`, `notifiedAt`, etc.). Use helpers that apply
+`timeZone: "America/Chicago"`:
 
 - `formatChicagoLongDate(d)` → `"Tuesday, April 21, 2026"`
+- `formatChicagoMediumDate(d)` → `"April 21, 2026"` (attorney/court PDFs)
+- `formatChicagoShortDate(d)` → `"Apr 21, 2026"`
+- `formatChicagoShortDateNoYear(d)` → `"Apr 21"` (tight table columns)
 - `formatChicagoTime(d)` → `"3:30 PM CT"`
-- `chicagoDateKey(d)` → `"YYYY-MM-DD"` of the Chicago day the instant falls in
 
-Date-key rows (`RandomSelection.selectedDate`, any field stored as
-UTC-midnight of a Chicago calendar day) are different — their UTC
-Y/M/D already **is** the Chicago day. Read them with `iso.slice(0,10)`
-or UTC getters; **do not** pass them through the Chicago formatters,
-which would subtract ~5h and shift to the prior day.
+**Date-keys** (stored as UTC midnight representing a Chicago calendar
+day — `RandomSelection.selectedDate`, `MonitoringSchedule.startDate` /
+`endDate`, anything written from an `<input type="date">` form value).
+The stored UTC Y/M/D *is* the intended Chicago day, so these helpers
+use `timeZone: "UTC"` to read the date as-is. Passing a date-key
+through an instant formatter (or the reverse) shifts the output by a
+day. Use:
+
+- `formatChicagoLongDateKey(d)` → `"Tuesday, May 20, 2026"`
+- `formatChicagoShortDateKey(d)` → `"May 20, 2026"` (no weekday, full month)
+- `formatChicagoCompactDateKey(d)` → `"Mon, May 20"` (row labels)
+- `chicagoDateKey(d)` → `"YYYY-MM-DD"` string
+
+**No local time math on date fields.** In particular, do NOT write
+`new Date(y, m, d, h, min)` in client components — the constructor
+reads the host's local timezone, which makes the value
+hydration-unstable (UTC during SSR on Vercel, donor's browser tz on
+hydration). Either echo the donor's typed strings back directly, or
+use `new Date(Date.UTC(...))` with an explicit intent.
+
+## Testing
+
+This repo has no automated test suite. Every PR must include a manual
+verification checklist covering the specific surfaces changed.
+Date/time-sensitive changes should be verified at multiple times of day
+to catch tz-edge bugs (specifically, evening CT hours when local and
+UTC dates diverge).
 
 ## UI rules
 
