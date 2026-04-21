@@ -11,6 +11,9 @@
 
 const CHICAGO_TZ = "America/Chicago";
 
+const MORNING_UNLOCK_HOUR_CT = 4;
+const EVENING_CUTOFF_HOUR_CT = 22;
+
 /**
  * UTC offset (in ms) of America/Chicago at the given instant. Negative,
  * e.g. -5h during CDT, -6h during CST. Handles DST transitions.
@@ -189,4 +192,78 @@ export function utcInstantForChicagoDayStart(utcMidnight: Date): Date {
     guess = target - offset;
   }
   return new Date(guess);
+}
+
+/** Wall-clock hour 0-23 in Chicago for the given instant. */
+function chicagoHour(instant: Date): number {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: CHICAGO_TZ,
+    hour: "2-digit",
+    hour12: false,
+  });
+  const raw = fmt.formatToParts(instant).find((p) => p.type === "hour")?.value ?? "0";
+  return parseInt(raw === "24" ? "0" : raw, 10);
+}
+
+/** 0=Sun, 1=Mon, ..., 6=Sat — weekday in Chicago for the given instant. */
+function chicagoWeekday(instant: Date): number {
+  const w = new Intl.DateTimeFormat("en-US", {
+    timeZone: CHICAGO_TZ,
+    weekday: "short",
+  }).format(instant);
+  const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return map[w] ?? 0;
+}
+
+/** Full weekday name in Chicago, e.g. "Tuesday". */
+function chicagoWeekdayName(instant: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: CHICAGO_TZ,
+    weekday: "long",
+  }).format(instant);
+}
+
+export type PortalWindow =
+  | { state: "open" }
+  | { state: "blackout"; nextOpenISO: string; nextOpenLabel: string };
+
+/**
+ * Portal visibility gate: the donor view is "open" on weekdays between
+ * 4:00 AM CT and 10:00 PM CT. Outside that window we return "blackout"
+ * with the next open instant (next weekday 4 AM CT). This preserves the
+ * blind-random rule — once a donor's Monday obligation is over at 10 PM
+ * CT, the portal stops revealing Monday's selection so the Tuesday
+ * selection can't leak via the portal before its own 4 AM CT unlock.
+ *
+ * Friday 10 PM CT → Monday 4 AM CT (weekends skipped). Holidays are NOT
+ * currently handled; we'll add a holiday list later if needed.
+ */
+export function portalCheckWindow(now: Date = new Date()): PortalWindow {
+  const hour = chicagoHour(now);
+  const todayWeekday = chicagoWeekday(now);
+  const isWeekday = todayWeekday >= 1 && todayWeekday <= 5;
+  const isOpenHour = hour >= MORNING_UNLOCK_HOUR_CT && hour < EVENING_CUTOFF_HOUR_CT;
+  if (isWeekday && isOpenHour) return { state: "open" };
+
+  // Candidate day for the next open: today (if we're still pre-4 AM) or
+  // tomorrow onward. Walk forward until we land on a weekday.
+  const todayUtcMid = chicagoTodayAsUtcMidnight(now);
+  let candidate = todayUtcMid;
+  if (hour >= MORNING_UNLOCK_HOUR_CT) {
+    candidate = new Date(candidate.getTime() + 86_400_000);
+  }
+  for (let i = 0; i < 7; i++) {
+    const instant = unlockInstantForSelection(candidate);
+    const wday = chicagoWeekday(instant);
+    if (wday >= 1 && wday <= 5) {
+      return {
+        state: "blackout",
+        nextOpenISO: instant.toISOString(),
+        nextOpenLabel: chicagoWeekdayName(instant),
+      };
+    }
+    candidate = new Date(candidate.getTime() + 86_400_000);
+  }
+  // Unreachable: any 7-day window contains a weekday.
+  return { state: "open" };
 }

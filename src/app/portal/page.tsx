@@ -88,10 +88,15 @@ type PortalSelection = {
   orderPdf: PortalOrderPdf | null;
 };
 
+type PortalWindow =
+  | { state: "open" }
+  | { state: "blackout"; nextOpenISO: string; nextOpenLabel: string };
+
 type PortalSession = {
   donorName: string;
   testName: string;
   selected: boolean;
+  checkWindow: PortalWindow;
   selection: PortalSelection | null;
   serverDay: string;
   serverNowISO: string;
@@ -696,6 +701,45 @@ export default function PortalPage() {
               Code expires in 5 minutes. Didn&apos;t get it? Re-enter your PIN to send a new code.
             </p>
           </form>
+        ) : session?.checkWindow.state === "blackout" ? (
+          <div className="bg-white rounded-xl border-2 border-slate-300 shadow-lg overflow-hidden">
+            <div className="bg-slate-700 text-white px-6 py-4 text-center">
+              <p className="text-sm font-semibold uppercase tracking-wider opacity-90">
+                Check Back Soon
+              </p>
+              <h2 className="text-2xl font-bold mt-1">
+                {session.checkWindow.nextOpenLabel} at 4:00 AM Central
+              </h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <p className="text-slate-500 text-sm">Donor</p>
+                <p className="text-xl font-bold text-slate-900">{session.donorName}</p>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                <p className="text-slate-800 text-sm">
+                  Your next selection status unlocks at 4:00 AM Central on{" "}
+                  <span className="font-semibold">{session.checkWindow.nextOpenLabel}</span>.
+                  Check back then to see whether you need to report.
+                </p>
+              </div>
+              <div className="pt-2 border-t border-slate-200 flex gap-2">
+                <button
+                  onClick={() => logout(false)}
+                  className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50"
+                >
+                  Sign out
+                </button>
+                <button
+                  onClick={() => logout(true)}
+                  className="flex-1 px-4 py-2 border border-slate-300 text-slate-600 rounded-lg text-xs hover:bg-slate-50"
+                  title="Forget this device"
+                >
+                  Not my device
+                </button>
+              </div>
+            </div>
+          </div>
         ) : session?.selected && session.selection ? (
           <div className="bg-white rounded-xl border-2 border-red-400 shadow-lg overflow-hidden">
             <div className="bg-red-600 text-white px-6 py-4 text-center">

@@ -10,7 +10,9 @@ import {
   chicagoDateKey,
   chicagoTodayAsUtcMidnight,
   isUnlockedForSelection,
+  portalCheckWindow,
   unlockInstantForSelection,
+  type PortalWindow,
 } from "@/lib/dateChicago";
 import type { OrderFields } from "@/lib/extractOrder";
 
@@ -32,6 +34,10 @@ export type PortalPayload = {
   donorName: string;
   testName: string;
   selected: boolean;
+  /** Open 4 AM – 10 PM CT Mon-Fri; blackout otherwise. During blackout the
+   *  selection is nulled so the UI can show a "check back at 4 AM" card
+   *  regardless of whether the donor had a selection today. */
+  checkWindow: PortalWindow;
   selection: {
     id: string;
     status: string;
@@ -77,7 +83,7 @@ export async function buildSessionPayload(scheduleId: string): Promise<PortalPay
   const tomorrow = new Date(today);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
-  const selection = await prisma.randomSelection.findFirst({
+  const rawSelection = await prisma.randomSelection.findFirst({
     where: {
       scheduleId: schedule.id,
       selectedDate: { gte: today, lt: tomorrow },
@@ -92,6 +98,14 @@ export async function buildSessionPayload(scheduleId: string): Promise<PortalPay
       },
     },
   });
+
+  // Suppress today's selection during the 10 PM – 4 AM CT blackout so the
+  // UI can render a "check back at 4 AM Central [weekday]" card. Past
+  // 10 PM the donor's daily obligation is over — hiding the row also
+  // preserves blind-random for tomorrow's selection, which shouldn't
+  // leak before its own 4 AM unlock.
+  const checkWindow = portalCheckWindow(now);
+  const selection = checkWindow.state === "open" ? rawSelection : null;
 
   // Diagnostic: surface the next handful of selections on/after today so
   // the donor can see at a glance whether today's row exists in the DB.
@@ -130,6 +144,7 @@ export async function buildSessionPayload(scheduleId: string): Promise<PortalPay
     donorName,
     testName: schedule.testCatalog.testName,
     selected: !!selection,
+    checkWindow,
     selection: selection
       ? {
           id: selection.id,
