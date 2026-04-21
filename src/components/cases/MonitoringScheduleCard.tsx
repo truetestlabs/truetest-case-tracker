@@ -30,6 +30,7 @@ type Schedule = {
   active: boolean;
   autoRescheduleOnMiss: boolean;
   autoRescheduleDays: number;
+  instructionsSentAt: string | null;
   testCatalog: { testName: string; specimenType: string };
   selections: Selection[];
 };
@@ -112,7 +113,19 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
   async function cancelSchedule(id: string) {
     if (!confirm("Cancel this schedule? All future pending selections will be cancelled.")) return;
     const res = await fetch(`/api/monitoring-schedules/${id}`, { method: "DELETE" });
-    if (res.ok) { loadSchedules(); onChanged?.(); }
+    if (res.ok) {
+      loadSchedules();
+      onChanged?.();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Failed to cancel schedule");
+    }
+  }
+
+  function scheduleState(s: Schedule): "active" | "paused" | "cancelled" {
+    if (s.active) return "active";
+    if (s.endDate && new Date(s.endDate).getTime() <= Date.now()) return "cancelled";
+    return "paused";
   }
 
   async function sendInstructions(id: string) {
@@ -121,6 +134,7 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
     const data = await res.json();
     if (res.ok) {
       alert(`Instructions sent to ${data.sentTo.join(", ")}`);
+      loadSchedules();
     } else {
       alert(data.error || "Failed to send instructions");
     }
@@ -246,7 +260,8 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
             <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
               <div className="flex items-start justify-between gap-2">
                 <h4 className="text-xs font-semibold text-gray-900 leading-tight">{s.testCatalog.testName}</h4>
-                {!s.active && <span className="px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 text-[10px] font-medium flex-shrink-0">Paused</span>}
+                {scheduleState(s) === "paused" && <span className="px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 text-[10px] font-medium flex-shrink-0">Paused</span>}
+                {scheduleState(s) === "cancelled" && <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-medium flex-shrink-0">Cancelled</span>}
               </div>
               <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 text-[10px] text-gray-500">
                 <span>{patternLabel(s)}</span>
@@ -263,31 +278,61 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
                 >
                   📋 Report
                 </a>
-                <button
-                  onClick={() => sendInstructions(s.id)}
-                  className="text-[10px] px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-                >
-                  ✉ Instructions
-                </button>
-                <button
-                  onClick={() => resendPin(s.id)}
-                  className="text-[10px] px-2 py-1 rounded bg-slate-700 text-white hover:bg-slate-800"
-                  title="Text + email the donor their PIN"
-                >
-                  🔑 Resend PIN
-                </button>
-                <button
-                  onClick={() => toggleActive(s.id, s.active)}
-                  className="text-[10px] px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-white"
-                >
-                  {s.active ? "Pause" : "Resume"}
-                </button>
-                <button
-                  onClick={() => cancelSchedule(s.id)}
-                  className="text-[10px] px-2 py-1 rounded border border-red-300 text-red-700 hover:bg-red-50"
-                >
-                  Cancel
-                </button>
+                {(() => {
+                  const sent = !!s.instructionsSentAt;
+                  return (
+                    <>
+                      <button
+                        onClick={() => sendInstructions(s.id)}
+                        disabled={sent}
+                        title={
+                          sent
+                            ? "Already sent — use Resend PIN to re-text/email the PIN"
+                            : "Email the donor the full compliance instructions + PIN"
+                        }
+                        className={`text-[10px] px-2 py-1 rounded ${
+                          sent
+                            ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                            : "bg-blue-600 text-white hover:bg-blue-700"
+                        }`}
+                      >
+                        ✉ Instructions
+                      </button>
+                      <button
+                        onClick={() => resendPin(s.id)}
+                        disabled={!sent}
+                        title={
+                          sent
+                            ? "Text + email the donor their PIN"
+                            : "Send the full instructions email first"
+                        }
+                        className={`text-[10px] px-2 py-1 rounded ${
+                          sent
+                            ? "bg-slate-700 text-white hover:bg-slate-800"
+                            : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                        }`}
+                      >
+                        🔑 Resend PIN
+                      </button>
+                    </>
+                  );
+                })()}
+                {scheduleState(s) !== "cancelled" && (
+                  <>
+                    <button
+                      onClick={() => toggleActive(s.id, s.active)}
+                      className="text-[10px] px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-white"
+                    >
+                      {s.active ? "Pause" : "Resume"}
+                    </button>
+                    <button
+                      onClick={() => cancelSchedule(s.id)}
+                      className="text-[10px] px-2 py-1 rounded border border-red-300 text-red-700 hover:bg-red-50"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -422,7 +467,11 @@ export function MonitoringScheduleCard({ caseId, onChanged }: Props) {
                     </dd>
 
                     <dt className="text-gray-500">Status</dt>
-                    <dd className="text-gray-900">{s.active ? "Active" : "Paused"}</dd>
+                    <dd className="text-gray-900">
+                      {scheduleState(s) === "active" && "Active"}
+                      {scheduleState(s) === "paused" && "Paused"}
+                      {scheduleState(s) === "cancelled" && "Cancelled"}
+                    </dd>
                   </div>
                 </dl>
               )}

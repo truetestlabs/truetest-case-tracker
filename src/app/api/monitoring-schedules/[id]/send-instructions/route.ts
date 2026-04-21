@@ -18,12 +18,16 @@ export async function POST(
       );
     }
 
-    // Log it
-    const schedule = await prisma.monitoringSchedule.findUnique({
+    // Stamp the schedule so the card UI can disable this button going
+    // forward (and enable "Resend PIN"). Stamp on every successful send —
+    // the UI gate prevents second clicks in practice, and treating this as
+    // "last sent" vs "first sent" collapses to the same truthy check.
+    const schedule = await prisma.monitoringSchedule.update({
       where: { id },
+      data: { instructionsSentAt: new Date() },
       select: { caseId: true },
     });
-    if (schedule) {
+    if (schedule?.caseId) {
       await prisma.statusLog.create({
         data: {
           caseId: schedule.caseId,
