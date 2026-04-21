@@ -9,7 +9,7 @@
  * Policy: "flag and wait for human review" (per the Piece 1 design).
  */
 import type { ExtractedLabResult } from "@/lib/resultExtract";
-import { formatChicagoMediumDate } from "@/lib/dateChicago";
+import { chicagoDateKey, formatChicagoMediumDate } from "@/lib/dateChicago";
 
 export type MismatchSeverity = "info" | "warning" | "critical";
 export type MismatchType = "collection_date" | "specimen_id" | "other";
@@ -31,22 +31,33 @@ export type TestOrderSnapshot = {
 /**
  * Parse an ISO YYYY-MM-DD string from the extractor into a Date. Returns
  * null on unparseable input rather than throwing — missing is expected.
+ *
+ * We construct at noon UTC (not local-tz noon) so the resulting instant
+ * is stable across servers: a UTC server and a CT-local dev machine
+ * produce the same `Date` for the same input. Noon is chosen so the
+ * instant renders as the same calendar day in every continental-US
+ * timezone (DST-safe).
  */
 function parseIsoDate(s: string | undefined | null): Date | null {
   if (!s) return null;
   const match = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
   const [, y, m, d] = match;
-  const date = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10), 12, 0, 0);
+  const date = new Date(Date.UTC(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10), 12, 0, 0));
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/**
+ * Compare two instants by Chicago calendar day. Using server-local
+ * getFullYear/getMonth/getDate here would false-positive whenever
+ * `order.collectionDate` straddles UTC midnight — e.g. a 9 PM CT
+ * collection is stored as the next UTC day, so its local-tz Y/M/D on a
+ * UTC server reads as tomorrow while the lab's `"YYYY-MM-DD"` string
+ * reads as today. Both represent the same Chicago day; the mismatch
+ * warning fires a false specimen-mixup alert on the reviewer.
+ */
 function sameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+  return chicagoDateKey(a) === chicagoDateKey(b);
 }
 
 function formatDate(d: Date): string {
