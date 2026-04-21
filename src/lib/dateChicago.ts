@@ -162,9 +162,14 @@ export function formatChicagoLongDateKey(d: Date): string {
 
 /**
  * Compact human-readable date for a UTC-midnight date-key — e.g.
- * `"May 20, 2026"`. Same input contract as `formatChicagoLongDateKey`
- * (date-keys only, never real instants); drop the weekday for inline
- * list views or short sentences embedded in paragraphs.
+ * `"April 20, 2026"` or `"May 20, 2026"`. Same input contract as
+ * `formatChicagoLongDateKey` (date-keys only, never real instants);
+ * drop the weekday for inline list views or short sentences embedded
+ * in paragraphs.
+ *
+ * Short form = no weekday. Month name is still spelled out in full,
+ * unlike `formatChicagoShortDate` (the instant variant) which also
+ * abbreviates the month to three letters.
  *
  * Same `timeZone: "UTC"` rationale as `formatChicagoLongDateKey` — see
  * that helper and the file header for the instant-vs-date-key split.
@@ -172,7 +177,7 @@ export function formatChicagoLongDateKey(d: Date): string {
  */
 export function formatChicagoShortDateKey(d: Date): string {
   return d.toLocaleDateString("en-US", {
-    month: "short",
+    month: "long",
     day: "numeric",
     year: "numeric",
     timeZone: "UTC",
