@@ -1,7 +1,12 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { downloadFile } from "@/lib/storage";
-import { formatChicagoLongDate, formatChicagoTime } from "@/lib/dateChicago";
+import {
+  formatChicagoLongDate,
+  formatChicagoLongDateKey,
+  formatChicagoShortDateKey,
+  formatChicagoTime,
+} from "@/lib/dateChicago";
 
 // Lazy client — only instantiated when actually sending, so missing key doesn't break build
 function getResend() {
@@ -446,7 +451,7 @@ export async function sendSampleCollectedEmail(
   // Use the first test's collection date (or earliest)
   const firstDate = testOrders.find((t) => t.collectionDate)?.collectionDate;
   const collectionLine = firstDate
-    ? `<p style="color:#64748b;font-size:13px;margin:0 0 20px;">Collection date: <strong>${new Date(firstDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</strong></p>`
+    ? `<p style="color:#64748b;font-size:13px;margin:0 0 20px;">Collection date: <strong>${formatChicagoLongDate(firstDate)}</strong></p>`
     : "";
 
   const unpaidMessage = collectedAtTTL
@@ -602,15 +607,13 @@ export async function sendRefusalToTestEmail(
   const donorName = caseData.donor
     ? `${caseData.donor.firstName} ${caseData.donor.lastName}`
     : "the donor";
-  const missedDate = new Date(selection.selectedDate).toLocaleDateString("en-US", {
-    weekday: "long", month: "long", day: "numeric", year: "numeric",
-  });
+  const missedDate = formatChicagoLongDateKey(selection.selectedDate);
 
   const replacementBlock = replacementDate
     ? calloutBox({
         bg: "#fef2f2", border: "#fecaca", titleColor: "#991b1b", textColor: "#7f1d1d",
         title: "Replacement Test Scheduled",
-        text: `A replacement test has been scheduled for <strong>${new Date(replacementDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</strong>. The donor must report to TrueTest Labs on that day by 5:00 PM.`,
+        text: `A replacement test has been scheduled for <strong>${formatChicagoLongDateKey(replacementDate)}</strong>. The donor must report to TrueTest Labs on that day by 5:00 PM.`,
       })
     : calloutBox({
         bg: "#fef2f2", border: "#fecaca", titleColor: "#991b1b", textColor: "#7f1d1d",
@@ -774,7 +777,7 @@ export async function sendDonorInstructionsEmail(scheduleId: string): Promise<st
     (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://truetest-case-tracker.vercel.app").replace(/\/$/, "") +
     "/portal";
   const patternSummary =
-    schedule.patternType === "range_count" ? `${schedule.targetCount} random tests through ${schedule.endDate ? new Date(schedule.endDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "an ongoing period"}`
+    schedule.patternType === "range_count" ? `${schedule.targetCount} random tests through ${schedule.endDate ? formatChicagoShortDateKey(schedule.endDate) : "an ongoing period"}`
     : schedule.patternType === "per_month" ? `${schedule.targetCount} random test${schedule.targetCount === 1 ? "" : "s"} per month`
     : `${schedule.targetCount} random test${schedule.targetCount === 1 ? "" : "s"} per week`;
 

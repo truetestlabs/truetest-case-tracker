@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
+import { formatChicagoShortDate, formatChicagoTime } from "@/lib/dateChicago";
 
 export async function generateCaseExportXLSX(caseId: string): Promise<Buffer> {
   const caseData = await prisma.case.findUnique({
@@ -25,7 +26,7 @@ export async function generateCaseExportXLSX(caseId: string): Promise<Buffer> {
     ["County", caseData.county || ""],
     ["Judge", caseData.judgeName || ""],
     ["Monitored", caseData.isMonitored ? "Yes" : "No"],
-    ["Created", caseData.createdAt.toLocaleDateString()],
+    ["Created", formatChicagoShortDate(caseData.createdAt)],
     [""],
     ["Donor Name", caseData.donor ? `${caseData.donor.firstName} ${caseData.donor.lastName}` : ""],
     ["Donor Email", caseData.donor?.email || ""],
@@ -46,10 +47,10 @@ export async function generateCaseExportXLSX(caseId: string): Promise<Buffer> {
     t.collectionType,
     t.paymentMethod || "Unpaid",
     t.clientPrice ? Number(t.clientPrice).toFixed(2) : "",
-    t.collectionDate?.toLocaleDateString() || "",
-    t.sentToLabDate?.toLocaleDateString() || "",
-    t.resultsReceivedDate?.toLocaleDateString() || "",
-    t.resultsReleasedDate?.toLocaleDateString() || "",
+    t.collectionDate ? formatChicagoShortDate(t.collectionDate) : "",
+    t.sentToLabDate ? formatChicagoShortDate(t.sentToLabDate) : "",
+    t.resultsReceivedDate ? formatChicagoShortDate(t.resultsReceivedDate) : "",
+    t.resultsReleasedDate ? formatChicagoShortDate(t.resultsReleasedDate) : "",
   ]);
   const ws2 = XLSX.utils.aoa_to_sheet([testHeaders, ...testRows]);
   ws2["!cols"] = testHeaders.map(() => ({ wch: 18 }));
@@ -73,7 +74,7 @@ export async function generateCaseExportXLSX(caseId: string): Promise<Buffer> {
   // ── Sheet 4: Activity Log ──
   const logHeaders = ["Date", "From", "To", "Note"];
   const logRows = caseData.statusLogs.map((log) => [
-    log.changedAt.toLocaleString(),
+    `${formatChicagoShortDate(log.changedAt)} ${formatChicagoTime(log.changedAt)}`,
     log.oldStatus.replace(/_/g, " "),
     log.newStatus.replace(/_/g, " "),
     log.note || "",

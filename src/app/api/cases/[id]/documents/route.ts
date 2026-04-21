@@ -211,8 +211,8 @@ export async function POST(
     const donor = caseData?.donor;
     const latestOrder = caseData?.testOrders[0];
     const collectionDate = latestOrder?.collectionDate
-      ? new Date(latestOrder.collectionDate).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" }).replace(/\//g, ".")
-      : new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" }).replace(/\//g, ".");
+      ? new Date(latestOrder.collectionDate).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit", timeZone: "America/Chicago" }).replace(/\//g, ".")
+      : new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit", timeZone: "America/Chicago" }).replace(/\//g, ".");
 
     // Parse the COC PDF ONCE, up front. Both the filename builder below AND
     // the test-order auto-advance block further down need the extracted
