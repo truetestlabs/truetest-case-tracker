@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatDonorName } from "@/lib/format";
+import { formatChicagoShortDateNoYear } from "@/lib/dateChicago";
 
 type RecentCase = {
   id: string;
@@ -113,7 +114,7 @@ export default function DashboardPage() {
     },
   ];
 
-  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const today = formatChicagoShortDateNoYear(new Date());
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -262,7 +263,7 @@ export default function DashboardPage() {
                           </span>
                         </td>
                         <td className="px-5 py-3.5 text-xs text-slate-400">
-                          {new Date(c.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          {formatChicagoShortDateNoYear(new Date(c.updatedAt))}
                         </td>
                       </tr>
                     );

@@ -17,7 +17,7 @@ import { TestOrderDocuments } from "@/components/cases/TestOrderDocuments";
 import { CaseDocuments } from "@/components/cases/CaseDocuments";
 import { EditTestOrderModal } from "@/components/cases/EditTestOrderModal";
 import { LabResultCard, type LabResultData } from "@/components/cases/LabResultCard";
-import { formatChicagoShortDate } from "@/lib/dateChicago";
+import { formatChicagoShortDate, formatChicagoShortDateNoYear, formatChicagoTime } from "@/lib/dateChicago";
 
 type CaseData = {
   id: string;
@@ -899,7 +899,7 @@ export default function CaseDetailPage() {
                 <ul className="space-y-3">
                   {caseData.statusLogs.slice(0, showAllLogs ? undefined : 3).map((log) => (
                     <li key={log.id} className="text-xs border-l-2 border-gray-200 pl-3 py-1">
-                      <div className="text-gray-500">{new Date(log.changedAt).toLocaleString()}</div>
+                      <div className="text-gray-500">{formatChicagoShortDate(new Date(log.changedAt))} {formatChicagoTime(new Date(log.changedAt))}</div>
                       <div className="text-gray-700 mt-0.5">
                         <span className="capitalize">{log.oldStatus.replace("_", " ")}</span> &rarr; <span className="font-medium capitalize">{log.newStatus.replace("_", " ")}</span>
                       </div>
@@ -934,7 +934,7 @@ export default function CaseDetailPage() {
                     <li key={n.id} className="border-l-2 border-green-300 pl-3 py-0.5">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-slate-700 capitalize">{label}</span>
-                        <span className="text-xs text-slate-400">{new Date(n.changedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                        <span className="text-xs text-slate-400">{formatChicagoShortDateNoYear(new Date(n.changedAt))}</span>
                       </div>
                       {n.testOrder && <p className="text-xs text-slate-500 mt-0.5">{n.testOrder.testDescription}</p>}
                       <p className="text-xs text-slate-400 mt-0.5">{recipients.length} recipient{recipients.length !== 1 ? "s" : ""}: {recipients.join(", ")}</p>

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { StatusBadge, CourtOrderFlag } from "@/components/ui/StatusBadge";
 import { formatDonorName } from "@/lib/format";
 import { getCasePaymentState } from "@/lib/payment";
+import { formatChicagoShortDate, formatChicagoShortDateNoYear, formatChicagoTime } from "@/lib/dateChicago";
 
 const AVATAR_COLORS = [
   "bg-blue-100 text-blue-700",
@@ -242,7 +243,7 @@ export default function CasesPage() {
                                     Scheduled{site ? ` @ ${site}` : ""}
                                   </span>
                                   <p className="text-xs text-slate-500 mt-0.5">
-                                    {new Date(test.appointmentDate!).toLocaleDateString()} {new Date(test.appointmentDate!).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                                    {formatChicagoShortDate(new Date(test.appointmentDate!))} {formatChicagoTime(new Date(test.appointmentDate!))}
                                   </p>
                                 </div>
                               );
@@ -272,7 +273,7 @@ export default function CasesPage() {
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-xs text-slate-400">
-                      {new Date(c.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      {formatChicagoShortDateNoYear(new Date(c.updatedAt))}
                     </td>
                   </tr>
                 ))}

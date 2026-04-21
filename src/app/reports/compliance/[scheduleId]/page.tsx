@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, use } from "react";
 import { useSearchParams } from "next/navigation";
+import { formatChicagoMediumDate, formatChicagoTime } from "@/lib/dateChicago";
 
 type ComplianceEntry = {
   date: string;
@@ -150,8 +151,8 @@ export default function ComplianceReportPage({ params }: { params: Promise<{ sch
               <p className="text-sm text-slate-600 mt-1">Court-Ordered Drug & Alcohol Testing Monitoring</p>
             </div>
             <div className="text-right text-xs text-slate-500">
-              <p>Generated: {new Date().toLocaleDateString("en-US", { dateStyle: "long" })}</p>
-              <p>{new Date().toLocaleTimeString()}</p>
+              <p>Generated: {formatChicagoMediumDate(new Date())}</p>
+              <p>{formatChicagoTime(new Date())}</p>
             </div>
           </div>
         </div>

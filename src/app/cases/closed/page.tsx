@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { formatChicagoShortDate } from "@/lib/dateChicago";
 
 type CaseRow = {
   id: string;
@@ -95,7 +96,7 @@ export default function ClosedCasesPage() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">{c._count.testOrders}</td>
-                    <td className="px-6 py-4 text-xs text-gray-400">{new Date(c.updatedAt).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-xs text-gray-400">{formatChicagoShortDate(new Date(c.updatedAt))}</td>
                     <td className="px-6 py-4">
                       <button
                         onClick={async () => {

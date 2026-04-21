@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getCasePaymentState } from "@/lib/payment";
+import { formatChicagoShortDate, formatChicagoTime } from "@/lib/dateChicago";
 
 type CaseRow = {
   id: string;
@@ -119,7 +120,7 @@ export default function MonitoredCasesPage() {
                             const appt = c.testOrders.filter((t) => t.testStatus !== "closed")[0]?.appointmentDate;
                             return appt ? (
                               <p className="text-xs text-gray-500 mt-1">
-                                {new Date(appt).toLocaleDateString()} {new Date(appt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                                {formatChicagoShortDate(new Date(appt))} {formatChicagoTime(new Date(appt))}
                               </p>
                             ) : null;
                           })()}
@@ -132,7 +133,7 @@ export default function MonitoredCasesPage() {
                       <StatusBadge status={getCasePaymentState(c.testOrders)} type="payment" />
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">{c._count.testOrders}</td>
-                    <td className="px-6 py-4 text-xs text-gray-400">{new Date(c.updatedAt).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-xs text-gray-400">{formatChicagoShortDate(new Date(c.updatedAt))}</td>
                   </tr>
                 ))}
               </tbody>

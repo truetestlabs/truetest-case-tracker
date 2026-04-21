@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AccountSelect } from "@/components/accounts/AccountSelect";
+import { formatChicagoLongDate, formatChicagoShortDate, formatChicagoTime } from "@/lib/dateChicago";
 
 /**
  * Staff-facing phone intake page — optimized for booking an appointment
@@ -76,7 +77,7 @@ function fmtDateKey(d: Date): string {
 }
 
 function fmtSlotTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return formatChicagoTime(new Date(iso));
 }
 
 /**
@@ -373,13 +374,7 @@ export default function PhoneIntakePage() {
           <p className="text-2xl font-bold text-[#1e3a5f] mb-2">{result.caseNumber}</p>
           <p className="text-base text-gray-700 mb-1">{form.firstName} {form.lastName}</p>
           <p className="text-sm text-gray-700 mb-4">
-            {new Date(result.slot.start).toLocaleString("en-US", {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            })}
+            {formatChicagoLongDate(new Date(result.slot.start))} at {formatChicagoTime(new Date(result.slot.start))}
           </p>
           {(form.phone || form.email) && (
             <div className="text-sm text-gray-500 mb-5 space-y-1">
@@ -711,13 +706,7 @@ export default function PhoneIntakePage() {
             <>
               Booking{" "}
               <span className="font-semibold text-gray-900">
-                {new Date(selectedSlot.start).toLocaleString("en-US", {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
+                {formatChicagoShortDate(new Date(selectedSlot.start))} at {formatChicagoTime(new Date(selectedSlot.start))}
               </span>
             </>
           ) : (

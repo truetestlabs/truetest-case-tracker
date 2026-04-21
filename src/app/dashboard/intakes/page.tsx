@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { properCase } from "@/lib/format";
+import { formatChicagoShortDate, formatChicagoTime } from "@/lib/dateChicago";
 
 type Draft = {
   id: string;
@@ -96,8 +97,8 @@ export default function IntakesPage() {
                     {d.email && <p>{d.email}</p>}
                   </td>
                   <td className="px-5 py-3 text-xs text-gray-500">
-                    {new Date(d.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
-                    {new Date(d.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                    {formatChicagoShortDate(new Date(d.createdAt))}{" "}
+                    {formatChicagoTime(new Date(d.createdAt))}
                   </td>
                   <td className="px-5 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${

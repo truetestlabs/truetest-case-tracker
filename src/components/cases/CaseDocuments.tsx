@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { apiError } from "@/lib/clientErrors";
+import { formatChicagoShortDate } from "@/lib/dateChicago";
 
 type Document = {
   id: string;
@@ -236,7 +237,7 @@ function DocumentUploadSlot({
             <li key={doc.id} className="flex items-center justify-between text-sm bg-gray-50 rounded px-3 py-2">
               <div>
                 <p className="font-medium text-gray-800 text-xs">{doc.fileName}</p>
-                <p className="text-xs text-gray-400">{new Date(doc.uploadedAt).toLocaleDateString()}</p>
+                <p className="text-xs text-gray-400">{formatChicagoShortDate(new Date(doc.uploadedAt))}</p>
               </div>
               <div className="flex items-center gap-2">
                 <a
