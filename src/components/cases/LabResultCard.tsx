@@ -12,6 +12,7 @@
  */
 import { useState } from "react";
 import { apiError } from "@/lib/clientErrors";
+import { formatChicagoShortDate } from "@/lib/dateChicago";
 
 export type Analyte = {
   name: string;
@@ -63,7 +64,7 @@ function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return formatChicagoShortDate(d);
 }
 
 function overallStatusStyle(status: string): { label: string; className: string } {

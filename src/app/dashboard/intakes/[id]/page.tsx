@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { properCase } from "@/lib/format";
+import { formatChicagoLongDate, formatChicagoTime } from "@/lib/dateChicago";
 import type { DetectedChanges } from "@/lib/kiosk-changes";
 
 type Draft = {
@@ -98,7 +99,7 @@ export default function IntakeDetailPage() {
           <div>
             <h1 className="text-xl font-bold text-gray-900">{properCase(draft.firstName)} {properCase(draft.lastName)}</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Submitted {new Date(draft.createdAt).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} at {new Date(draft.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+              Submitted {formatChicagoLongDate(new Date(draft.createdAt))} at {formatChicagoTime(new Date(draft.createdAt))}
             </p>
           </div>
           <div className="flex items-center gap-2">

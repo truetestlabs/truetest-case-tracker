@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { formatChicagoShortDate, formatChicagoTime } from "@/lib/dateChicago";
 
 type AuditEntry = {
   id: string;
@@ -106,8 +107,8 @@ export default function AuditLogPage() {
                 return (
                   <tr key={e.id} className={`border-b border-gray-100 ${i % 2 === 1 ? "bg-gray-50/50" : ""}`}>
                     <td className="px-5 py-2.5 text-xs text-gray-500 whitespace-nowrap">
-                      {new Date(e.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
-                      {new Date(e.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                      {formatChicagoShortDate(new Date(e.createdAt))}{" "}
+                      {formatChicagoTime(new Date(e.createdAt))}
                     </td>
                     <td className="px-5 py-2.5 text-xs text-gray-700 font-medium">{e.user.name}</td>
                     <td className="px-5 py-2.5">

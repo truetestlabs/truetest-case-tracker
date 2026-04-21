@@ -7,7 +7,8 @@
  *      `collectionDate`, `createdAt`. These apply
  *      `timeZone: "America/Chicago"` so a 3:30 PM CT appointment renders
  *      as "3:30 PM CT", not "8:30 PM UTC". Helpers:
- *      `formatChicagoLongDate`, `formatChicagoShortDate`,
+ *      `formatChicagoLongDate`, `formatChicagoMediumDate`,
+ *      `formatChicagoShortDate`, `formatChicagoShortDateNoYear`,
  *      `formatChicagoTime`.
  *
  *   2. Date-key formatters — for UTC-midnight markers of a Chicago
@@ -16,7 +17,8 @@
  *      These read the stored UTC Y/M/D directly (via ISO slice or
  *      `timeZone: "UTC"`) because the stored UTC Y/M/D *is* the
  *      intended Chicago day. Helpers: `chicagoDateKey`,
- *      `formatChicagoLongDateKey`, `formatChicagoShortDateKey`.
+ *      `formatChicagoLongDateKey`, `formatChicagoShortDateKey`,
+ *      `formatChicagoCompactDateKey`.
  *
  * Mixing these up will cause dates to display off by one day.
  * Passing a date-key through an instant formatter subtracts 5-6h and
@@ -185,6 +187,29 @@ export function formatChicagoShortDateKey(d: Date): string {
 }
 
 /**
+ * Compact weekday+date for a UTC-midnight date-key — e.g.
+ * `"Mon, Apr 21"`. For row labels and inline list views where vertical
+ * space is tight: the weekday orients the reader, the short month keeps
+ * it narrow, and dropping the year is safe in contexts where the
+ * calendar frame is already established (e.g. a selections list for a
+ * single monitoring schedule).
+ *
+ * Same input contract as the other date-key helpers: UTC-midnight
+ * markers of a Chicago day only, never real instants. See the file
+ * header for the split. Uses `timeZone: "UTC"` for the same reason as
+ * `formatChicagoLongDateKey` — applying an America/Chicago offset would
+ * subtract 5-6h from midnight UTC and render the prior day.
+ */
+export function formatChicagoCompactDateKey(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/**
  * Human-readable America/Chicago date for a stored UTC instant —
  * e.g. "Tuesday, April 21, 2026". Use for donor/client-facing emails
  * and SMS where the row holds a real timestamp (appointmentDate,
@@ -227,6 +252,38 @@ export function formatChicagoShortDate(d: Date): string {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: CHICAGO_TZ,
+  });
+}
+
+/**
+ * Medium-form America/Chicago date for a stored UTC instant — e.g.
+ * `"April 21, 2026"`. Full month name, no weekday. Intended for
+ * court/attorney-facing reports (compliance reports, PDFs) where the
+ * abbreviated "Apr" feels informal and the weekday is noise. Same
+ * caveats as `formatChicagoLongDate` — real instants only, never
+ * date-keys.
+ */
+export function formatChicagoMediumDate(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: CHICAGO_TZ,
+  });
+}
+
+/**
+ * America/Chicago date for a stored UTC instant, no year — e.g.
+ * `"Apr 21"`. For tight table columns ("Last updated" cells on list
+ * pages) and the dashboard "today" banner where the year is either
+ * assumed-current or redundant context. Same caveats as
+ * `formatChicagoLongDate` — real instants only, never date-keys.
+ */
+export function formatChicagoShortDateNoYear(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
     timeZone: CHICAGO_TZ,
   });
 }

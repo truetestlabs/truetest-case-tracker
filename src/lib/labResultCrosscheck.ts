@@ -9,6 +9,7 @@
  * Policy: "flag and wait for human review" (per the Piece 1 design).
  */
 import type { ExtractedLabResult } from "@/lib/resultExtract";
+import { formatChicagoMediumDate } from "@/lib/dateChicago";
 
 export type MismatchSeverity = "info" | "warning" | "critical";
 export type MismatchType = "collection_date" | "specimen_id" | "other";
@@ -49,7 +50,7 @@ function sameDay(a: Date, b: Date): boolean {
 }
 
 function formatDate(d: Date): string {
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  return formatChicagoMediumDate(d);
 }
 
 /**

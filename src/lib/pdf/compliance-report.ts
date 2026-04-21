@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import type { ComplianceReport } from "@/lib/compliance";
+import { formatChicagoMediumDate } from "@/lib/dateChicago";
 
 const NAVY = "#1e3a5f";
 const GREEN = "#059669";
@@ -114,7 +115,7 @@ export async function generateComplianceReportPDF(report: ComplianceReport): Pro
     doc.moveTo(50, y).lineTo(doc.page.width - 50, y).lineWidth(0.5).stroke("#cbd5e1");
     doc.fontSize(7).fillColor(GRAY);
     doc.text("TrueTest Labs · 2256 Landmeier Rd Ste A, Elk Grove Village, IL 60007 · (847) 258-3966", 50, y + 8);
-    doc.text(`Generated: ${new Date().toLocaleDateString("en-US", { dateStyle: "long" })}`, 50, y + 20);
+    doc.text(`Generated: ${formatChicagoMediumDate(new Date())}`, 50, y + 20);
 
     doc.end();
   });
