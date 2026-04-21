@@ -8,7 +8,7 @@ import type { ExtractedLabResult } from "@/lib/resultExtract";
 import { runLabResultCrosschecks } from "@/lib/labResultCrosscheck";
 import { detectCocMisclassification } from "@/lib/detectCocMisclassification";
 import { uploadFile } from "@/lib/storage";
-import { chicagoTodayAtUtcNoon } from "@/lib/dateChicago";
+import { chicagoTodayAtUtcNoon, formatChicagoShortDate } from "@/lib/dateChicago";
 
 // Allow longer execution for AI summary generation on upload
 export const maxDuration = 60;
@@ -327,7 +327,7 @@ export async function POST(
             newStatus: "specimen_collected",
             changedBy: "admin",
             note: usedParsedDate
-              ? `Auto-advanced: chain of custody uploaded. Collection date ${effectiveCollectionDate.toLocaleDateString("en-US")} extracted from COC.`
+              ? `Auto-advanced: chain of custody uploaded. Collection date ${formatChicagoShortDate(effectiveCollectionDate)} extracted from COC.`
               : "Auto-advanced: chain of custody uploaded. Collection date set to upload time (could not parse date from PDF).",
           },
         });

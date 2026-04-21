@@ -9,6 +9,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AccountFormModal, type AccountDraft } from "@/components/accounts/AccountFormModal";
+import { formatChicagoShortDateNoYear } from "@/lib/dateChicago";
 
 type DefaultRecipient = {
   id: string;
@@ -247,7 +248,7 @@ export default function AccountDetailPage() {
                         </td>
                         <td className="px-4 py-2 text-xs text-slate-600">{c._count.testOrders}</td>
                         <td className="px-4 py-2 text-xs text-slate-500">
-                          {new Date(c.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          {formatChicagoShortDateNoYear(new Date(c.updatedAt))}
                         </td>
                       </tr>
                     ))}
