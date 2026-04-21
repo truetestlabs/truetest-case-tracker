@@ -13,14 +13,14 @@ export async function POST(
     const testOrders = await prisma.testOrder.findMany({
       where: {
         caseId,
-        testStatus: "results_received",
+        testStatus: { in: ["results_received", "results_held"] },
         paymentMethod: null,
       },
     });
 
     if (testOrders.length === 0) {
       return NextResponse.json(
-        { error: "No unpaid tests with results received" },
+        { error: "No unpaid tests with results received or held" },
         { status: 400 }
       );
     }
