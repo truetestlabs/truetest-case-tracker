@@ -71,6 +71,12 @@ export default function ComplianceReportPage({ params }: { params: Promise<{ sch
   const [error, setError] = useState("");
   const [from, setFrom] = useState(fromParam || "");
   const [to, setTo] = useState(toParam || "");
+  const [sendState, setSendState] = useState<
+    | { kind: "idle" }
+    | { kind: "sending" }
+    | { kind: "sent"; count: number }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" });
 
   const loadReport = useCallback(() => {
     setLoading(true);
@@ -98,6 +104,33 @@ export default function ComplianceReportPage({ params }: { params: Promise<{ sch
     if (to) qs.set("to", to);
     qs.set("format", "csv");
     window.location.href = `/api/monitoring-schedules/${scheduleId}/compliance-report?${qs}`;
+  }
+
+  async function notifyRecipients() {
+    if (!report) return;
+    const donor = report.schedule.donorName;
+    const caseNo = report.schedule.caseNumber;
+    const confirmed = window.confirm(
+      `Email this compliance report (${report.period.from} to ${report.period.to}) as a PDF attachment to all status recipients on case ${caseNo} (${donor})?`
+    );
+    if (!confirmed) return;
+    setSendState({ kind: "sending" });
+    try {
+      const res = await fetch(`/api/monitoring-schedules/${scheduleId}/compliance-report/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from, to }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSendState({ kind: "error", message: data?.error || `Send failed (${res.status}).` });
+        return;
+      }
+      const count = Array.isArray(data.sentTo) ? data.sentTo.length : 0;
+      setSendState({ kind: "sent", count });
+    } catch {
+      setSendState({ kind: "error", message: "Network error — the email was not sent." });
+    }
   }
 
   if (loading) return <div className="p-8 text-slate-500">Loading report...</div>;
@@ -139,8 +172,25 @@ export default function ComplianceReportPage({ params }: { params: Promise<{ sch
               className="px-4 py-2 border border-slate-300 text-slate-700 rounded text-sm font-semibold hover:bg-slate-50">
               ⬇ Download CSV
             </button>
+            <button
+              onClick={notifyRecipients}
+              disabled={sendState.kind === "sending"}
+              className="px-4 py-2 bg-slate-900 text-white rounded text-sm font-semibold hover:bg-slate-800 disabled:opacity-50"
+            >
+              {sendState.kind === "sending" ? "Sending..." : "✉ Email to recipients"}
+            </button>
           </div>
         </div>
+        {sendState.kind === "sent" && (
+          <div className="print:hidden mb-6 -mt-3 rounded border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+            ✓ Sent to {sendState.count} recipient{sendState.count === 1 ? "" : "s"}.
+          </div>
+        )}
+        {sendState.kind === "error" && (
+          <div className="print:hidden mb-6 -mt-3 rounded border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+            {sendState.message}
+          </div>
+        )}
 
         {/* Header */}
         <div className="border-b-2 border-slate-900 pb-4 mb-6">

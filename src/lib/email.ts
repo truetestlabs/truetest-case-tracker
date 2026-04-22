@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { DocumentType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { downloadFile } from "@/lib/storage";
 import {
@@ -7,6 +8,8 @@ import {
   formatChicagoShortDateKey,
   formatChicagoTime,
 } from "@/lib/dateChicago";
+import { buildComplianceReport } from "@/lib/compliance";
+import { generateComplianceReportPDF } from "@/lib/pdf/compliance-report";
 
 // Lazy client — only instantiated when actually sending, so missing key doesn't break build
 function getResend() {
@@ -258,9 +261,9 @@ export async function sendDraftEmail(draftId: string): Promise<string[]> {
   type Attachment = { filename: string; content: Buffer };
   const attachments: Attachment[] = [];
 
-  const docTypesToAttach: string[] = isMro
-    ? ["correspondence", "result_report"] // MRO report first, then lab result as backup
-    : ["result_report"];
+  const docTypesToAttach: DocumentType[] = isMro
+    ? [DocumentType.correspondence, DocumentType.result_report] // MRO report first, then lab result as backup
+    : [DocumentType.result_report];
 
   const docsToAttach = await prisma.document.findMany({
     where: {
@@ -403,6 +406,59 @@ export async function sendResultsReleasedEmail(
     throw new Error(sendError.message);
   }
   console.log("[Email] results sent, id:", sendData?.id);
+
+  return emailList;
+}
+
+/** Send a compliance-report email to the case's status recipients, with the PDF attached. */
+export async function sendComplianceReportEmail(
+  scheduleId: string,
+  fromDate: Date,
+  toDate: Date
+): Promise<string[]> {
+  if (!process.env.RESEND_API_KEY) return [];
+
+  const report = await buildComplianceReport(scheduleId, fromDate, toDate);
+  if (!report) throw new Error("Schedule not found or report could not be built.");
+
+  const recipients = await getEmailRecipients(report.schedule.caseId, "status");
+  if (recipients.length === 0) {
+    throw new Error("No recipients configured for this case.");
+  }
+
+  const pdfBuffer = await generateComplianceReportPDF(report);
+  const filename = `compliance-${report.schedule.caseNumber}-${report.period.from}-to-${report.period.to}.pdf`;
+
+  const periodLabel = `${report.period.from} through ${report.period.to}`;
+  const { checkInRate, complianceRate, checkInsMade, checkInsMissed, daysSelected, daysTested } = report.summary;
+
+  const html = emailLayout({
+    headerTitle: "Random Testing Compliance Report",
+    body: `
+      <p style="margin:0 0 4px;">Attached is the compliance report for:</p>
+      <p style="color:#0f172a;font-size:18px;font-weight:600;margin:0 0 4px;font-family:${FONT};">${report.schedule.donorName}</p>
+      <p style="color:#64748b;font-size:13px;margin:0 0 24px;">Case No. ${report.schedule.caseNumber} &bull; ${report.schedule.testName}</p>
+      ${summaryBlock(
+        `Period: ${periodLabel}\nCheck-ins made: ${checkInsMade}\nCheck-ins missed: ${checkInsMissed}\nDays selected: ${daysSelected}\nDays tested: ${daysTested}\nCheck-in rate: ${checkInRate}%\nCompliance rate: ${complianceRate}%`
+      )}
+      <p style="margin:0;color:#475569;font-size:14px;">The full report PDF is attached to this email.</p>`,
+  });
+
+  const emailList = recipients.map((r) => r.email);
+
+  const { data: sendData, error: sendError } = await getResend().emails.send({
+    from: FROM_EMAIL,
+    replyTo: REPLY_TO,
+    to: emailList,
+    subject: `Compliance Report — ${report.schedule.donorName} (${report.schedule.caseNumber})`,
+    html,
+    attachments: [{ filename, content: Buffer.from(pdfBuffer) }],
+  });
+  if (sendError) {
+    console.error("[Email] Resend error (compliance):", sendError);
+    throw new Error(sendError.message);
+  }
+  console.log("[Email] compliance report sent, id:", sendData?.id);
 
   return emailList;
 }

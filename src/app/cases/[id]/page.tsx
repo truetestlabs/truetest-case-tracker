@@ -192,7 +192,7 @@ export default function CaseDetailPage() {
   // can collapse historical tests behind a toggle. All logic elsewhere still
   // reads caseData.testOrders directly — this is render-layer filtering only.
   const isTerminalTest = (t: CaseData["testOrders"][number]) =>
-    t.testStatus === "closed" || t.testStatus === "cancelled";
+    t.testStatus === "closed" || t.testStatus === "cancelled" || t.testStatus === "no_show";
   const activeTests = caseData.testOrders.filter((t) => !isTerminalTest(t));
   const closedTests = caseData.testOrders.filter(isTerminalTest);
 
@@ -635,7 +635,7 @@ export default function CaseDetailPage() {
                           const sent = hasSentNotification("results held");
                           return sent
                             ? <p className="text-[10px] text-amber-600 mt-1.5">✓ Payment notice sent</p>
-                            : <button onClick={async (e) => { e.stopPropagation(); const r = await fetch(`/api/cases/${caseData.id}/send-results-held`, { method: "POST" }); if (r.ok) loadCase(); else alert((await r.json()).error || "Failed"); }} className="mt-1.5 w-full text-[10px] px-2 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 font-semibold">✉ Results Held — Request Payment</button>;
+                            : <button onClick={async (e) => { e.stopPropagation(); setSendingResultsHeld(true); try { const r = await fetch(`/api/cases/${caseData.id}/send-results-held`, { method: "POST" }); if (r.ok) await loadCase(); else alert((await r.json()).error || "Failed"); } finally { setSendingResultsHeld(false); } }} disabled={sendingResultsHeld} className="mt-1.5 w-full text-[10px] px-2 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 font-semibold disabled:opacity-50">{sendingResultsHeld ? "Sending…" : "✉ Results Held — Request Payment"}</button>;
                         }
                         return null;
                       })()}

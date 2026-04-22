@@ -51,10 +51,20 @@ export async function DELETE(
       data: { status: "cancelled" },
     });
 
-    // Mark schedule as inactive (preserve history)
+    // Mark schedule as inactive + stamp endDate so the UI can distinguish
+    // "Cancelled" from "Paused" (both previously just set active=false,
+    // which made cancel look like a no-op on an already-paused schedule).
+    // Leave endDate alone if it was already set to a past date (the
+    // schedule already ended naturally).
+    const existing = await prisma.monitoringSchedule.findUnique({
+      where: { id },
+      select: { endDate: true },
+    });
+    const now = new Date();
+    const shouldStampEnd = !existing?.endDate || existing.endDate.getTime() > now.getTime();
     await prisma.monitoringSchedule.update({
       where: { id },
-      data: { active: false },
+      data: { active: false, ...(shouldStampEnd ? { endDate: now } : {}) },
     });
 
     return NextResponse.json({ success: true });
