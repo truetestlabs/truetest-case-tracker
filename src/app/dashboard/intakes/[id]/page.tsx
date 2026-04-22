@@ -29,7 +29,6 @@ type Draft = {
   orderedBy: string | null;
   paymentResponsibility: string | null;
   notes: string | null;
-  communicationConsent: boolean;
   changes: DetectedChanges | null;
   reviewedBy: string | null;
   createdAt: string;
@@ -157,7 +156,6 @@ export default function IntakeDetailPage() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div><span className="text-gray-500">Phone:</span> <span className="text-gray-900 font-medium">{draft.phone || "—"}</span></div>
               <div><span className="text-gray-500">Email:</span> <span className="text-gray-900 font-medium">{draft.email || "—"}</span></div>
-              <div><span className="text-gray-500">Communication Consent:</span> <span className={`font-medium ${draft.communicationConsent ? "text-green-600" : "text-gray-400"}`}>{draft.communicationConsent ? "Yes" : "No"}</span></div>
               {draft.existingDonorId && <div><span className="text-green-600 text-xs font-medium">Returning donor</span></div>}
             </div>
           </section>
