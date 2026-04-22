@@ -131,6 +131,23 @@ export async function createSignedUrl(
 }
 
 /**
+ * Delete a file from Supabase Storage. Idempotent — a missing file is not
+ * an error. Used to clean up orphans (e.g., when a CoC upload is cancelled
+ * at the specimen-ID mismatch confirmation modal).
+ */
+export async function deleteFile(storagePath: string): Promise<void> {
+  const res = await fetch(storageUrl(storagePath), {
+    method: "DELETE",
+    headers: headers(),
+  });
+  // 404 = already gone; treat as success. Any other non-2xx = real failure.
+  if (!res.ok && res.status !== 404) {
+    const err = await res.text();
+    throw new Error(`Storage delete failed: ${res.status} — ${err}`);
+  }
+}
+
+/**
  * Download a file from Supabase Storage.
  * @returns { buffer, contentType }
  */

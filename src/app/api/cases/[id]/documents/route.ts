@@ -1,140 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { TestStatus, LabResultStatus } from "@prisma/client";
-import { claude } from "@/lib/claude";
 import { generateResultSummary } from "@/lib/resultSummary";
 import { extractLabResult, LAB_RESULT_PARSER_VERSION } from "@/lib/resultExtract";
 import type { ExtractedLabResult } from "@/lib/resultExtract";
 import { runLabResultCrosschecks } from "@/lib/labResultCrosscheck";
 import { detectCocMisclassification } from "@/lib/detectCocMisclassification";
 import { uploadFile } from "@/lib/storage";
-import { chicagoTodayAtUtcNoon, formatChicagoShortDate } from "@/lib/dateChicago";
+import { buildCcfFilename } from "@/lib/filename";
+import { extractCocSpecimenId } from "@/lib/extractCocSpecimenId";
 
 // Allow longer execution for AI summary generation on upload
 export const maxDuration = 60;
-
-/**
- * Parse a "M.D.YY" / "MM.DD.YYYY" / "M/D/YY" string (as returned by
- * parseCocPdf) into a JavaScript Date. Returns null on bad input, impossible
- * dates, or wildly out-of-range values (>30 days future or >2 years old —
- * those are almost certainly OCR errors, not real collection dates).
- *
- * Uses noon-local time to dodge timezone edge cases around midnight.
- */
-function parseCocDateString(s: string | undefined | null): Date | null {
-  if (!s) return null;
-  const match = s.trim().match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
-  if (!match) return null;
-  const [, mStr, dStr, yStr] = match;
-  let year = parseInt(yStr, 10);
-  if (year < 100) year = 2000 + year; // "26" → 2026. Good enough until 2100.
-  const month = parseInt(mStr, 10) - 1; // JS months are 0-indexed
-  const day = parseInt(dStr, 10);
-  if (month < 0 || month > 11 || day < 1 || day > 31) return null;
-  const date = new Date(year, month, day, 12, 0, 0);
-  if (Number.isNaN(date.getTime())) return null;
-  // Sanity bounds: if the parser reads a garbage date, fall back to upload
-  // time rather than writing a ridiculous value to the DB.
-  const now = Date.now();
-  const twoYearsAgo = now - 2 * 365 * 24 * 60 * 60 * 1000;
-  const thirtyDaysAhead = now + 30 * 24 * 60 * 60 * 1000;
-  if (date.getTime() < twoYearsAgo || date.getTime() > thirtyDaysAhead) return null;
-  return date;
-}
-
-/** Extract specimen ID and collection date from a USDTL chain of custody PDF.
- *  First tries text extraction (works for typed PDFs).
- *  Falls back to Claude Vision for scanned images. */
-async function parseCocPdf(buffer: Buffer): Promise<{ controlNumber?: string; collectionDate?: string }> {
-  // Try text extraction first (fast, free)
-  try {
-    // Lazy import to avoid crashing on Vercel if pdf-parse has issues
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse");
-    const PDFParseClass = pdfParse.PDFParse || pdfParse.default || pdfParse;
-    const uint8 = new Uint8Array(buffer);
-    const parser = typeof PDFParseClass === "function" && PDFParseClass.prototype
-      ? new PDFParseClass(uint8)
-      : null;
-    if (!parser) {
-      console.warn("[PDF] pdf-parse not available, skipping text extraction");
-      throw new Error("pdf-parse not available");
-    }
-    await parser.load();
-    const result = await parser.getText();
-    const text: string = result.text || "";
-
-    if (text.trim().length > 50) {
-      // Extract control number (specimen ID) — reliably printed, not handwritten
-      const controlMatch = text.match(/CONTROL\s*#\s*\n?\s*(\d{5,})/i);
-      const controlNumber = controlMatch?.[1];
-
-      // Extract collection date near "Date (Mo./Day/Y"
-      const dateMatch = text.match(/Date\s*\(Mo\.?\/?Day\.?\/?Y.*?\)\s*\n?\s*([\d]{1,2}[\/\|][\d]{1,2}[\/\|]?[\d]{2,4})/i);
-      let collectionDate: string | undefined;
-      if (dateMatch) {
-        const raw = dateMatch[1].replace(/\|/g, "/");
-        const parts = raw.split("/");
-        if (parts.length >= 2) {
-          const mo = parts[0];
-          const day = parts[1];
-          const yr = parts[2] || new Date().getFullYear().toString().slice(-2);
-          collectionDate = `${mo}.${day}.${yr}`;
-        }
-      }
-
-      if (controlNumber || collectionDate) {
-        return { controlNumber, collectionDate };
-      }
-    }
-  } catch (e) {
-    console.error("COC text parse error:", e);
-  }
-
-  // Fallback: Claude Vision for scanned PDFs
-  if (!process.env.ANTHROPIC_API_KEY) return {};
-
-  try {
-    const base64 = buffer.toString("base64");
-    const response = await claude.messages.create({
-      model: "claude-opus-4-6",
-      max_tokens: 256,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "document",
-              source: { type: "base64", media_type: "application/pdf", data: base64 },
-            },
-            {
-              type: "text",
-              text: `This is a USDTL drug test chain of custody form. Extract the following printed (not handwritten) fields:
-1. Control/Specimen ID number (near "CONTROL #" or "SPECIMEN ID")
-2. Collection date (near "Date" in Step 4 or Step 5, formatted as M/D/YY or MM/DD/YYYY)
-
-Reply in this exact format (use "unknown" if not found):
-CONTROL: <number>
-DATE: <M.D.YY>`,
-            },
-          ],
-        },
-      ],
-    });
-
-    const text = response.content.find((b) => b.type === "text")?.text || "";
-    const controlMatch = text.match(/CONTROL:\s*(\d{5,})/i);
-    const dateMatch = text.match(/DATE:\s*([\d]{1,2}\.[\d]{1,2}\.[\d]{2,4})/i);
-
-    return {
-      controlNumber: controlMatch?.[1],
-      collectionDate: dateMatch?.[1],
-    };
-  } catch (e) {
-    console.error("Claude Vision COC parse error:", e);
-    return {};
-  }
-}
 
 export async function POST(
   request: NextRequest,
@@ -153,6 +30,10 @@ export async function POST(
     let buffer: Buffer;
     let storagePath: string;
     let ext: string;
+    // When the client re-submits after acknowledging a specimen-ID mismatch
+    // modal, it sets this flag. Server skips the mismatch check for this
+    // upload and records the ack in the StatusLog.
+    let confirmSpecimenMismatch = false;
 
     if (isJson) {
       // NEW MODE: File already uploaded directly to Supabase Storage
@@ -162,6 +43,7 @@ export async function POST(
       testOrderId = body.testOrderId || null;
       originalFileName = body.fileName;
       storagePath = body.storagePath;
+      confirmSpecimenMismatch = body.confirmSpecimenMismatch === true;
       ext = originalFileName.includes(".") ? "." + originalFileName.split(".").pop() : ".pdf";
 
       // Download from Supabase to get buffer for parsing/AI summary
@@ -175,6 +57,7 @@ export async function POST(
       documentType = formData.get("documentType") as string;
       manualSpecimenId = formData.get("specimenId") as string | null;
       testOrderId = formData.get("testOrderId") as string | null;
+      confirmSpecimenMismatch = formData.get("confirmSpecimenMismatch") === "true";
 
       if (!file) {
         return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -195,7 +78,10 @@ export async function POST(
 
     // === From here, both modes converge — buffer and storagePath are set ===
 
-    // Fetch case with donor and latest test order for smart file naming
+    // Fetch case with donor and latest test order for smart file naming.
+    // CCF filenames don't embed a date anymore (see buildCcfFilename); we
+    // still need `collectionDate` for the legacy result_report filename
+    // format below, so we pull it on the latest order.
     const caseData = await prisma.case.findUnique({
       where: { id: caseId },
       include: {
@@ -203,7 +89,11 @@ export async function POST(
         testOrders: {
           orderBy: { updatedAt: "desc" },
           take: 1,
-          select: { labAccessionNumber: true, collectionDate: true },
+          select: {
+            labAccessionNumber: true,
+            collectionDate: true,
+            specimenId: true,
+          },
         },
       },
     });
@@ -214,28 +104,68 @@ export async function POST(
       ? new Date(latestOrder.collectionDate).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit", timeZone: "America/Chicago" }).replace(/\//g, ".")
       : new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit", timeZone: "America/Chicago" }).replace(/\//g, ".");
 
-    // Parse the COC PDF ONCE, up front. Both the filename builder below AND
-    // the test-order auto-advance block further down need the extracted
-    // collection date + control number, and parsing is expensive (text
-    // extraction + possible Claude Vision fallback).
-    const parsedCoc =
-      documentType === "chain_of_custody" && ext.toLowerCase() === ".pdf"
-        ? await parseCocPdf(buffer)
-        : {};
-    const parsedCocDate = parseCocDateString(parsedCoc.collectionDate);
+    // --- CoC specimen ID validation ---------------------------------------
+    // For CCF PDFs: read the printed specimen ID from the "CONTROL #" box and
+    // compare to the reference ID (the one the user typed in this upload
+    // flow, or the one already on the targeted test order). If they differ
+    // and the user has not acknowledged the mismatch, return 409 so the
+    // client can show a confirmation modal. The file stays in storage; the
+    // client will either re-POST with confirmSpecimenMismatch=true or fire
+    // an orphan-cleanup DELETE on cancel.
+    //
+    // Vision failures (null extraction) → skip validation silently and
+    // proceed with the upload; we never block the user on OCR failures.
+    let parsedCocSpecimenId: string | null = null;
+    let referenceSpecimenId: string | null = null;
+    if (documentType === "chain_of_custody" && ext.toLowerCase() === ".pdf") {
+      // If the upload targets a specific test order, its specimenId wins
+      // over latestOrder.specimenId as the reference. Only query if
+      // testOrderId differs from the latest order we already loaded.
+      let targetOrderSpecimenId: string | null = latestOrder?.specimenId ?? null;
+      if (testOrderId) {
+        const target = await prisma.testOrder.findUnique({
+          where: { id: testOrderId },
+          select: { specimenId: true },
+        });
+        targetOrderSpecimenId = target?.specimenId ?? null;
+      }
+      referenceSpecimenId = (manualSpecimenId?.trim() || targetOrderSpecimenId) ?? null;
+
+      const extraction = await extractCocSpecimenId(buffer);
+      parsedCocSpecimenId = extraction.specimenId;
+
+      if (
+        parsedCocSpecimenId &&
+        referenceSpecimenId &&
+        parsedCocSpecimenId !== referenceSpecimenId &&
+        !confirmSpecimenMismatch
+      ) {
+        return NextResponse.json(
+          {
+            error: "specimen_id_mismatch",
+            parsedSpecimenId: parsedCocSpecimenId,
+            recordSpecimenId: referenceSpecimenId,
+            storagePath,
+          },
+          { status: 409 }
+        );
+      }
+    }
 
     // Build smart file name based on document type
     let displayName = originalFileName;
     if (documentType === "result_report" && donor) {
       displayName = `${donor.firstName} ${donor.lastName} Results ${collectionDate}${ext}`;
     } else if (documentType === "chain_of_custody") {
-      const specimenId = manualSpecimenId || parsedCoc.controlNumber || latestOrder?.labAccessionNumber || "";
+      const specimenId =
+        manualSpecimenId?.trim() ||
+        parsedCocSpecimenId ||
+        latestOrder?.specimenId ||
+        latestOrder?.labAccessionNumber ||
+        "";
       const donorFirst = donor?.firstName || "Unknown";
       const donorLast = donor?.lastName || "Donor";
-      const cocDate = parsedCoc.collectionDate || collectionDate;
-      displayName = specimenId
-        ? `${specimenId} ${donorFirst} ${donorLast} ${cocDate}${ext}`
-        : `${donorFirst} ${donorLast} COC ${cocDate}${ext}`;
+      displayName = buildCcfFilename(specimenId, donorFirst, donorLast, ext);
     }
 
     // For result reports: generate the narrative summary first (the human-
@@ -290,7 +220,13 @@ export async function POST(
       },
     });
 
-    // Auto-advance test orders when chain of custody is uploaded → specimen_collected
+    // Auto-advance test orders when chain of custody is uploaded → specimen_collected.
+    //
+    // We deliberately do NOT write `collectionDate` here anymore. The prior
+    // Vision-based date extraction misread handwritten dates too often, and
+    // the upload-day fallback silently substituted a wrong value when the
+    // extraction failed. collectionDate is now populated only by explicit
+    // staff entry (EditTestOrderModal) or other authoritative paths.
     if (documentType === "chain_of_custody") {
       const preCollectionStatuses = ["order_created", "awaiting_payment", "payment_received"] as TestStatus[];
       const testOrders = await prisma.testOrder.findMany({
@@ -301,21 +237,11 @@ export async function POST(
         },
       });
 
-      // Prefer the date printed on the COC; fall back to today (Chicago)
-      // if parsing failed or the parsed value was outside the sanity
-      // bounds. Use noon-UTC of the Chicago day so the stored instant
-      // renders as the same calendar day in every timezone — a plain
-      // `new Date()` captures the upload moment and, during the 7 PM CT
-      // → midnight UTC window, produces tomorrow's UTC day.
-      const effectiveCollectionDate = parsedCocDate ?? chicagoTodayAtUtcNoon();
-      const usedParsedDate = parsedCocDate !== null;
-
       for (const order of testOrders) {
         await prisma.testOrder.update({
           where: { id: order.id },
           data: {
             testStatus: "specimen_collected",
-            collectionDate: effectiveCollectionDate,
             ...(manualSpecimenId && !order.specimenId ? { specimenId: manualSpecimenId } : {}),
           },
         });
@@ -326,13 +252,31 @@ export async function POST(
             oldStatus: order.testStatus,
             newStatus: "specimen_collected",
             changedBy: "admin",
-            note: usedParsedDate
-              ? `Auto-advanced: chain of custody uploaded. Collection date ${formatChicagoShortDate(effectiveCollectionDate)} extracted from COC.`
-              : "Auto-advanced: chain of custody uploaded. Collection date set to upload time (could not parse date from PDF).",
+            note: "Auto-advanced: chain of custody uploaded.",
           },
         });
       }
 
+      // If the upload proceeded despite a detected specimen-ID mismatch
+      // (user acknowledged via the confirmation modal), record the ack so
+      // the provenance is queryable later.
+      if (
+        confirmSpecimenMismatch &&
+        parsedCocSpecimenId &&
+        referenceSpecimenId &&
+        parsedCocSpecimenId !== referenceSpecimenId
+      ) {
+        await prisma.statusLog.create({
+          data: {
+            caseId,
+            testOrderId: testOrderId || null,
+            oldStatus: "—",
+            newStatus: "specimen_id_mismatch_ack",
+            changedBy: "admin",
+            note: `CoC uploaded with acknowledged specimen ID mismatch (PDF: ${parsedCocSpecimenId}, record: ${referenceSpecimenId}).`,
+          },
+        });
+      }
     }
 
     // Auto-advance test orders when lab results are uploaded.

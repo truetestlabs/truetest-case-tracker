@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { apiError } from "@/lib/clientErrors";
+import { SpecimenIdMismatchModal } from "./SpecimenIdMismatchModal";
 
 type Doc = {
   id: string;
@@ -23,11 +24,69 @@ const DOC_SLOTS = [
   { type: "correspondence", label: "MRO", icon: "👨‍⚕️" },
 ];
 
+type ProcessPayload = {
+  storagePath: string;
+  fileName: string;
+  documentType: string;
+  testOrderId: string;
+  specimenId?: string;
+  confirmSpecimenMismatch?: boolean;
+};
+
+type MismatchState = {
+  parsedSpecimenId: string;
+  recordSpecimenId: string;
+  storagePath: string;
+  payload: ProcessPayload; // the original POST body, reused on confirm
+};
+
 export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }: Props) {
   const [uploading, setUploading] = useState<string | null>(null);
   const [specimenIdInput, setSpecimenIdInput] = useState("");
   const [pendingFile, setPendingFile] = useState<{ file: File; type: string } | null>(null);
+  const [mismatch, setMismatch] = useState<MismatchState | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  // POST step only — used both for the initial attempt and for the
+  // "Upload Anyway" retry after the user acknowledges a mismatch.
+  async function postProcess(payload: ProcessPayload): Promise<boolean> {
+    const processRes = await fetch(`/api/cases/${caseId}/documents`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    // 409 = specimen-ID mismatch. Capture the mismatch details, keep the
+    // file in storage, and let the user decide via the modal.
+    if (processRes.status === 409) {
+      const body = await processRes.json().catch(() => null);
+      if (body?.error === "specimen_id_mismatch") {
+        setMismatch({
+          parsedSpecimenId: body.parsedSpecimenId,
+          recordSpecimenId: body.recordSpecimenId,
+          storagePath: body.storagePath,
+          payload,
+        });
+        return false;
+      }
+    }
+
+    if (!processRes.ok) {
+      const err = await processRes.json().catch(() => null);
+      alert(err?.error || `Processing failed (${processRes.status})`);
+      return false;
+    }
+
+    // Surface the COC-misclassification warning if the server set one.
+    try {
+      const body = await processRes.json();
+      if (body?.warning) {
+        alert(`⚠ Upload saved with a warning:\n\n${body.warning}`);
+      }
+    } catch { /* not JSON — skip */ }
+    onUpdated();
+    return true;
+  }
 
   async function uploadFile(file: File, docType: string, extraSpecimenId?: string) {
     setUploading(docType);
@@ -76,39 +135,49 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
         throw new Error(`Storage upload failed after 3 attempts — ${lastError}. Please try again.`);
       }
 
-      // Step 3: Tell the API to process the uploaded file (COC parsing, AI summary, DB record, auto-advance)
-      const processRes = await fetch(`/api/cases/${caseId}/documents`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          storagePath,
-          fileName: file.name,
-          documentType: docType,
-          testOrderId,
-          ...(extraSpecimenId ? { specimenId: extraSpecimenId } : {}),
-        }),
-      });
-      if (!processRes.ok) {
-        const err = await processRes.json().catch(() => null);
-        alert(err?.error || `Processing failed (${processRes.status})`);
-      } else {
-        // Surface the COC-misclassification warning if the server set one
-        // on the response. The upload still saves, but the user sees a
-        // warning so they can verify they uploaded the right PDF.
-        try {
-          const body = await processRes.json();
-          if (body?.warning) {
-            alert(`⚠ Upload saved with a warning:\n\n${body.warning}`);
-          }
-        } catch { /* not JSON — skip */ }
-        onUpdated();
-      }
+      // Step 3: Tell the API to process the uploaded file.
+      const payload: ProcessPayload = {
+        storagePath,
+        fileName: file.name,
+        documentType: docType,
+        testOrderId,
+        ...(extraSpecimenId ? { specimenId: extraSpecimenId } : {}),
+      };
+      await postProcess(payload);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(null);
       setPendingFile(null);
       setSpecimenIdInput("");
+    }
+  }
+
+  async function handleMismatchConfirm() {
+    if (!mismatch) return;
+    const payload = { ...mismatch.payload, confirmSpecimenMismatch: true };
+    setMismatch(null);
+    setUploading(payload.documentType);
+    try {
+      await postProcess(payload);
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  async function handleMismatchCancel() {
+    if (!mismatch) return;
+    const { storagePath } = mismatch;
+    setMismatch(null);
+    // Clean up the orphaned file. Fire-and-forget — failures just leave a
+    // stray file in storage; they don't affect the user.
+    try {
+      await fetch(
+        `/api/storage/orphan?caseId=${encodeURIComponent(caseId)}&storagePath=${encodeURIComponent(storagePath)}`,
+        { method: "DELETE" }
+      );
+    } catch (e) {
+      console.warn("[TestOrderDocuments] orphan cleanup failed:", e);
     }
   }
 
@@ -215,6 +284,15 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
             </button>
           </div>
         </div>
+      )}
+
+      {mismatch && (
+        <SpecimenIdMismatchModal
+          pdfId={mismatch.parsedSpecimenId}
+          recordId={mismatch.recordSpecimenId}
+          onConfirm={handleMismatchConfirm}
+          onCancel={handleMismatchCancel}
+        />
       )}
     </div>
   );

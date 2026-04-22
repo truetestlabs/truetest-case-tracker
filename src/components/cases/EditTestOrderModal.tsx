@@ -54,6 +54,12 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
     lab: testOrder.lab,
     clientPrice: testOrder.clientPrice,
   });
+  // Tracked so we can conditionally require the collection-date picker when
+  // advancing to specimen_collected. The server also enforces this (the
+  // PATCH returns 400 if collectionDate is missing), but blocking submit
+  // on the client is a cleaner UX than a round-trip error.
+  const [currentStatus, setCurrentStatus] = useState(testOrder.testStatus);
+  const collectionDateRequired = currentStatus === "specimen_collected";
 
   useEffect(() => {
     if (changingTest && catalog.length === 0) {
@@ -182,7 +188,12 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
             {(() => {
               const isSweat = testOrder.testDescription?.toLowerCase().includes("sweat patch");
               return (
-                <select name="testStatus" defaultValue={testOrder.testStatus} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm">
+                <select
+                  name="testStatus"
+                  value={currentStatus}
+                  onChange={(e) => setCurrentStatus(e.target.value)}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                >
                   <option value="order_created">{isSweat ? "Patch Applied" : "Order Created"}</option>
                   <option value="specimen_collected">{isSweat ? "Patch Removed" : "Specimen Collected"}</option>
                   <option value="sent_to_lab">Sent to Lab</option>
@@ -208,8 +219,18 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {testOrder.testDescription?.toLowerCase().includes("sweat patch") ? "Application Date" : "Collection Date"}
+                {collectionDateRequired && <span className="text-red-500 ml-0.5">*</span>}
               </label>
-              <input type="date" name="collectionDate" defaultValue={testOrder.collectionDate ? new Date(testOrder.collectionDate).toISOString().split("T")[0] : ""} className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
+              <input
+                type="date"
+                name="collectionDate"
+                defaultValue={testOrder.collectionDate ? new Date(testOrder.collectionDate).toISOString().split("T")[0] : ""}
+                required={collectionDateRequired}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              />
+              {collectionDateRequired && (
+                <p className="text-[10px] text-gray-500 mt-0.5">Required when marking specimen collected.</p>
+              )}
             </div>
           </div>
 

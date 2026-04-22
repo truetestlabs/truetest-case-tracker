@@ -124,9 +124,11 @@ export async function PATCH(
       if (updateData.testStatus === "order_released" && !existing.orderReleasedDate) {
         data.orderReleasedDate = now;
       }
-      if (updateData.testStatus === "specimen_collected" && !existing.collectionDate) {
-        data.collectionDate = now;
-      }
+      // specimen_collected no longer auto-fills collectionDate with today.
+      // The CoC upload path was the main source of wrong-date contamination
+      // (Vision misreads + upload-day fallbacks), and the "default to now"
+      // behavior here was the other silent path. Staff must now pick the
+      // date explicitly — see the guard below before the update.
       if (updateData.testStatus === "specimen_held") {
         data.specimenHeld = true;
       }
@@ -192,6 +194,24 @@ export async function PATCH(
         }
       } else if (oldMethod && !newMethod) {
         data.paymentDate = null;
+      }
+    }
+
+    // Safety-net guard: specimen_collected requires an explicit
+    // collectionDate. The CoC upload path no longer auto-fills this, and the
+    // prior "default to now" fallback in this route corrupted data. Reject
+    // the PATCH so the caller must surface a date picker instead of
+    // silently stamping the upload instant into the DB.
+    if (updateData.testStatus === "specimen_collected") {
+      const hasExplicitDate = Object.prototype.hasOwnProperty.call(data, "collectionDate");
+      const effectiveCollectionDate = hasExplicitDate
+        ? (data.collectionDate as Date | null)
+        : existing.collectionDate;
+      if (!effectiveCollectionDate) {
+        return NextResponse.json(
+          { error: "collectionDate is required when advancing to specimen_collected" },
+          { status: 400 }
+        );
       }
     }
 

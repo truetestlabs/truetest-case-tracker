@@ -40,24 +40,15 @@ function DocumentUploadSlot({
   onUpdated: () => void;
 }) {
   const [uploading, setUploading] = useState(false);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [specimenId, setSpecimenId] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // For COC uploads, prompt for specimen ID before uploading
-    if (docType === "chain_of_custody") {
-      setPendingFile(file);
-      return;
-    }
-
     uploadFile(file);
   }
 
-  async function uploadFile(file: File, extraFields?: Record<string, string>) {
+  async function uploadFile(file: File) {
     setUploading(true);
     const effectiveDocType = docType === "other" ? "other" : docType;
 
@@ -112,7 +103,6 @@ function DocumentUploadSlot({
           storagePath,
           fileName: file.name,
           documentType: effectiveDocType,
-          ...(extraFields || {}),
         }),
       });
       if (!processRes.ok) {
@@ -139,8 +129,6 @@ function DocumentUploadSlot({
       alert(`Upload error: ${msg}`);
     } finally {
       setUploading(false);
-      setPendingFile(null);
-      setSpecimenId("");
       if (fileRef.current) fileRef.current.value = "";
     }
   }
@@ -190,44 +178,6 @@ function DocumentUploadSlot({
           </button>
         </div>
       </div>
-
-      {/* Specimen ID prompt for COC uploads */}
-      {pendingFile && docType === "chain_of_custody" && (
-        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-xs font-medium text-gray-700 mb-2">
-            Specimen ID for <span className="text-gray-900">{pendingFile.name}</span>
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={specimenId}
-              onChange={(e) => setSpecimenId(e.target.value)}
-              placeholder="e.g. 8079207"
-              className="flex-1 px-2.5 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  uploadFile(pendingFile, { specimenId: specimenId.trim() });
-                }
-              }}
-            />
-            <button
-              onClick={() => uploadFile(pendingFile, { specimenId: specimenId.trim() })}
-              disabled={uploading}
-              className="px-3 py-1.5 bg-[#1e3a5f] text-white rounded text-xs font-medium hover:bg-[#2a5490] disabled:opacity-50"
-            >
-              {uploading ? "Uploading..." : "Upload"}
-            </button>
-            <button
-              onClick={() => { setPendingFile(null); setSpecimenId(""); if (fileRef.current) fileRef.current.value = ""; }}
-              className="px-2 py-1.5 text-gray-500 hover:text-gray-700 text-xs"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
       {docs.length === 0 ? (
         <p className="text-xs text-gray-400 italic">No files uploaded</p>
