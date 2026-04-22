@@ -17,10 +17,12 @@ import { generateCaseNumber } from "@/lib/case-utils";
  *    (reopening it if closed); otherwise creates a new case
  *  - Adds attorney / GAL / evaluator contacts with dedup via caseContact.findFirst
  *  - Adds additional result recipients as "other" CaseContacts
- *  - Creates placeholder TestOrders for each selected test type
- *  - Uploads the court order document link if present
- *  - Writes a StatusLog entry (changedBy = reviewedBy, e.g. "kiosk-auto" or "admin")
- *  - Stamps the draft: status=approved, reviewedAt=now, reviewedBy, caseId
+ *  - Atomically writes a StatusLog entry and stamps the draft
+ *    (status=approved, reviewedAt=now, reviewedBy, caseId)
+ *
+ * TestOrders are intentionally NOT created here — staff creates them in the
+ * case view after approval. This keeps intake approval idempotent-ish and
+ * avoids duplicate placeholder orders on re-approval.
  *
  * Throws on any database error — callers should wrap in try/catch and
  * fall through to a pending-review response if they want to be defensive.
@@ -324,67 +326,30 @@ export async function approveDraft(
     }
   }
 
-  // Create placeholder test orders for each test type the client selected
-  const testTypes = (draft.testTypes as string[]) || [];
-  const testTypeLabels: Record<string, { description: string; specimenType: "urine" | "hair" | "blood" | "sweat_patch" }> = {
-    urine: { description: "Urine Drug Test (pending staff selection)", specimenType: "urine" },
-    hair: { description: "Hair Drug Test (pending staff selection)", specimenType: "hair" },
-    blood_peth: { description: "PEth Blood Alcohol Test (pending staff selection)", specimenType: "blood" },
-    sweat_patch: { description: "Sweat Patch Test (pending staff selection)", specimenType: "sweat_patch" },
-  };
-  for (const tt of testTypes) {
-    const meta = testTypeLabels[tt];
-    if (meta) {
-      await prisma.testOrder.create({
-        data: {
-          caseId,
-          testDescription: meta.description,
-          specimenType: meta.specimenType,
-          lab: "usdtl",
-          testStatus: "order_created",
-          collectionType: "unobserved",
-          schedulingType: "walk_in",
-        },
-      });
-    }
-  }
-
-  // Upload court order document if present
-  if (draft.courtOrderPath) {
-    await prisma.document.create({
+  // Finalize: write the status log and stamp the draft atomically so a failure
+  // mid-way can't leave the draft marked approved without a log entry (or vice versa).
+  await prisma.$transaction([
+    prisma.statusLog.create({
       data: {
         caseId,
-        documentType: "court_order",
-        fileName: "Court Order (from kiosk intake)",
-        filePath: draft.courtOrderPath,
-        uploadedBy: "kiosk",
+        oldStatus: "intake",
+        newStatus: "active",
+        changedBy: reviewedBy,
+        note: reviewedBy === "kiosk-auto"
+          ? "Case auto-approved from kiosk intake (no changes from returning client)"
+          : "Case created from kiosk intake",
       },
-    });
-  }
-
-  // Create status log
-  await prisma.statusLog.create({
-    data: {
-      caseId,
-      oldStatus: "intake",
-      newStatus: "active",
-      changedBy: reviewedBy,
-      note: reviewedBy === "kiosk-auto"
-        ? "Case auto-approved from kiosk intake (no changes from returning client)"
-        : "Case created from kiosk intake",
-    },
-  });
-
-  // Update the draft
-  await prisma.intakeDraft.update({
-    where: { id: draftId },
-    data: {
-      status: "approved",
-      reviewedAt: new Date(),
-      reviewedBy,
-      caseId,
-    },
-  });
+    }),
+    prisma.intakeDraft.update({
+      where: { id: draftId },
+      data: {
+        status: "approved",
+        reviewedAt: new Date(),
+        reviewedBy,
+        caseId,
+      },
+    }),
+  ]);
 
   return { caseId, caseNumber: finalCaseNumber };
 }

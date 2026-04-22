@@ -41,7 +41,6 @@ type FormData = {
   hadMultipleAttorneysOnPreviousCase: boolean;
   hadMultipleEvaluatorsOnPreviousCase: boolean;
   // Step 4
-  communicationConsent: boolean;
   notes: string;
 };
 
@@ -78,7 +77,6 @@ const INITIAL_FORM: FormData = {
   prefilledEvaluator: false,
   hadMultipleAttorneysOnPreviousCase: false,
   hadMultipleEvaluatorsOnPreviousCase: false,
-  communicationConsent: false,
   notes: "",
 };
 
@@ -93,7 +91,6 @@ export default function KioskPage() {
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [optInResponded, setOptInResponded] = useState(false);
   const [error, setError] = useState("");
   const [lastActivity, setLastActivity] = useState(Date.now());
   const [showTimeout, setShowTimeout] = useState(false);
@@ -125,7 +122,6 @@ export default function KioskPage() {
         setForm(INITIAL_FORM);
         setStep(1);
         setSubmitted(false);
-        setOptInResponded(false);
         setDonorChecked(false);
         setDonorFound(false);
         setDonorConfirmed(false);
@@ -302,15 +298,12 @@ export default function KioskPage() {
         throw new Error(data.error || "Submission failed");
       }
       setSubmitted(true);
-      setOptInResponded(false);
       try { localStorage.removeItem("kiosk-draft"); } catch { /* */ }
-      // Auto-reset after 30 seconds if the user never taps the opt-in buttons.
-      // (If they do tap, the button handler runs its own faster reset.)
+      // Auto-reset after 30 seconds so the next donor gets a clean kiosk.
       setTimeout(() => {
         setForm(INITIAL_FORM);
         setStep(1);
         setSubmitted(false);
-        setOptInResponded(false);
         setDonorChecked(false);
         setDonorFound(false);
         setDonorConfirmed(false);
@@ -340,86 +333,8 @@ export default function KioskPage() {
           <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
             <svg className="w-10 h-10 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20,6 9,17 4,12" /></svg>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-3">Thank You!</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">Thanks, your check-in is complete.</h1>
           <p className="text-lg text-gray-600 mb-8">A technician will be with you shortly.</p>
-
-          {/* Communication opt-in */}
-          {!optInResponded ? (
-            <div className="bg-gray-50 rounded-2xl p-6 mb-8">
-              <p className="text-xl font-bold text-gray-900 mb-2">Want to learn more about your test?</p>
-              <p className="text-sm text-gray-600 mb-5">
-                We&apos;ll send you easy-to-understand info about how long your results take, what drugs the test screens for, and what to expect — tailored to the test you took today.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    updateForm({ communicationConsent: true });
-                    setOptInResponded(true);
-                    fetch("/api/kiosk/intake", {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        firstName: form.firstName,
-                        lastName: form.lastName,
-                        communicationConsent: true,
-                      }),
-                    }).catch((e) => console.error("[page.tsx] background fetch failed:", e));
-                    // Fast reset — 2.5 seconds is enough for the user to see the confirmation
-                    setTimeout(() => {
-                      setForm(INITIAL_FORM);
-                      setStep(1);
-                      setSubmitted(false);
-                      setOptInResponded(false);
-                      setDonorChecked(false);
-                      setDonorFound(false);
-                      setDonorConfirmed(false);
-                    }, 2500);
-                  }}
-                  className="flex-1 py-5 rounded-xl text-lg font-bold bg-white border-2 border-gray-300 text-gray-700 hover:border-[#7AB928] hover:bg-green-50 transition-all"
-                >
-                  Yes, keep me informed
-                </button>
-                <button
-                  onClick={() => {
-                    updateForm({ communicationConsent: false });
-                    setOptInResponded(true);
-                    fetch("/api/kiosk/intake", {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        firstName: form.firstName,
-                        lastName: form.lastName,
-                        communicationConsent: false,
-                      }),
-                    }).catch((e) => console.error("[page.tsx] background fetch failed:", e));
-                    setTimeout(() => {
-                      setForm(INITIAL_FORM);
-                      setStep(1);
-                      setSubmitted(false);
-                      setOptInResponded(false);
-                      setDonorChecked(false);
-                      setDonorFound(false);
-                      setDonorConfirmed(false);
-                    }, 2500);
-                  }}
-                  className="flex-1 py-5 rounded-xl text-lg font-bold bg-white border-2 border-gray-300 text-gray-700 hover:border-gray-400 transition-all"
-                >
-                  No thanks
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-green-50 border border-green-200 rounded-2xl p-6 mb-8">
-              <div className="flex items-center justify-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20,6 9,17 4,12" /></svg>
-                </div>
-                <p className="text-lg font-bold text-green-800">
-                  {form.communicationConsent ? "Got it — we'll be in touch!" : "Got it — you're all set!"}
-                </p>
-              </div>
-            </div>
-          )}
 
           <div className="text-sm text-gray-500">
             <p className="font-medium text-gray-700">(847) 258-3966</p>

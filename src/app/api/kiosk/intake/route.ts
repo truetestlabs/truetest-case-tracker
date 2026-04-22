@@ -55,7 +55,6 @@ export async function POST(request: NextRequest) {
         galInfo: galJson,
         evaluators: evaluatorsJson,
         notes: body.notes?.trim() || null,
-        communicationConsent: body.communicationConsent || false,
         status: "pending_review",
       },
     });
@@ -100,36 +99,5 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Kiosk intake error:", error);
     return NextResponse.json({ error: "Failed to submit intake" }, { status: 500 });
-  }
-}
-
-/** PATCH /api/kiosk/intake — update communication consent after submit */
-export async function PATCH(request: NextRequest) {
-  try {
-    const body = await request.json();
-    if (!body.firstName || !body.lastName) {
-      return NextResponse.json({ error: "Name required" }, { status: 400 });
-    }
-
-    // Find the most recent draft for this donor
-    const draft = await prisma.intakeDraft.findFirst({
-      where: {
-        firstName: { equals: body.firstName.trim(), mode: "insensitive" },
-        lastName: { equals: body.lastName.trim(), mode: "insensitive" },
-        status: "pending_review",
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    if (draft && body.communicationConsent !== undefined) {
-      await prisma.intakeDraft.update({
-        where: { id: draft.id },
-        data: { communicationConsent: body.communicationConsent },
-      });
-    }
-
-    return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }
