@@ -6,17 +6,25 @@ import { sendSms } from "@/lib/sms";
 import { Resend } from "resend";
 
 // Inline Resend for this cron so we don't bloat src/lib/email.ts with a
-// generic sender that nothing else needs yet.
+// generic sender that nothing else needs yet. All three env vars are
+// required — no silent fallback to a hardcoded sender (see email.ts).
 async function sendPlainEmail(to: string, subject: string, html: string) {
-  if (!process.env.RESEND_API_KEY) throw new Error("RESEND_API_KEY not set");
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  await resend.emails.send({
-    from: process.env.FROM_EMAIL || "TrueTest Labs <noreply@truetestlabs.com>",
-    replyTo: process.env.REPLY_TO_EMAIL || "support@truetestlabs.com",
-    to,
-    subject,
-    html,
-  });
+  const from = process.env.FROM_EMAIL;
+  const replyTo = process.env.REPLY_TO_EMAIL;
+  const key = process.env.RESEND_API_KEY;
+  if (!key?.trim()) throw new Error("RESEND_API_KEY env var is required");
+  if (!from?.trim()) {
+    throw new Error(
+      "FROM_EMAIL env var is required — refusing to send via unverified fallback domain"
+    );
+  }
+  if (!replyTo?.trim()) {
+    throw new Error(
+      "REPLY_TO_EMAIL env var is required — refusing to send with a hardcoded reply-to address"
+    );
+  }
+  const resend = new Resend(key);
+  await resend.emails.send({ from, replyTo, to, subject, html });
 }
 
 export const maxDuration = 60;

@@ -16,10 +16,39 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
-const FROM_EMAIL = process.env.FROM_EMAIL || "TrueTest Labs <noreply@truetestlabs.com>";
-// Reply-To falls back to the shared support mailbox, NOT a personal inbox, so that a
-// missing env var in any environment never accidentally exposes a private email.
-const REPLY_TO = process.env.REPLY_TO_EMAIL || "support@truetestlabs.com";
+// Email sender config is REQUIRED. Previous code silently fell back to a
+// hardcoded `noreply@truetestlabs.com` sender, which routed production
+// email through an unverified Resend domain when FROM_EMAIL was unset on
+// Vercel. Now we validate on first use and fail loudly rather than ship
+// through a fallback domain no one's monitoring.
+const EMAIL_ENV_VARS = ["RESEND_API_KEY", "FROM_EMAIL", "REPLY_TO_EMAIL"] as const;
+
+export function missingEmailEnv(): string[] {
+  return EMAIL_ENV_VARS.filter((name) => {
+    const v = process.env[name];
+    return !v || !v.trim();
+  });
+}
+
+function requireFromEmail(): string {
+  const v = process.env.FROM_EMAIL;
+  if (!v || !v.trim()) {
+    throw new Error(
+      "FROM_EMAIL env var is required — refusing to send via unverified fallback domain"
+    );
+  }
+  return v;
+}
+
+function requireReplyToEmail(): string {
+  const v = process.env.REPLY_TO_EMAIL;
+  if (!v || !v.trim()) {
+    throw new Error(
+      "REPLY_TO_EMAIL env var is required — refusing to send with a hardcoded reply-to address"
+    );
+  }
+  return v;
+}
 const OFFICE_PHONE = "(847) 258-3966";
 const OFFICE_ADDRESS = "2256 Landmeier Rd Ste A, Elk Grove Village, IL 60007";
 
@@ -157,8 +186,8 @@ export async function sendMroReferralEmail(
   }
 
   const { error: sendError } = await getResend().emails.send({
-    from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    from: requireFromEmail(),
+    replyTo: requireReplyToEmail(),
     to: [MRO_INTERNAL_TO],
     subject,
     html,
@@ -233,7 +262,10 @@ export type SendDraftResult =
 
 /** Send an approved EmailDraft via Resend — builds HTML from the draft's plain-text body */
 export async function sendDraftEmail(draftId: string): Promise<SendDraftResult> {
-  if (!process.env.RESEND_API_KEY) return { ok: false, reason: "not_configured" };
+  // `not_configured` now covers any missing email env var — previously only
+  // RESEND_API_KEY was checked and a missing FROM_EMAIL silently fell back
+  // to a hardcoded sender.
+  if (missingEmailEnv().length > 0) return { ok: false, reason: "not_configured" };
 
   const draft = await prisma.emailDraft.findUnique({
     where: { id: draftId },
@@ -304,8 +336,8 @@ export async function sendDraftEmail(draftId: string): Promise<SendDraftResult> 
   }
 
   const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    from: requireFromEmail(),
+    replyTo: requireReplyToEmail(),
     to: emailList,
     subject: draft.subject,
     html,
@@ -407,8 +439,8 @@ export async function sendResultsReleasedEmail(
   }
 
   const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    from: requireFromEmail(),
+    replyTo: requireReplyToEmail(),
     to: emailList,
     subject: `Test Results Available — ${caseData.donor?.lastName ?? donorName} (${caseData.caseNumber})`,
     html,
@@ -460,8 +492,8 @@ export async function sendComplianceReportEmail(
   const emailList = recipients.map((r) => r.email);
 
   const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    from: requireFromEmail(),
+    replyTo: requireReplyToEmail(),
     to: emailList,
     subject: `Compliance Report — ${report.schedule.donorName} (${report.schedule.caseNumber})`,
     html,
@@ -557,8 +589,8 @@ export async function sendSampleCollectedEmail(
   const emailList = recipients.map((r) => r.email);
 
   const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    from: requireFromEmail(),
+    replyTo: requireReplyToEmail(),
     to: emailList,
     subject: `Specimen Collected — ${caseData.donor?.lastName ?? donorName} (${caseData.caseNumber})`,
     html,
@@ -627,8 +659,8 @@ export async function sendNoShowEmail(
   const emailList = recipients.map((r) => r.email);
 
   const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    from: requireFromEmail(),
+    replyTo: requireReplyToEmail(),
     to: emailList,
     subject: `No Show — ${caseData.donor?.lastName ?? donorName} (${caseData.caseNumber})`,
     html,
@@ -705,8 +737,8 @@ export async function sendRefusalToTestEmail(
   const lastName = caseData.donor?.lastName ?? donorName;
 
   const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    from: requireFromEmail(),
+    replyTo: requireReplyToEmail(),
     to: emailList,
     subject: `Refusal to Test — ${lastName} (${caseData.caseNumber})`,
     html,
@@ -759,8 +791,8 @@ export async function sendBookingConfirmationEmail(opts: {
   });
 
   const { error: sendError } = await getResend().emails.send({
-    from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    from: requireFromEmail(),
+    replyTo: requireReplyToEmail(),
     to: [opts.toEmail],
     subject: `Appointment Confirmed — ${dateStr} at ${timeStr}`,
     html,
@@ -806,8 +838,8 @@ export async function sendPortalOtpEmail(opts: {
   });
 
   const { error: sendError } = await getResend().emails.send({
-    from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    from: requireFromEmail(),
+    replyTo: requireReplyToEmail(),
     to: [opts.toEmail],
     subject: `Your TrueTest Labs sign-in code: ${opts.code}`,
     html,
@@ -918,8 +950,8 @@ export async function sendDonorInstructionsEmail(scheduleId: string): Promise<st
   });
 
   const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    from: requireFromEmail(),
+    replyTo: requireReplyToEmail(),
     to: [donorEmail],
     subject: `Random Testing Instructions — Case ${schedule.case.caseNumber}`,
     html,
@@ -984,8 +1016,8 @@ export async function sendResultsHeldEmail(
   const emailList = recipients.map((r) => r.email);
 
   const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    from: requireFromEmail(),
+    replyTo: requireReplyToEmail(),
     to: emailList,
     subject: `Results Available — Payment Required — ${caseData.donor?.lastName ?? donorName} (${caseData.caseNumber})`,
     html,
@@ -1046,8 +1078,8 @@ export async function sendPaymentReceivedEmail(
   const emailList = recipients.map((r) => r.email);
 
   const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    from: requireFromEmail(),
+    replyTo: requireReplyToEmail(),
     to: emailList,
     subject: `Payment Received — ${caseData.donor?.lastName ?? donorName} (${caseData.caseNumber})`,
     html,
@@ -1117,8 +1149,8 @@ export async function sendPinReminderEmail(scheduleId: string): Promise<string[]
   });
 
   const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    from: requireFromEmail(),
+    replyTo: requireReplyToEmail(),
     to: donorEmail,
     subject: "Your TrueTest Labs PIN",
     html,
