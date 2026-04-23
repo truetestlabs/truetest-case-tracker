@@ -224,9 +224,16 @@ export async function getEmailRecipients(
   });
 }
 
+export type SendDraftResult =
+  | { ok: true; sentTo: string[] }
+  | {
+      ok: false;
+      reason: "not_configured" | "not_found" | "already_sent" | "no_recipients";
+    };
+
 /** Send an approved EmailDraft via Resend — builds HTML from the draft's plain-text body */
-export async function sendDraftEmail(draftId: string): Promise<string[]> {
-  if (!process.env.RESEND_API_KEY) return [];
+export async function sendDraftEmail(draftId: string): Promise<SendDraftResult> {
+  if (!process.env.RESEND_API_KEY) return { ok: false, reason: "not_configured" };
 
   const draft = await prisma.emailDraft.findUnique({
     where: { id: draftId },
@@ -236,7 +243,8 @@ export async function sendDraftEmail(draftId: string): Promise<string[]> {
     },
   });
 
-  if (!draft || draft.status === "sent") return [];
+  if (!draft) return { ok: false, reason: "not_found" };
+  if (draft.status === "sent") return { ok: false, reason: "already_sent" };
 
   const isMro = draft.draftType === "results_mro";
   const donorName = draft.case.donor
@@ -253,8 +261,13 @@ export async function sendDraftEmail(draftId: string): Promise<string[]> {
     body: summaryBlock(draft.body) + attachmentNote,
   });
 
-  const emailList = (draft.recipients as string[]) || [];
-  if (emailList.length === 0) return [];
+  // `recipients` is a Json column storing string[]; defensively validate at runtime
+  // rather than trusting the `as string[]` cast, so malformed rows fail loudly.
+  const rawRecipients = draft.recipients;
+  const emailList = Array.isArray(rawRecipients)
+    ? rawRecipients.filter((r): r is string => typeof r === "string" && r.length > 0)
+    : [];
+  if (emailList.length === 0) return { ok: false, reason: "no_recipients" };
 
   // Attach PDFs: for MRO-complete drafts attach the MRO report (correspondence);
   // for standard results drafts attach the lab result report.
@@ -324,7 +337,7 @@ export async function sendDraftEmail(draftId: string): Promise<string[]> {
     },
   });
 
-  return emailList;
+  return { ok: true, sentTo: emailList };
 }
 
 /** Send results-released email with AI-generated summary (legacy — used by other flows) */
