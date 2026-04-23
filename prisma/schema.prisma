@@ -730,7 +730,6 @@ model MonitoringSchedule {
   selections           RandomSelection[]
   checkIns             CheckIn[]
   pushSubscriptions    PushSubscription[]
-  nativePushTokens     PortalNativePushToken[]
   trustedDevices       TrustedDevice[]
   portalOtps           PortalOtp[]
 
@@ -874,27 +873,6 @@ model PushSubscription {
   lastUsedAt      DateTime?
 
   @@index([scheduleId])
-}
-
-// APNs / FCM device token registered by the Capacitor-wrapped native
-// app. Parallel channel to PushSubscription (Web Push / VAPID). At
-// send time we prefer the native token, falling back to Web Push for
-// donors still on the PWA / browser.
-model PortalNativePushToken {
-  id          String             @id @default(cuid())
-  scheduleId  String
-  schedule    MonitoringSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-
-  platform    String             // "ios" | "android"
-  token       String             @unique
-  appVersion  String?
-  deviceModel String?
-
-  createdAt   DateTime           @default(now())
-  lastSeenAt  DateTime           @default(now())
-  revokedAt   DateTime?
-
-  @@index([scheduleId, revokedAt])
 }
 
 model CheckIn {
