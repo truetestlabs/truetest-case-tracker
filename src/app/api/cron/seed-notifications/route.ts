@@ -32,9 +32,12 @@ import { guardCron } from "@/lib/cronAuth";
 // rather than pulling in a tz library for a single cadence table. Operators
 // can adjust these hours directly when the business moves to a different
 // region or wants the launch times shifted.
+// SMS channel intentionally disabled until TCPA-compliant opt-in is built.
+// Re-enabling requires: consent capture page, logged consent records on Donor,
+// STOP/HELP webhook handling, and dispatch-time consent guard.
 const SCHEDULE: { hour: number; channels: string[] }[] = [
-  { hour: 12, channels: ["push", "sms"] },
-  { hour: 14, channels: ["push", "sms"] },
+  { hour: 12, channels: ["push"] },
+  { hour: 14, channels: ["push"] },
   { hour: 16, channels: ["push", "email"] },
   // Voice deferred — add { hour: 18, channels: ["voice"] } when Twilio Voice is wired.
 ];
