@@ -67,18 +67,23 @@ function chicagoOffsetMs(utcMs: number): number {
 }
 
 /**
- * The UTC instant corresponding to 4:00:00 AM America/Chicago on the
- * calendar day encoded by `selectedDate` (interpreted via its UTC year/
- * month/day — matches how the rest of the codebase stores selectedDate
- * as midnight UTC of the intended calendar day).
+ * The UTC instant corresponding to `hourCT:00:00` America/Chicago on the
+ * calendar day encoded by `utcMidnight` (interpreted via its UTC year/
+ * month/day — matches how the rest of the codebase stores UTC-midnight
+ * date keys like `RandomSelection.selectedDate`). DST-aware.
+ *
+ * Ambiguous hours during DST transitions (spring-forward skipped 2 AM,
+ * fall-back repeated 1 AM) aren't disambiguated here — we converge on
+ * the post-transition offset. Use non-transition hours for anything
+ * that matters; 4/6/8/10/12 are all safe.
  *
  * Converges in two passes across DST transitions.
  */
-export function unlockInstantForSelection(selectedDate: Date): Date {
-  const y = selectedDate.getUTCFullYear();
-  const m = selectedDate.getUTCMonth();
-  const d = selectedDate.getUTCDate();
-  const target = Date.UTC(y, m, d, 4, 0, 0);
+export function utcInstantForChicagoHour(utcMidnight: Date, hourCT: number): Date {
+  const y = utcMidnight.getUTCFullYear();
+  const m = utcMidnight.getUTCMonth();
+  const d = utcMidnight.getUTCDate();
+  const target = Date.UTC(y, m, d, hourCT, 0, 0);
 
   let guess = target;
   for (let i = 0; i < 2; i++) {
@@ -86,6 +91,16 @@ export function unlockInstantForSelection(selectedDate: Date): Date {
     guess = target - offset;
   }
   return new Date(guess);
+}
+
+/**
+ * The UTC instant corresponding to 4:00:00 AM America/Chicago on the
+ * calendar day encoded by `selectedDate`. Thin wrapper around
+ * `utcInstantForChicagoHour` preserved for callsite readability —
+ * "unlock instant" is a domain term used in several places.
+ */
+export function unlockInstantForSelection(selectedDate: Date): Date {
+  return utcInstantForChicagoHour(selectedDate, 4);
 }
 
 /**

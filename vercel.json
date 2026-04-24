@@ -11,7 +11,7 @@
     },
     {
       "path": "/api/cron/run-notifications",
-      "schedule": "*/5 11-17 * * *"
+      "schedule": "*/5 11-18 * * *"
     }
   ]
 }
