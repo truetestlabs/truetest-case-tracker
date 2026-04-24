@@ -32,14 +32,24 @@ import { guardCron } from "@/lib/cronAuth";
 // rather than pulling in a tz library for a single cadence table. Operators
 // can adjust these hours directly when the business moves to a different
 // region or wants the launch times shifted.
+// Email-only escalation cadence. Four dispatches per selected day at the
+// CDT-local times below. Run-notifications short-circuits as soon as the
+// donor acknowledges the selection via the portal, so subsequent jobs for
+// the same day get marked 'skipped' with errorMessage='acknowledged'.
+//
 // SMS channel intentionally disabled until TCPA-compliant opt-in is built.
 // Re-enabling requires: consent capture page, logged consent records on Donor,
 // STOP/HELP webhook handling, and dispatch-time consent guard.
+//
+// Push channel left out until the donor-portal subscription UI ships; zero
+// active PushSubscription rows today so it would just "skip: no subscriptions"
+// on every dispatch.
 const SCHEDULE: { hour: number; channels: string[] }[] = [
-  { hour: 12, channels: ["push"] },
-  { hour: 14, channels: ["push"] },
-  { hour: 16, channels: ["push", "email"] },
-  // Voice deferred — add { hour: 18, channels: ["voice"] } when Twilio Voice is wired.
+  { hour: 11, channels: ["email"] },  //  6:00 AM CDT
+  { hour: 13, channels: ["email"] },  //  8:00 AM CDT
+  { hour: 15, channels: ["email"] },  // 10:00 AM CDT
+  { hour: 17, channels: ["email"] },  // 12:00 PM CDT
+  // Voice deferred — add { hour: N, channels: ["voice"] } when Twilio Voice is wired.
 ];
 
 export async function GET(request: NextRequest) {

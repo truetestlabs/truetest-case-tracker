@@ -7,11 +7,11 @@
   "crons": [
     {
       "path": "/api/cron/seed-notifications",
-      "schedule": "0 11 * * *"
+      "schedule": "0 10 * * *"
     },
     {
       "path": "/api/cron/run-notifications",
-      "schedule": "*/5 12-19 * * *"
+      "schedule": "*/5 11-17 * * *"
     }
   ]
 }
