@@ -128,7 +128,10 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Match all routes except static files
-    "/((?!_next/static|_next/image).*)",
+    // Match all routes except static files and Vercel Cron endpoints.
+    // Cron endpoints authenticate via CRON_SECRET bearer header inside
+    // the handler (see src/lib/cronAuth.ts) — running the Supabase session
+    // middleware in front of them would redirect to /login and 307 the cron.
+    "/((?!api/cron|_next/static|_next/image).*)",
   ],
 };
