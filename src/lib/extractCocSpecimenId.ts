@@ -1,16 +1,24 @@
 import { claude } from "@/lib/claude";
 
 /**
- * Extract the printed specimen ID (the number in the "CONTROL #" box) from a
- * chain-of-custody PDF. Narrow-scope helper — we deliberately do NOT read
- * handwritten fields here, because handwriting recognition (especially dates)
- * produces silent misreads that we cannot distinguish from a correct read.
+ * Extract the printed specimen ID from a chain-of-custody PDF. Narrow-scope
+ * helper — we deliberately do NOT read handwritten fields here, because
+ * handwriting recognition (especially dates) produces silent misreads that
+ * we cannot distinguish from a correct read.
+ *
+ * Lab formats this needs to handle:
+ *   - USDTL: digitally-generated PDF, specimen ID printed in a "CONTROL #" box.
+ *   - Quest: typically scanned/rasterized; barcode header has two numbers
+ *     stacked together (account # on the left, specimen ID on the right) above
+ *     a "SPECIMEN ID NO." label. The text-pass regex won't match here — Vision
+ *     picks it up via the format guide in the prompt below.
  *
  * Strategy:
  *   1. Try pdf-parse text extraction first (fast, free, reliable for
- *      digitally-generated lab PDFs).
- *   2. Fall back to Claude Vision only if text extraction returns nothing —
- *      handles scanned/rasterized PDFs.
+ *      digitally-generated lab PDFs like USDTL).
+ *   2. Fall back to Claude Vision if text extraction returns nothing or
+ *      doesn't contain a CONTROL # field — handles scanned PDFs (Quest) and
+ *      forms with non-USDTL labels.
  *   3. Return null on any error. Callers treat null as "skip validation,
  *      proceed with upload" — we never block the user on extraction failures.
  */
@@ -74,9 +82,14 @@ export async function extractCocSpecimenId(
             },
             {
               type: "text",
-              text: `Return the printed/barcoded specimen ID in the "CONTROL #" box of this chain-of-custody form. This is the lab-issued ID that is pre-printed or barcoded — NOT any handwritten number. It is typically 7 or more digits.
+              text: `Return the printed/barcoded specimen ID from this chain-of-custody form. The specimen ID is the lab-issued number that is pre-printed or barcoded — NEVER a handwritten value.
 
-If the printed specimen ID is not clearly legible, return null. Do not guess. Do not return a handwritten number from another field.
+Lab format guide:
+- USDTL forms: the specimen ID is the number in the "CONTROL #" box (typically 7 digits).
+- Quest Diagnostics forms: under the barcode at the top of STEP 1, TWO numbers are printed side-by-side. The LEFT number (usually 8 digits) is the ACCOUNT number — do NOT return this. The RIGHT number (usually 7 digits), which sits immediately to the left of the "SPECIMEN ID NO." label, IS the specimen ID. Example layout: "10814630  4070549  SPECIMEN ID NO." → return "4070549".
+- Other labs: look for a printed/barcoded field labeled "Specimen ID", "Control #", "Accession #", or equivalent.
+
+If the printed specimen ID is not clearly legible, return null. Do not guess. Do not return a handwritten number, an account number, an MRO/employer phone or fax, or any other unrelated digits on the form.
 
 Respond with JSON only, in this exact shape:
 {"specimenId": "1234567"}
