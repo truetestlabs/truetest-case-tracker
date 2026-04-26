@@ -23,6 +23,8 @@ type TestOrderData = {
   appointmentDate: string | null;
   collectionDate: string | null;
   notes: string | null;
+  // Present only when specimenType === 'sweat_patch'. Null otherwise.
+  patchDetails?: { panel: "WA07" | "WC82" } | null;
 };
 
 type CatalogItem = {
@@ -60,6 +62,12 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
   // on the client is a cleaner UX than a round-trip error.
   const [currentStatus, setCurrentStatus] = useState(testOrder.testStatus);
   const collectionDateRequired = currentStatus === "specimen_collected";
+  // Sweat-patch panel selection. Only meaningful when this is a sweat patch
+  // order; the rest of the UI conditionally renders on isSweatPatchOrder.
+  const isSweatPatchOrder = testOrder.specimenType === "sweat_patch";
+  const [patchPanel, setPatchPanel] = useState<"WA07" | "WC82">(
+    testOrder.patchDetails?.panel ?? "WA07",
+  );
 
   useEffect(() => {
     if (changingTest && catalog.length === 0) {
@@ -93,6 +101,8 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
       specimenId: form.get("specimenId") || null,
       paymentMethod: (form.get("payment") as string) === "not_paid" ? null : form.get("payment"),
       notes: form.get("notes") || null,
+      // Sweat-patch panel side channel — server ignores when not sweat_patch.
+      ...(isSweatPatchOrder ? { patchPanel } : {}),
     };
 
     const apptDate = form.get("appointmentDate") as string;
@@ -209,6 +219,26 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
               );
             })()}
           </div>
+
+          {/* Patch Panel (sweat patch only) */}
+          {isSweatPatchOrder && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Patch Panel
+              </label>
+              <select
+                value={patchPanel}
+                onChange={(e) => setPatchPanel(e.target.value as "WA07" | "WC82")}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              >
+                <option value="WA07">WA07 — Standard panel</option>
+                <option value="WC82">WC82 — Expanded panel</option>
+              </select>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                Standard panel (WA07) is the default. Switch to expanded (WC82) when the case requires it.
+              </p>
+            </div>
+          )}
 
           {/* Specimen ID + Collection Date */}
           <div className="grid grid-cols-2 gap-3">

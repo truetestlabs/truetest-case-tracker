@@ -5,6 +5,7 @@ import { deleteCalendarEvent } from "@/lib/gcal";
 import { requireAuth } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { createTestOrderSchema, formatZodError } from "@/lib/validation/schemas";
+import { createTestOrderWithPatchDetails } from "@/lib/createTestOrder";
 
 export async function POST(
   request: NextRequest,
@@ -39,8 +40,10 @@ export async function POST(
       if (catalogItem) labCost = catalogItem.labCost;
     }
 
-    const testOrder = await prisma.testOrder.create({
-      data: {
+    // Wrapped in a tx so sweat-patch orders + their PatchDetails row commit
+    // atomically. See src/lib/createTestOrder.ts for the invariant rationale.
+    const testOrder = await prisma.$transaction((tx) =>
+      createTestOrderWithPatchDetails(tx, {
         caseId,
         testCatalogId: body.testCatalogId || null,
         testDescription: body.testDescription,
@@ -56,8 +59,8 @@ export async function POST(
         squarePaymentLink: body.squarePaymentLink || null,
         paymentMethod: body.paymentMethod || null,
         notes: body.notes || null,
-      },
-    });
+      }),
+    );
 
     // Log it
     await prisma.statusLog.create({
@@ -221,6 +224,21 @@ export async function PATCH(
       where: { id: testOrderId },
       data,
     });
+
+    // PatchDetails.panel update — sweat-patch-only side channel from
+    // EditTestOrderModal. Routed through this same PATCH so the UI keeps
+    // a single submit. Silent no-op if the order isn't sweat_patch or no
+    // PatchDetails row exists (would only happen for legacy orphans).
+    if (
+      updateData.patchPanel &&
+      (updateData.patchPanel === "WA07" || updateData.patchPanel === "WC82") &&
+      updated.specimenType === "sweat_patch"
+    ) {
+      await prisma.patchDetails.updateMany({
+        where: { testOrderId },
+        data: { panel: updateData.patchPanel },
+      });
+    }
 
     console.log("[PATCH test-order] saved collectionDate:", updated.collectionDate);
 

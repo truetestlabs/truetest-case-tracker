@@ -134,6 +134,7 @@ enum DocumentType {
   agreement
   correspondence
   monitoring_order
+  cancellation_notice
   other
 }
 
@@ -147,6 +148,25 @@ enum ReviewStatus {
   pending_review
   reviewed
   flagged
+}
+
+// ─── Sweat patch enums ───────────────────────────────────────────────────
+// PharmChek is the patch device manufacturer. CRL (Clinical Reference
+// Laboratory) is the testing lab. WA07 and WC82 are CRL's panel codes —
+// not PharmChek's. PatchDetails.panel refers to the CRL panel ordered.
+enum PatchPanel {
+  WA07
+  WC82
+}
+
+// Patch cancellation kinds live on PatchDetails.cancellationKind. We do NOT
+// extend TestStatus — the underlying order still moves through
+// awaiting_collection → specimen_collected. The UI uses this field plus
+// the two patch dates to render "Patch Applied"/"Patch Removed" labels.
+enum PatchCancellationKind {
+  cancelled      // Operator-initiated cancellation (donor request, error, etc.)
+  lab_cancelled  // Lab rejected the specimen
+  expired        // Wore past the 30-day max — set when manually cancelled after the red badge appears
 }
 
 // ============================================================
@@ -404,6 +424,7 @@ model TestOrder {
   emailDrafts          EmailDraft[]
   randomSelection      RandomSelection?
   labResults           LabResult[]
+  patchDetails         PatchDetails?
 
   @@index([caseId])
   @@index([testStatus])
@@ -434,9 +455,77 @@ model Document {
   randomSelectionId String?
   randomSelection   RandomSelection? @relation("RandomSelectionDocuments", fields: [randomSelectionId], references: [id], onDelete: SetNull)
 
+  // Reverse side of the two PatchDetails CoC pointers. "Current working"
+  // and "executed" CoC membership is authoritative on PatchDetails; these
+  // relations exist only so Prisma can traverse them. Archived working
+  // copies remain as ordinary Document rows on the TestOrder — recover
+  // them by listing chain_of_custody docs for the test order and excluding
+  // the two scalar FKs on PatchDetails.
+  patchDetailsAsWorkingCopy PatchDetails[] @relation("PatchDetailsWorkingCopy")
+  patchDetailsAsExecuted    PatchDetails[] @relation("PatchDetailsExecuted")
+
   @@index([caseId])
   @@index([documentType])
   @@index([randomSelectionId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PatchDetails — 1:1 with a TestOrder when specimenType = sweat_patch.
+// Holds the patch-specific workflow state (application + removal dates,
+// CRL panel code, CoC lifecycle pointers, cancellation kind) that the
+// generic TestOrder can't express.
+//
+// Mirroring contract: when the executed CoC is uploaded (via
+// `executePatchCoc` in src/lib/patchStatus.ts), removalDate is mirrored
+// to TestOrder.collectionDate so every query that already reads
+// collectionDate keeps working without specimen-type branching.
+// ─────────────────────────────────────────────────────────────────────────
+model PatchDetails {
+  id                    String                 @id @default(cuid())
+  testOrderId           String                 @unique
+  testOrder             TestOrder              @relation(fields: [testOrderId], references: [id], onDelete: Cascade)
+
+  panel                 PatchPanel
+
+  // Two-date model. applicationDate is captured at patch-on; removalDate
+  // at patch-off. Lab's reportedCollectionDate on the result report
+  // corresponds to removalDate (specimen left the donor), not
+  // applicationDate.
+  applicationDate       DateTime?
+  removalDate           DateTime?
+
+  // Current working copy and executed CoC documents. When the executed
+  // CoC is uploaded, the working copy is *archived* (Document.cocLifecycleStage
+  // flipped to `archived`), not deleted — and workingCopyDocumentId is
+  // nullified. See replaceWorkingCopy / executePatchCoc in patchStatus.ts.
+  workingCopyDocumentId String?
+  workingCopyDocument   Document?              @relation("PatchDetailsWorkingCopy", fields: [workingCopyDocumentId], references: [id], onDelete: SetNull)
+  executedDocumentId    String?
+  executedDocument      Document?              @relation("PatchDetailsExecuted", fields: [executedDocumentId], references: [id], onDelete: SetNull)
+
+  // Cancellation is orthogonal to TestStatus — we keep the order flowing
+  // through the standard statuses, and stamp the kind here when cancelled.
+  cancellationKind      PatchCancellationKind?
+  cancelledAt           DateTime?
+
+  // Replacement-patch capture at cancellation time. When staff cancel a
+  // patch, they're asked whether a fresh patch was applied in the same
+  // visit; if yes, we stamp these fields AND create a new PatchDetails
+  // row (linked to its own new TestOrder on the same case) for the
+  // replacement. These two fields are the audit trail on the cancelled
+  // patch — `replacementPatchApplied` distinguishes a known "no" from a
+  // null "we never asked" (legacy rows). The new replacement patch is
+  // discoverable by querying TestOrder.caseId.
+  replacementPatchApplied Boolean?
+  replacementPatchDate    DateTime?
+
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([panel])
+  @@index([cancellationKind])
+  @@index([applicationDate])
+  @@index([removalDate])
 }
 
 // ─────────────────────────────────────────────────────────────────────────

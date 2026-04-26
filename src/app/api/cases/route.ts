@@ -6,6 +6,7 @@ import type { TestStatus } from "@prisma/client";
 import { requireAuth } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { createCaseSchema, formatZodError } from "@/lib/validation/schemas";
+import { createTestOrderWithPatchDetails } from "@/lib/createTestOrder";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -224,8 +225,9 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        await prisma.testOrder.create({
-          data: {
+        // Wrapped in tx so sweat-patch order + PatchDetails commit atomically.
+        await prisma.$transaction((tx) =>
+          createTestOrderWithPatchDetails(tx, {
             caseId: newCase.id,
             testStatus: "scheduled" as TestStatus,
             appointmentDate,
@@ -233,8 +235,8 @@ export async function POST(request: NextRequest) {
             specimenType: catalogItem?.specimenType ?? SpecimenType.urine,
             lab: catalogItem?.lab ?? Lab.usdtl,
             ...(catalogItem ? { testCatalogId: catalogItem.id } : {}),
-          },
-        });
+          }),
+        );
       } catch (testOrderError) {
         // Log but don't fail — case was already created successfully
         console.error("Failed to create test order during intake:", testOrderError);

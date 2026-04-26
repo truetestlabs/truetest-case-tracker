@@ -17,6 +17,7 @@ import { TestOrderDocuments } from "@/components/cases/TestOrderDocuments";
 import { CaseDocuments } from "@/components/cases/CaseDocuments";
 import { EditTestOrderModal } from "@/components/cases/EditTestOrderModal";
 import { LabResultCard, type LabResultData } from "@/components/cases/LabResultCard";
+import { PatchSection, type PatchOrderForUI } from "@/components/cases/PatchSection";
 import { formatChicagoShortDate, formatChicagoShortDateNoYear, formatChicagoTime } from "@/lib/dateChicago";
 
 type CaseData = {
@@ -76,6 +77,22 @@ type CaseData = {
       uploadedAt: string;
     }>;
     labResults?: LabResultData[];
+    patchDetails?: {
+      id: string;
+      panel: "WA07" | "WC82";
+      applicationDate: string | null;
+      removalDate: string | null;
+      cancellationKind:
+        | "cancelled"
+        | "lab_cancelled"
+        | "expired"
+        | null;
+      cancelledAt: string | null;
+      executedDocumentId: string | null;
+      workingCopyDocumentId: string | null;
+      replacementPatchApplied: boolean | null;
+      replacementPatchDate: string | null;
+    } | null;
   }>;
   documents: Array<{
     id: string;
@@ -195,6 +212,20 @@ export default function CaseDetailPage() {
     t.testStatus === "closed" || t.testStatus === "cancelled" || t.testStatus === "no_show";
   const activeTests = caseData.testOrders.filter((t) => !isTerminalTest(t));
   const closedTests = caseData.testOrders.filter(isTerminalTest);
+
+  // Sweat patches render in a dedicated section above the generic test
+  // orders list. The split is purely presentational — both lists draw
+  // from the same caseData.testOrders array. The dedicated PatchSection
+  // shows lifecycle badges (Worn/At Lab/Complete/Cancelled) and the
+  // wear-overdue chip for in-flight patches.
+  type Order = CaseData["testOrders"][number];
+  const isPatchOrder = (
+    t: Order,
+  ): t is Order & { patchDetails: NonNullable<Order["patchDetails"]> } =>
+    t.specimenType === "sweat_patch" && !!t.patchDetails;
+  const patchOrders = caseData.testOrders.filter(isPatchOrder);
+  const nonPatchActive = activeTests.filter((t) => !isPatchOrder(t));
+  const nonPatchClosed = closedTests.filter((t) => !isPatchOrder(t));
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -329,23 +360,33 @@ export default function CaseDetailPage() {
               ) : <p className="text-gray-400 py-2">No donor assigned</p>}
             </div>
 
+            {/* Sweat patch lifecycle (separated from generic Test Orders) */}
+            {patchOrders.length > 0 && (
+              <PatchSection
+                caseId={caseData.id}
+                patchOrders={patchOrders satisfies PatchOrderForUI[]}
+                onChanged={loadCase}
+                onEdit={(testOrderId) => setEditingTestOrder(testOrderId)}
+              />
+            )}
+
             {/* Test Orders */}
             <div className="px-6 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50">
               <h3 className="text-sm font-semibold text-gray-700">
-                Test Orders ({activeTests.length}{closedTests.length > 0 ? ` · ${closedTests.length} closed` : ""})
+                Test Orders ({nonPatchActive.length}{nonPatchClosed.length > 0 ? ` · ${nonPatchClosed.length} closed` : ""})
               </h3>
               <div className="flex items-center gap-2">
                 <AddTestOrder caseId={caseData.id} onAdded={loadCase} />
               </div>
             </div>
-            {caseData.testOrders.length === 0 ? (
-              <div className="px-6 py-8 text-center text-gray-400">No test orders yet</div>
+            {nonPatchActive.length + nonPatchClosed.length === 0 ? (
+              <div className="px-6 py-8 text-center text-gray-400">No non-patch test orders</div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {activeTests.length === 0 && (
+                {nonPatchActive.length === 0 && (
                   <div className="px-6 py-6 text-center text-gray-400 text-sm">No active test orders</div>
                 )}
-                {(showClosedTests ? [...activeTests, ...closedTests] : activeTests).map((test) => (
+                {(showClosedTests ? [...nonPatchActive, ...nonPatchClosed] : nonPatchActive).map((test) => (
                   <div key={test.id} className={`px-6 py-3 ${isTerminalTest(test) ? "opacity-60" : ""}`}>
                     <div className="flex items-center justify-between">
                       <div>
@@ -401,13 +442,13 @@ export default function CaseDetailPage() {
                     )}
                   </div>
                 ))}
-                {closedTests.length > 0 && (
+                {nonPatchClosed.length > 0 && (
                   <div className="px-6 py-2 bg-gray-50 text-center">
                     <button
                       onClick={() => setShowClosedTests((v) => !v)}
                       className="text-xs text-gray-500 hover:text-gray-700 underline"
                     >
-                      {showClosedTests ? "Hide" : "Show"} {closedTests.length} closed test{closedTests.length === 1 ? "" : "s"}
+                      {showClosedTests ? "Hide" : "Show"} {nonPatchClosed.length} closed test{nonPatchClosed.length === 1 ? "" : "s"}
                     </button>
                   </div>
                 )}

@@ -6,6 +6,7 @@ import type { SpecimenType, Lab } from "@prisma/client";
 import { publicOrderSchema, formatZodError } from "@/lib/validation/schemas";
 import { verifyHmac, parseAllowlist } from "@/lib/hmac";
 import { rateLimit, getClientIp } from "@/lib/rateLimit";
+import { createTestOrderWithPatchDetails } from "@/lib/createTestOrder";
 
 // ── CORS allowlist ────────────────────────────────────────────────────────
 // We refuse to fall back to "*" — a missing env var means the public route is
@@ -266,8 +267,9 @@ export async function POST(request: NextRequest) {
     if (tests.length > 0) {
       const resolved = await resolveFormTests(tests);
       for (const t of resolved) {
-        await prisma.testOrder.create({
-          data: {
+        // Wrapped in tx so sweat-patch order + PatchDetails commit atomically.
+        await prisma.$transaction((tx) =>
+          createTestOrderWithPatchDetails(tx, {
             caseId: caseId,
             testCatalogId: t.testCatalogId,
             testDescription: t.testDescription,
@@ -276,8 +278,8 @@ export async function POST(request: NextRequest) {
             testStatus: "order_created",
             collectionType,
             schedulingType: "scheduled",
-          },
-        });
+          }),
+        );
       }
     }
 

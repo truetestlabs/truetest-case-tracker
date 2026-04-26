@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { createTestOrderWithPatchDetails } from "@/lib/createTestOrder";
 
 // This endpoint receives extracted court order data (parsed client-side or by AI)
 // and creates the full case with contacts, distribution list, and test orders
@@ -117,8 +118,9 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      await prisma.testOrder.create({
-        data: {
+      // Wrapped in tx so sweat-patch order + PatchDetails commit atomically.
+      await prisma.$transaction((tx) =>
+        createTestOrderWithPatchDetails(tx, {
           caseId: newCase.id,
           testCatalogId: catalogMatch?.id || null,
           testDescription: test.description || "Unknown test",
@@ -130,8 +132,8 @@ export async function POST(request: NextRequest) {
           clientPrice: catalogMatch?.clientPrice || null,
           labCost: catalogMatch?.labCost || null,
           notes: test.notes || null,
-        },
-      });
+        }),
+      );
     }
 
     // Create court order record

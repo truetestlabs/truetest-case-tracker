@@ -31,6 +31,9 @@ export async function GET(
             labResults: {
               orderBy: { receivedByUs: "desc" },
             },
+            // Sweat-patch lifecycle row (panel selection, application/removal
+            // dates, executed-CoC tracking). Null for non-sweat-patch orders.
+            patchDetails: true,
           },
         },
         documents: { orderBy: { uploadedAt: "desc" } },
