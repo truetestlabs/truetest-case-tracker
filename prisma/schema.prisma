@@ -78,6 +78,7 @@ enum SpecimenType {
 
 enum Lab {
   usdtl
+  crl
   crl_quest
   quest
   expertox

@@ -132,6 +132,7 @@ export const createEmailDraftSchema = z.object({
 // value will be rejected with a 400.
 const labEnum = z.enum([
   "usdtl",
+  "crl",
   "crl_quest",
   "quest",
   "expertox",

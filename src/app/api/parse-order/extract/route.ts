@@ -280,7 +280,7 @@ function parseCourtOrderText(text: string) {
   // Sweat patch
   if (upperText.includes("SWEAT PATCH")) {
     testOrders.push({
-      description: "Sweat Patch Testing", specimenType: "sweat_patch", lab: "usdtl",
+      description: "Sweat Patch Testing", specimenType: "sweat_patch", lab: "crl",
       observed: false, scheduling: "scheduled", catalogSearch: "Sweat Patch", notes: "",
     });
   }
