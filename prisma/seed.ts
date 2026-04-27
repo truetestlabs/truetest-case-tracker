@@ -118,7 +118,7 @@ async function main() {
     // ============================================================
     // SWEAT PATCH
     // ============================================================
-    { category: "Sweat Patch", testName: "Sweat Patch Testing", panelSize: null, specimenType: "sweat_patch" as const, lab: "usdtl" as const, labTestCode: null, clientPrice: 150, labCost: 0, description: "Can be worn up to 7 days, new patch applied" },
+    { category: "Sweat Patch", testName: "Sweat Patch Testing", panelSize: null, specimenType: "sweat_patch" as const, lab: "crl" as const, labTestCode: null, clientPrice: 150, labCost: 0, description: "Can be worn up to 7 days, new patch applied" },
 
     // ============================================================
     // SPECIALTY — Expertox
