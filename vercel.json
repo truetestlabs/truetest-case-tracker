@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/run-notifications",
       "schedule": "*/5 11-18 * * *"
+    },
+    {
+      "path": "/api/cron/create-test-orders",
+      "schedule": "0 9,10 * * *"
     }
   ]
 }
