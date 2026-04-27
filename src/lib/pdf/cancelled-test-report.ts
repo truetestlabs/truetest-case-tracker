@@ -197,7 +197,17 @@ export async function generateCancelledTestReportPDF(
       );
 
     // ── Footer ────────────────────────────────────────────────────────
-    const footerY = doc.page.height - 60;
+    // footerY must leave enough room for two text lines below it AND
+    // sit above PDFKit's bottom margin (default = the doc-level margin
+    // of 50pt). Page height is 792 (US Letter); usable bottom = 742.
+    // Earlier draft used page.height - 60 = 732 with second line at
+    // footerY + 20 = 752, which spills below the bottom margin and
+    // triggers PDFKit auto-pagination per text call (= 3-page output).
+    // Move footer up to page.height - 80 = 712 so the second line at
+    // 732 is comfortably inside the usable area. lineBreak: false on
+    // each text call also defends against future paginates if the
+    // address string ever changes.
+    const footerY = doc.page.height - 80;
     doc
       .moveTo(contentLeft, footerY)
       .lineTo(contentRight, footerY)
@@ -208,11 +218,13 @@ export async function generateCancelledTestReportPDF(
       "TrueTest Labs · 2256 Landmeier Rd Ste A, Elk Grove Village, IL 60007 · (847) 258-3966",
       contentLeft,
       footerY + 8,
+      { width: contentWidth, lineBreak: false },
     );
     doc.text(
       `Generated: ${formatChicagoMediumDate(new Date())}`,
       contentLeft,
       footerY + 20,
+      { width: contentWidth, lineBreak: false },
     );
 
     doc.end();
