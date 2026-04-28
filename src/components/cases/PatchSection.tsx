@@ -12,6 +12,7 @@ import {
 } from "@/lib/patchValidation";
 import { CancelPatchModal } from "@/components/cases/CancelPatchModal";
 import { PendingSelectionBanner } from "@/components/cases/PendingSelectionBanner";
+import { ConfirmTestModal } from "@/components/cases/ConfirmTestModal";
 import { needsStaffSelection } from "@/lib/case-utils";
 
 /**
@@ -83,6 +84,7 @@ export function PatchSection({
     null,
   );
   const [reportError, setReportError] = useState<string | null>(null);
+  const [confirmingTestOrderId, setConfirmingTestOrderId] = useState<string | null>(null);
 
   if (patchOrders.length === 0) return null;
 
@@ -113,6 +115,7 @@ export function PatchSection({
             order={order}
             caseId={caseId}
             onCancelClick={() => setCancellingPatchId(order.patchDetails?.id ?? null)}
+            onConfirmClick={() => setConfirmingTestOrderId(order.id)}
             onEdit={() => onEdit(order.id)}
             onGenerateReport={async () => {
               if (!order.patchDetails) return;
@@ -174,6 +177,24 @@ export function PatchSection({
             />
           );
         })()}
+
+      {confirmingTestOrderId &&
+        (() => {
+          const target = patchOrders.find((o) => o.id === confirmingTestOrderId);
+          if (!target) return null;
+          return (
+            <ConfirmTestModal
+              caseId={caseId}
+              testOrderId={target.id}
+              specimenType="sweat_patch"
+              onConfirmed={() => {
+                setConfirmingTestOrderId(null);
+                onChanged();
+              }}
+              onClose={() => setConfirmingTestOrderId(null)}
+            />
+          );
+        })()}
     </section>
   );
 }
@@ -186,6 +207,7 @@ function PatchRow({
   order,
   caseId,
   onCancelClick,
+  onConfirmClick,
   onEdit,
   onGenerateReport,
   generating,
@@ -193,6 +215,7 @@ function PatchRow({
   order: PatchOrderForUI;
   caseId: string;
   onCancelClick: () => void;
+  onConfirmClick: () => void;
   onEdit: () => void;
   onGenerateReport: () => void;
   generating: boolean;
@@ -234,6 +257,15 @@ function PatchRow({
     <div className="px-6 py-4">
       {needsStaffSelection({ testCatalogId: order.testCatalogId, testStatus: order.testStatus }) && (
         <PendingSelectionBanner />
+      )}
+      {needsStaffSelection({ testCatalogId: order.testCatalogId, testStatus: order.testStatus }) && (
+        <button
+          type="button"
+          onClick={onConfirmClick}
+          className="text-xs font-medium text-white bg-[#1e3a5f] hover:bg-[#2a5490] px-3 py-1 rounded-lg mb-2"
+        >
+          Confirm test
+        </button>
       )}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">

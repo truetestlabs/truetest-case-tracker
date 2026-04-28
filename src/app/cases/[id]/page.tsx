@@ -16,6 +16,7 @@ import { TestProgressBar } from "@/components/cases/TestProgressBar";
 import { TestOrderDocuments } from "@/components/cases/TestOrderDocuments";
 import { CaseDocuments } from "@/components/cases/CaseDocuments";
 import { EditTestOrderModal } from "@/components/cases/EditTestOrderModal";
+import { ConfirmTestModal } from "@/components/cases/ConfirmTestModal";
 import { PendingSelectionBanner } from "@/components/cases/PendingSelectionBanner";
 import { LabResultCard, type LabResultData } from "@/components/cases/LabResultCard";
 import { PatchSection, type PatchOrderForUI } from "@/components/cases/PatchSection";
@@ -132,6 +133,7 @@ export default function CaseDetailPage() {
   const [error, setError] = useState("");
   const [editingContact, setEditingContact] = useState<string | null>(null);
   const [editingTestOrder, setEditingTestOrder] = useState<string | null>(null);
+  const [confirmingTestOrderId, setConfirmingTestOrderId] = useState<string | null>(null);
   const [showEditCase, setShowEditCase] = useState(false);
   const [showDistribution, setShowDistribution] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -390,6 +392,15 @@ export default function CaseDetailPage() {
                 {(showClosedTests ? [...nonPatchActive, ...nonPatchClosed] : nonPatchActive).map((test) => (
                   <div key={test.id} className={`px-6 py-3 ${isTerminalTest(test) ? "opacity-60" : ""}`}>
                     {needsStaffSelection(test) && <PendingSelectionBanner />}
+                    {needsStaffSelection(test) && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingTestOrderId(test.id)}
+                        className="text-xs font-medium text-white bg-[#1e3a5f] hover:bg-[#2a5490] px-3 py-1 rounded-lg mb-2"
+                      >
+                        Confirm test
+                      </button>
+                    )}
                     <div className="flex items-center justify-between">
                       <div>
                         <p
@@ -445,6 +456,16 @@ export default function CaseDetailPage() {
                         testOrder={test}
                         onSaved={() => { setEditingTestOrder(null); loadCase(); }}
                         onClose={() => setEditingTestOrder(null)}
+                      />
+                    )}
+                    {/* Confirm Test Modal */}
+                    {confirmingTestOrderId === test.id && (
+                      <ConfirmTestModal
+                        caseId={caseData.id}
+                        testOrderId={test.id}
+                        specimenType={test.specimenType}
+                        onConfirmed={() => { setConfirmingTestOrderId(null); loadCase(); }}
+                        onClose={() => setConfirmingTestOrderId(null)}
                       />
                     )}
                   </div>
