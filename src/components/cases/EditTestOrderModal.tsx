@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { apiError } from "@/lib/clientErrors";
 
 type TestOrderData = {
@@ -69,6 +70,12 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
     testOrder.patchDetails?.panel ?? "WA07",
   );
 
+  // Mount gate so createPortal(..., document.body) doesn't run during
+  // SSR. Conditional render on click means it shouldn't anyway, but
+  // this is the standard idiom and avoids hydration mismatches.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
     if (changingTest && catalog.length === 0) {
       fetch("/api/test-catalog").then((r) => r.json()).then(setCatalog).catch((e) => console.error("[EditTestOrderModal.tsx] background fetch failed:", e));
@@ -127,7 +134,9 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
     }
   }
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -343,6 +352,7 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
