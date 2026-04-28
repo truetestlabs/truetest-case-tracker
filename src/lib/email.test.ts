@@ -35,7 +35,7 @@ vi.mock("resend", () => ({
   })),
 }));
 
-import { sendDraftEmail } from "./email";
+import { sendDraftEmail, sendNotification } from "./email";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -43,6 +43,7 @@ function setEmailEnv(overrides: Partial<Record<string, string | undefined>> = {}
   process.env.RESEND_API_KEY = "re_test_key";
   process.env.FROM_EMAIL = "TrueTest Labs <noreply@truetestlabs.com>";
   process.env.REPLY_TO_EMAIL = "support@truetestlabs.com";
+  process.env.NOTIFICATIONS_TO = "notifications@truetestlabs.com";
   for (const [k, v] of Object.entries(overrides)) {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
@@ -84,6 +85,13 @@ describe("sendDraftEmail — not_configured", () => {
     setEmailEnv({ REPLY_TO_EMAIL: undefined });
     const result = await sendDraftEmail("draft-1");
     expect(result).toEqual({ ok: false, reason: "not_configured" });
+  });
+
+  it("returns not_configured when NOTIFICATIONS_TO is unset", async () => {
+    setEmailEnv({ NOTIFICATIONS_TO: undefined });
+    const result = await sendDraftEmail("draft-1");
+    expect(result).toEqual({ ok: false, reason: "not_configured" });
+    expect(prismaMock.emailDraft.findUnique).not.toHaveBeenCalled();
   });
 });
 
@@ -206,8 +214,9 @@ describe("sendDraftEmail — happy path", () => {
     });
     expect(resendSendMock).toHaveBeenCalledTimes(1);
     const call = resendSendMock.mock.calls[0][0];
-    expect(call.to).toEqual(["jane@example.com", "lawyer@example.com"]);
-    expect(call.from).toBe("TrueTest Labs <noreply@truetestlabs.com>");
+    expect(call.to).toEqual(["notifications@truetestlabs.com"]);
+    expect(call.bcc).toEqual(["jane@example.com", "lawyer@example.com"]);
+    expect(call.from).toBe("TrueTest Labs Notifications <noreply@truetestlabs.com>");
     expect(call.replyTo).toBe("support@truetestlabs.com");
     expect(call.subject).toBe("Results — Jane Doe (C-1234)");
     expect(prismaMock.emailDraft.update).toHaveBeenCalledWith({
@@ -215,6 +224,11 @@ describe("sendDraftEmail — happy path", () => {
       data: expect.objectContaining({ status: "sent" }),
     });
     expect(prismaMock.statusLog.create).toHaveBeenCalledTimes(1);
+    const statusLogCall = prismaMock.statusLog.create.mock.calls[0][0];
+    expect(statusLogCall.data.notificationRecipients).toEqual([
+      "jane@example.com",
+      "lawyer@example.com",
+    ]);
   });
 
   it("filters empty-string entries out of a mixed recipients array", async () => {
@@ -238,8 +252,114 @@ describe("sendDraftEmail — happy path", () => {
 
     expect(result).toEqual({ ok: true, sentTo: ["a@b.com", "c@d.com"] });
     expect(resendSendMock.mock.calls[0][0].to).toEqual([
+      "notifications@truetestlabs.com",
+    ]);
+    expect(resendSendMock.mock.calls[0][0].bcc).toEqual([
       "a@b.com",
       "c@d.com",
     ]);
+  });
+});
+
+describe("sendNotification", () => {
+  it("routes recipients through bcc with a fixed to address", async () => {
+    await sendNotification({
+      subject: "S",
+      html: "<p>H</p>",
+      recipients: ["a@b.com", "c@d.com"],
+    });
+    const call = resendSendMock.mock.calls[0][0];
+    expect(call.to).toEqual(["notifications@truetestlabs.com"]);
+    expect(call.bcc).toEqual(["a@b.com", "c@d.com"]);
+    expect(call.from).toBe("TrueTest Labs Notifications <noreply@truetestlabs.com>");
+    expect(call.replyTo).toBe("support@truetestlabs.com");
+    expect(call.cc).toBeUndefined();
+  });
+
+  it("lowercases, trims, and dedupes the bcc list", async () => {
+    const result = await sendNotification({
+      subject: "S",
+      html: "<p>H</p>",
+      recipients: ["A@B.com", "  a@b.com ", "C@D.com", "", null, undefined],
+    });
+    expect(result.bcc).toEqual(["a@b.com", "c@d.com"]);
+    expect(resendSendMock.mock.calls[0][0].bcc).toEqual(["a@b.com", "c@d.com"]);
+  });
+
+  it("accepts a bare string for recipients", async () => {
+    await sendNotification({
+      subject: "S",
+      html: "<p>H</p>",
+      recipients: "Solo@Example.com",
+    });
+    expect(resendSendMock.mock.calls[0][0].bcc).toEqual(["solo@example.com"]);
+  });
+
+  it("parses Display Name <addr> form in FROM_EMAIL and re-renders the display name", async () => {
+    setEmailEnv({ FROM_EMAIL: "Old Display <noreply@truetestlabs.com>" });
+    await sendNotification({
+      subject: "S",
+      html: "<p>H</p>",
+      recipients: ["a@b.com"],
+    });
+    expect(resendSendMock.mock.calls[0][0].from).toBe(
+      "TrueTest Labs Notifications <noreply@truetestlabs.com>"
+    );
+  });
+
+  it("accepts a bare addr@host in FROM_EMAIL", async () => {
+    setEmailEnv({ FROM_EMAIL: "noreply@truetestlabs.com" });
+    await sendNotification({
+      subject: "S",
+      html: "<p>H</p>",
+      recipients: ["a@b.com"],
+    });
+    expect(resendSendMock.mock.calls[0][0].from).toBe(
+      "TrueTest Labs Notifications <noreply@truetestlabs.com>"
+    );
+  });
+
+  it("throws when bcc is empty after sanitization", async () => {
+    await expect(
+      sendNotification({
+        subject: "S",
+        html: "<p>H</p>",
+        recipients: ["", "  ", null, 123],
+      })
+    ).rejects.toThrow(/bcc list is empty after sanitization/);
+    expect(resendSendMock).not.toHaveBeenCalled();
+  });
+
+  it("throws when NOTIFICATIONS_TO env var is unset", async () => {
+    setEmailEnv({ NOTIFICATIONS_TO: undefined });
+    await expect(
+      sendNotification({
+        subject: "S",
+        html: "<p>H</p>",
+        recipients: ["a@b.com"],
+      })
+    ).rejects.toThrow("NOTIFICATIONS_TO env var is required");
+    expect(resendSendMock).not.toHaveBeenCalled();
+  });
+
+  it("throws and logs when Resend returns an error", async () => {
+    resendSendMock.mockResolvedValueOnce({ data: null, error: { message: "boom" } });
+    await expect(
+      sendNotification({
+        subject: "S",
+        html: "<p>H</p>",
+        recipients: ["a@b.com"],
+      })
+    ).rejects.toThrow("boom");
+  });
+
+  it("returns the Resend message id and the sanitized bcc on success", async () => {
+    resendSendMock.mockResolvedValueOnce({ data: { id: "re_msg_42" }, error: null });
+    const result = await sendNotification({
+      subject: "S",
+      html: "<p>H</p>",
+      recipients: ["A@b.com", "a@b.com"],
+    });
+    expect(result).toEqual({ id: "re_msg_42", bcc: ["a@b.com"] });
   });
 });

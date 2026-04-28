@@ -21,7 +21,7 @@ function getResend() {
 // email through an unverified Resend domain when FROM_EMAIL was unset on
 // Vercel. Now we validate on first use and fail loudly rather than ship
 // through a fallback domain no one's monitoring.
-const EMAIL_ENV_VARS = ["RESEND_API_KEY", "FROM_EMAIL", "REPLY_TO_EMAIL"] as const;
+const EMAIL_ENV_VARS = ["RESEND_API_KEY", "FROM_EMAIL", "REPLY_TO_EMAIL", "NOTIFICATIONS_TO"] as const;
 
 export function missingEmailEnv(): string[] {
   return EMAIL_ENV_VARS.filter((name) => {
@@ -49,6 +49,74 @@ function requireReplyToEmail(): string {
   }
   return v;
 }
+
+function requireNotificationsTo(): string {
+  const v = process.env.NOTIFICATIONS_TO;
+  if (!v || !v.trim()) throw new Error("NOTIFICATIONS_TO env var is required");
+  return v.trim();
+}
+
+function sanitizeBcc(recipients: unknown): string[] {
+  const arr = Array.isArray(recipients) ? recipients : [recipients];
+  const cleaned = arr
+    .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+    .map((x) => x.trim().toLowerCase());
+  return Array.from(new Set(cleaned));
+}
+
+function parseFromEmail(raw: string | undefined): string {
+  if (!raw || !raw.trim()) {
+    throw new Error(
+      "FROM_EMAIL env var is required — refusing to send via unverified fallback domain"
+    );
+  }
+  const trimmed = raw.trim();
+  const angle = trimmed.match(/<\s*([^>\s]+@[^>\s]+)\s*>/);
+  const address = angle ? angle[1] : trimmed;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+    throw new Error(`FROM_EMAIL is unparseable: ${raw}`);
+  }
+  return `TrueTest Labs Notifications <${address}>`;
+}
+
+/**
+ * Single shared notification sender. All multi-party notifications route
+ * through here so recipients never see each other on the To: line —
+ * `to:` is fixed to NOTIFICATIONS_TO and real recipients ride on `bcc:`.
+ * Throws if the bcc list is empty after sanitization.
+ */
+export async function sendNotification(opts: {
+  subject: string;
+  html: string;
+  recipients: unknown;
+  text?: string;
+  attachments?: { filename: string; content: Buffer }[];
+}): Promise<{ id: string | null; bcc: string[] }> {
+  const sanitizedBcc = sanitizeBcc(opts.recipients);
+  if (sanitizedBcc.length === 0) {
+    throw new Error(
+      "sendNotification: bcc list is empty after sanitization — refusing to send a notification with no real recipients"
+    );
+  }
+  const { data, error: sendError } = await getResend().emails.send({
+    from: parseFromEmail(process.env.FROM_EMAIL),
+    replyTo: requireReplyToEmail(),
+    to: [requireNotificationsTo()],
+    bcc: sanitizedBcc,
+    subject: opts.subject,
+    html: opts.html,
+    ...(opts.text ? { text: opts.text } : {}),
+    ...(opts.attachments && opts.attachments.length > 0
+      ? { attachments: opts.attachments }
+      : {}),
+  });
+  if (sendError) {
+    console.error("[Email] Resend error:", sendError);
+    throw new Error(sendError.message);
+  }
+  return { id: data?.id ?? null, bcc: sanitizedBcc };
+}
+
 const OFFICE_PHONE = "(847) 258-3966";
 const OFFICE_ADDRESS = "2256 Landmeier Rd Ste A, Elk Grove Village, IL 60007";
 
@@ -335,19 +403,13 @@ export async function sendDraftEmail(draftId: string): Promise<SendDraftResult> 
     }
   }
 
-  const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: requireFromEmail(),
-    replyTo: requireReplyToEmail(),
-    to: emailList,
+  const { id, bcc: sentBcc } = await sendNotification({
     subject: draft.subject,
     html,
+    recipients: emailList,
     ...(attachments.length > 0 ? { attachments } : {}),
   });
-  if (sendError) {
-    console.error("[Email] Resend error (draft send):", sendError);
-    throw new Error(sendError.message);
-  }
-  console.log("[Email] draft sent, id:", sendData?.id);
+  console.log("[Email] draft sent, id:", id);
 
   // Mark draft as sent
   await prisma.emailDraft.update({
@@ -365,11 +427,11 @@ export async function sendDraftEmail(draftId: string): Promise<SendDraftResult> 
       changedBy: "admin",
       note: isMro ? "Results email sent (MRO review)" : "Results email sent",
       notificationSent: true,
-      notificationRecipients: emailList,
+      notificationRecipients: sentBcc,
     },
   });
 
-  return { ok: true, sentTo: emailList };
+  return { ok: true, sentTo: sentBcc };
 }
 
 /** Send results-released email with AI-generated summary (legacy — used by other flows) */
@@ -438,21 +500,15 @@ export async function sendResultsReleasedEmail(
     }
   }
 
-  const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: requireFromEmail(),
-    replyTo: requireReplyToEmail(),
-    to: emailList,
+  const { id, bcc: sentBcc } = await sendNotification({
     subject: `Test Results Available — ${caseData.donor?.lastName ?? donorName} (${caseData.caseNumber})`,
     html,
+    recipients: emailList,
     ...(attachments.length > 0 ? { attachments } : {}),
   });
-  if (sendError) {
-    console.error("[Email] Resend error (results):", sendError);
-    throw new Error(sendError.message);
-  }
-  console.log("[Email] results sent, id:", sendData?.id);
+  console.log("[Email] results sent, id:", id);
 
-  return emailList;
+  return sentBcc;
 }
 
 /** Send a compliance-report email to the case's status recipients, with the PDF attached. */
@@ -491,21 +547,15 @@ export async function sendComplianceReportEmail(
 
   const emailList = recipients.map((r) => r.email);
 
-  const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: requireFromEmail(),
-    replyTo: requireReplyToEmail(),
-    to: emailList,
+  const { id, bcc: sentBcc } = await sendNotification({
     subject: `Compliance Report — ${report.schedule.donorName} (${report.schedule.caseNumber})`,
     html,
+    recipients: emailList,
     attachments: [{ filename, content: Buffer.from(pdfBuffer) }],
   });
-  if (sendError) {
-    console.error("[Email] Resend error (compliance):", sendError);
-    throw new Error(sendError.message);
-  }
-  console.log("[Email] compliance report sent, id:", sendData?.id);
+  console.log("[Email] compliance report sent, id:", id);
 
-  return emailList;
+  return sentBcc;
 }
 
 /** Send specimen-collected confirmation email for one or more tests (with combined payment notice if unpaid) */
@@ -588,20 +638,14 @@ export async function sendSampleCollectedEmail(
 
   const emailList = recipients.map((r) => r.email);
 
-  const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: requireFromEmail(),
-    replyTo: requireReplyToEmail(),
-    to: emailList,
+  const { id, bcc: sentBcc } = await sendNotification({
     subject: `Specimen Collected — ${caseData.donor?.lastName ?? donorName} (${caseData.caseNumber})`,
     html,
+    recipients: emailList,
   });
-  if (sendError) {
-    console.error("[Email] Resend error (collection):", sendError);
-    throw new Error(sendError.message);
-  }
-  console.log("[Email] collection sent, id:", sendData?.id);
+  console.log("[Email] collection sent, id:", id);
 
-  return emailList;
+  return sentBcc;
 }
 
 /** Send no-show notification email */
@@ -658,20 +702,14 @@ export async function sendNoShowEmail(
 
   const emailList = recipients.map((r) => r.email);
 
-  const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: requireFromEmail(),
-    replyTo: requireReplyToEmail(),
-    to: emailList,
+  const { id, bcc: sentBcc } = await sendNotification({
     subject: `No Show — ${caseData.donor?.lastName ?? donorName} (${caseData.caseNumber})`,
     html,
+    recipients: emailList,
   });
-  if (sendError) {
-    console.error("[Email] Resend error (no-show):", sendError);
-    throw new Error(sendError.message);
-  }
-  console.log("[Email] no-show sent, id:", sendData?.id);
+  console.log("[Email] no-show sent, id:", id);
 
-  return emailList;
+  return sentBcc;
 }
 
 /** Send refusal-to-test email when a donor missed a randomly selected testing day */
@@ -736,20 +774,14 @@ export async function sendRefusalToTestEmail(
   const emailList = recipients.map((r) => r.email);
   const lastName = caseData.donor?.lastName ?? donorName;
 
-  const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: requireFromEmail(),
-    replyTo: requireReplyToEmail(),
-    to: emailList,
+  const { id, bcc: sentBcc } = await sendNotification({
     subject: `Refusal to Test — ${lastName} (${caseData.caseNumber})`,
     html,
+    recipients: emailList,
   });
-  if (sendError) {
-    console.error("[Email] Resend error (refusal):", sendError);
-    throw new Error(sendError.message);
-  }
-  console.log("[Email] refusal sent, id:", sendData?.id);
+  console.log("[Email] refusal sent, id:", id);
 
-  return emailList;
+  return sentBcc;
 }
 
 /** Send appointment booking confirmation email to the donor */
@@ -1015,20 +1047,14 @@ export async function sendResultsHeldEmail(
 
   const emailList = recipients.map((r) => r.email);
 
-  const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: requireFromEmail(),
-    replyTo: requireReplyToEmail(),
-    to: emailList,
+  const { id, bcc: sentBcc } = await sendNotification({
     subject: `Results Available — Payment Required — ${caseData.donor?.lastName ?? donorName} (${caseData.caseNumber})`,
     html,
+    recipients: emailList,
   });
-  if (sendError) {
-    console.error("[Email] Resend error (results held):", sendError);
-    throw new Error(sendError.message);
-  }
-  console.log("[Email] results-held sent, id:", sendData?.id);
+  console.log("[Email] results-held sent, id:", id);
 
-  return emailList;
+  return sentBcc;
 }
 
 /** Send payment received + sample shipping to lab notification */
@@ -1077,20 +1103,14 @@ export async function sendPaymentReceivedEmail(
 
   const emailList = recipients.map((r) => r.email);
 
-  const { data: sendData, error: sendError } = await getResend().emails.send({
-    from: requireFromEmail(),
-    replyTo: requireReplyToEmail(),
-    to: emailList,
+  const { id, bcc: sentBcc } = await sendNotification({
     subject: `Payment Received — ${caseData.donor?.lastName ?? donorName} (${caseData.caseNumber})`,
     html,
+    recipients: emailList,
   });
-  if (sendError) {
-    console.error("[Email] Resend error (payment received):", sendError);
-    throw new Error(sendError.message);
-  }
-  console.log("[Email] payment-received sent, id:", sendData?.id);
+  console.log("[Email] payment-received sent, id:", id);
 
-  return emailList;
+  return sentBcc;
 }
 
 /**
