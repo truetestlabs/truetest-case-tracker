@@ -1,5 +1,7 @@
 "use client";
 
+import { needsStaffSelection } from "@/lib/case-utils";
+
 const STANDARD_STEPS = [
   { key: "order_created", label: "Ordered" },
   { key: "specimen_collected", label: "Collected" },
@@ -26,6 +28,7 @@ const SPECIAL_STATUSES: Record<string, { label: string; color: string }> = {
 
 type Props = {
   currentStatus: string;
+  testCatalogId?: string | null;
   caseId?: string;
   testOrderId?: string;
   testDescription?: string;
@@ -33,8 +36,14 @@ type Props = {
   onUpdated?: () => void;
 };
 
-export function TestProgressBar({ currentStatus, caseId, testOrderId, testDescription, hasMroHistory, onUpdated }: Props) {
+export function TestProgressBar({ currentStatus, testCatalogId, caseId, testOrderId, testDescription, hasMroHistory, onUpdated }: Props) {
   const isSweatPatch = testDescription?.toLowerCase().includes("sweat patch");
+  // Block progression when the order has no catalog row linked. The
+  // banner above each row explains the why; here we just gate the dots.
+  const pending = needsStaffSelection({
+    testCatalogId: testCatalogId ?? null,
+    testStatus: currentStatus,
+  });
   // Show MRO steps if the test is currently in MRO, OR if it was closed
   // after going through MRO (closed status loses the MRO context otherwise).
   // The hasMroHistory prop is passed from the parent when the test has an
@@ -94,17 +103,25 @@ export function TestProgressBar({ currentStatus, caseId, testOrderId, testDescri
           const isCurrent = effectiveIndex === i;
           const isNext = effectiveIndex === i - 1;
           const isLast = i === steps.length - 1;
-          const canClick = isNext && caseId && testOrderId;
+          const canClick = isNext && caseId && testOrderId && !pending;
 
           return (
             <div key={step.key} className="flex items-center flex-1 last:flex-none">
               <div
-                className={`flex-shrink-0 ${canClick ? "cursor-pointer group" : ""}`}
+                className={`flex-shrink-0 relative ${
+                  canClick ? "cursor-pointer group"
+                  : pending && isNext ? "cursor-not-allowed group"
+                  : ""
+                }`}
                 onClick={canClick ? (e) => { e.stopPropagation(); advanceTo(step.key); } : undefined}
                 onKeyDown={canClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); advanceTo(step.key); } } : undefined}
                 role={canClick ? "button" : undefined}
                 tabIndex={canClick ? 0 : undefined}
-                title={canClick ? `Click to advance to ${step.label}` : step.label}
+                title={
+                  pending && isNext
+                    ? undefined
+                    : canClick ? `Click to advance to ${step.label}` : step.label
+                }
               >
                 <div
                   className={`rounded-full transition-all ${
@@ -117,6 +134,11 @@ export function TestProgressBar({ currentStatus, caseId, testOrderId, testDescri
                       : "w-2 h-2 bg-gray-300"
                   }`}
                 />
+                {pending && isNext && (
+                  <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-20 hidden group-hover:block whitespace-nowrap bg-gray-900 text-white text-xs rounded px-2 py-1 shadow-lg pointer-events-none">
+                    Select a test before advancing this order.
+                  </span>
+                )}
               </div>
               {!isLast && (
                 <div className={`flex-1 h-[1.5px] mx-0.5 ${isCompleted ? "bg-blue-500" : "bg-gray-200"}`} />
@@ -131,7 +153,7 @@ export function TestProgressBar({ currentStatus, caseId, testOrderId, testDescri
           const isCompleted = effectiveIndex > i;
           const isCurrent = effectiveIndex === i;
           const isNext = effectiveIndex === i - 1;
-          const canClick = isNext && caseId && testOrderId;
+          const canClick = isNext && caseId && testOrderId && !pending;
           return (
             <span
               key={step.key}

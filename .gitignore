@@ -7,3 +7,8 @@ next-env.d.ts
 uploads/
 .vercel
 .env*.local
+tests/eval/extract/fixtures/
+tests/eval/extract/truth/
+tests/eval/extract/parser-dump.json
+tests/eval/extract/results/
+tests/eval/extract/AUTHORING_NOTES.md

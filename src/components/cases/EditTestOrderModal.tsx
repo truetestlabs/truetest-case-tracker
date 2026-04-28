@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { apiError } from "@/lib/clientErrors";
 
 type TestOrderData = {
@@ -23,6 +24,8 @@ type TestOrderData = {
   appointmentDate: string | null;
   collectionDate: string | null;
   notes: string | null;
+  // Present only when specimenType === 'sweat_patch'. Null otherwise.
+  patchDetails?: { panel: "WA07" | "WC82" } | null;
 };
 
 type CatalogItem = {
@@ -44,6 +47,7 @@ type Props = {
 export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notifSent, setNotifSent] = useState(false);
   const [changingTest, setChangingTest] = useState(false);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -60,6 +64,18 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
   // on the client is a cleaner UX than a round-trip error.
   const [currentStatus, setCurrentStatus] = useState(testOrder.testStatus);
   const collectionDateRequired = currentStatus === "specimen_collected";
+  // Sweat-patch panel selection. Only meaningful when this is a sweat patch
+  // order; the rest of the UI conditionally renders on isSweatPatchOrder.
+  const isSweatPatchOrder = testOrder.specimenType === "sweat_patch";
+  const [patchPanel, setPatchPanel] = useState<"WA07" | "WC82">(
+    testOrder.patchDetails?.panel ?? "WA07",
+  );
+
+  // Mount gate so createPortal(..., document.body) doesn't run during
+  // SSR. Conditional render on click means it shouldn't anyway, but
+  // this is the standard idiom and avoids hydration mismatches.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (changingTest && catalog.length === 0) {
@@ -93,6 +109,8 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
       specimenId: form.get("specimenId") || null,
       paymentMethod: (form.get("payment") as string) === "not_paid" ? null : form.get("payment"),
       notes: form.get("notes") || null,
+      // Sweat-patch panel side channel — server ignores when not sweat_patch.
+      ...(isSweatPatchOrder ? { patchPanel } : {}),
     };
 
     const apptDate = form.get("appointmentDate") as string;
@@ -109,7 +127,12 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
         body: JSON.stringify(data),
       });
       if (!res.ok) throw await apiError(res, "Failed to update test order");
-      onSaved();
+      if (data.testStatus === "no_show") {
+        setNotifSent(true);
+        setTimeout(() => onSaved(), 2000);
+      } else {
+        onSaved();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -117,7 +140,9 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
     }
   }
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -208,7 +233,30 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
                 </select>
               );
             })()}
+            {notifSent && (
+              <p className="text-xs text-green-600 mt-1">✓ No Show notification sent</p>
+            )}
           </div>
+
+          {/* Patch Panel (sweat patch only) */}
+          {isSweatPatchOrder && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Patch Panel
+              </label>
+              <select
+                value={patchPanel}
+                onChange={(e) => setPatchPanel(e.target.value as "WA07" | "WC82")}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              >
+                <option value="WA07">WA07 — Standard panel</option>
+                <option value="WC82">WC82 — Expanded panel</option>
+              </select>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                Standard panel (WA07) is the default. Switch to expanded (WC82) when the case requires it.
+              </p>
+            </div>
+          )}
 
           {/* Specimen ID + Collection Date */}
           <div className="grid grid-cols-2 gap-3">
@@ -313,6 +361,7 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
