@@ -11,6 +11,8 @@ import {
   type PatchLifecycleStatus,
 } from "@/lib/patchValidation";
 import { CancelPatchModal } from "@/components/cases/CancelPatchModal";
+import { PendingSelectionBanner } from "@/components/cases/PendingSelectionBanner";
+import { needsStaffSelection } from "@/lib/case-utils";
 
 /**
  * Sweat-patch lifecycle section for the case detail view. Renders only
@@ -31,6 +33,7 @@ import { CancelPatchModal } from "@/components/cases/CancelPatchModal";
 // stringifies dates and the page hasn't deserialized them.
 export type PatchOrderForUI = {
   id: string;
+  testCatalogId: string | null;
   testDescription: string;
   specimenId: string | null;
   lab: string;
@@ -229,9 +232,17 @@ function PatchRow({
 
   return (
     <div className="px-6 py-4">
+      {needsStaffSelection({ testCatalogId: order.testCatalogId, testStatus: order.testStatus }) && (
+        <PendingSelectionBanner />
+      )}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3 flex-wrap">
+            {needsStaffSelection({ testCatalogId: order.testCatalogId, testStatus: order.testStatus }) && (
+              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-medium text-xs rounded-full">
+                Pending staff selection
+              </span>
+            )}
             {order.specimenId && (
               <span className="font-mono font-semibold text-gray-900 text-sm">
                 {order.specimenId}

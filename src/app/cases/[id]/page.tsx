@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { StatusBadge, CourtOrderFlag } from "@/components/ui/StatusBadge";
-import { CASE_TYPE_CONFIG } from "@/lib/case-utils";
+import { CASE_TYPE_CONFIG, needsStaffSelection } from "@/lib/case-utils";
 import { getPaymentState, getPaymentLabel } from "@/lib/payment";
 import { AddContactForm } from "@/components/cases/AddContactForm";
 import { EditContactModal } from "@/components/cases/EditContactModal";
@@ -16,6 +16,7 @@ import { TestProgressBar } from "@/components/cases/TestProgressBar";
 import { TestOrderDocuments } from "@/components/cases/TestOrderDocuments";
 import { CaseDocuments } from "@/components/cases/CaseDocuments";
 import { EditTestOrderModal } from "@/components/cases/EditTestOrderModal";
+import { PendingSelectionBanner } from "@/components/cases/PendingSelectionBanner";
 import { LabResultCard, type LabResultData } from "@/components/cases/LabResultCard";
 import { PatchSection, type PatchOrderForUI } from "@/components/cases/PatchSection";
 import { formatChicagoShortDate, formatChicagoShortDateNoYear, formatChicagoTime } from "@/lib/dateChicago";
@@ -388,6 +389,7 @@ export default function CaseDetailPage() {
                 )}
                 {(showClosedTests ? [...nonPatchActive, ...nonPatchClosed] : nonPatchActive).map((test) => (
                   <div key={test.id} className={`px-6 py-3 ${isTerminalTest(test) ? "opacity-60" : ""}`}>
+                    {needsStaffSelection(test) && <PendingSelectionBanner />}
                     <div className="flex items-center justify-between">
                       <div>
                         <p
@@ -398,6 +400,11 @@ export default function CaseDetailPage() {
                           {test.testDescription} <span className="text-xs text-blue-500">edit</span>
                         </p>
                         <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 flex-wrap">
+                          {needsStaffSelection(test) && (
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-medium rounded-full">
+                              Pending staff selection
+                            </span>
+                          )}
                           {test.specimenId && <span className="font-mono font-medium text-gray-700">{test.specimenId}</span>}
                           <span className="capitalize">{test.specimenType}</span>
                           <span className="capitalize">{test.lab.replace("_", "/")}</span>

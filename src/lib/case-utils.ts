@@ -75,3 +75,29 @@ export const PAYMENT_STATUS_CONFIG = {
   paid: { label: "Paid", color: "bg-green-100 text-green-700" },
   invoiced: { label: "Invoiced", color: "bg-blue-100 text-blue-700" },
 } as const;
+
+/**
+ * True when a TestOrder needs a staff member to pick a real test from
+ * the catalog. Used to gate the pending-selection banner, status
+ * badge, and progression-button block.
+ *
+ * Skips terminal-status rows (closed/cancelled/no_show) because those
+ * orders can't progress and showing a "must take action" warning on
+ * historical rows would be misleading. The truthy check on
+ * testCatalogId covers null, undefined, and (defensively) empty
+ * string — all of which mean "no catalog row linked."
+ */
+export function needsStaffSelection(t: {
+  testCatalogId: string | null;
+  testStatus: string;
+}): boolean {
+  if (t.testCatalogId) return false;
+  if (
+    t.testStatus === "closed" ||
+    t.testStatus === "cancelled" ||
+    t.testStatus === "no_show"
+  ) {
+    return false;
+  }
+  return true;
+}
