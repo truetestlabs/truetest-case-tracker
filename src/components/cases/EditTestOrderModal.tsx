@@ -47,6 +47,7 @@ type Props = {
 export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notifSent, setNotifSent] = useState(false);
   const [changingTest, setChangingTest] = useState(false);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -126,7 +127,12 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
         body: JSON.stringify(data),
       });
       if (!res.ok) throw await apiError(res, "Failed to update test order");
-      onSaved();
+      if (data.testStatus === "no_show") {
+        setNotifSent(true);
+        setTimeout(() => onSaved(), 2000);
+      } else {
+        onSaved();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -227,6 +233,9 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
                 </select>
               );
             })()}
+            {notifSent && (
+              <p className="text-xs text-green-600 mt-1">✓ No Show notification sent</p>
+            )}
           </div>
 
           {/* Patch Panel (sweat patch only) */}
