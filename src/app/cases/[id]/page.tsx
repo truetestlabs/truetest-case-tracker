@@ -124,6 +124,15 @@ type CaseData = {
     note: string | null;
     notificationSent: boolean;
   }>;
+  // Upcoming appointments on this case, used as a display fallback when a
+  // TestOrder.appointmentDate hasn't been stamped (e.g., Square booking
+  // outside the phone-intake flow, or appointment pre-dating the order).
+  appointments?: Array<{
+    id: string;
+    startTime: string;
+    endTime: string;
+    googleEventId: string | null;
+  }>;
 };
 
 export default function CaseDetailPage() {
@@ -453,7 +462,19 @@ export default function CaseDetailPage() {
                     {editingTestOrder === test.id && (
                       <EditTestOrderModal
                         caseId={caseData.id}
-                        testOrder={test}
+                        testOrder={{
+                          ...test,
+                          // If this test order has no appointmentDate cached
+                          // but the case has an upcoming Appointment row,
+                          // surface it here so staff sees the scheduled date
+                          // instead of an empty input. Saving the modal will
+                          // persist whatever's in the field, which is fine —
+                          // it commits the same value.
+                          appointmentDate:
+                            test.appointmentDate ??
+                            caseData.appointments?.[0]?.startTime ??
+                            null,
+                        }}
                         onSaved={() => { setEditingTestOrder(null); loadCase(); }}
                         onClose={() => setEditingTestOrder(null)}
                       />

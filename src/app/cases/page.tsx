@@ -50,6 +50,11 @@ type CaseRow = {
     collectionType: string;
     paymentMethod: string | null;
   }>;
+  appointments: Array<{
+    id: string;
+    startTime: string;
+    googleEventId: string | null;
+  }>;
   _count: { testOrders: number; documents: number };
 };
 
@@ -231,7 +236,13 @@ export default function CasesPage() {
                           {c.testOrders.filter((t) => t.testStatus !== "closed").map((test, ti) => {
                             const preCollectionStatuses = ["order_created", "awaiting_payment", "payment_received"];
                             const isPreCollection = preCollectionStatuses.includes(test.testStatus);
-                            const hasAppt = test.appointmentDate;
+                            // Prefer TestOrder.appointmentDate (the cached value
+                            // populated by the in-app phone-intake flow). Fall
+                            // back to the case's next upcoming Appointment row
+                            // for cases where the cache wasn't stamped — e.g.,
+                            // booking pre-dated the test order.
+                            const apptDate = test.appointmentDate ?? c.appointments?.[0]?.startTime ?? null;
+                            const hasAppt = !!apptDate;
                             const site = test.collectionSiteType === "truetest" ? "TTL"
                               : test.collectionSiteType === "electronic" ? "Electronic Order"
                               : test.collectionSiteType === "mobile" ? "Mobile / On-site"
@@ -243,7 +254,7 @@ export default function CasesPage() {
                                     Scheduled{site ? ` @ ${site}` : ""}
                                   </span>
                                   <p className="text-xs text-slate-500 mt-0.5">
-                                    {formatChicagoShortDate(new Date(test.appointmentDate!))} {formatChicagoTime(new Date(test.appointmentDate!))}
+                                    {formatChicagoShortDate(new Date(apptDate!))} {formatChicagoTime(new Date(apptDate!))}
                                   </p>
                                 </div>
                               );

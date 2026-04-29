@@ -42,6 +42,16 @@ export async function GET(request: NextRequest) {
       donor: true,
       caseContacts: { include: { contact: true } },
       testOrders: { orderBy: { updatedAt: "desc" }, select: { testStatus: true, appointmentDate: true, schedulingType: true, testDescription: true, collectionSite: true, collectionSiteType: true, collectionType: true, paymentMethod: true } },
+      // Next upcoming appointment per case — surfaces as a fallback for the
+      // "Order Created" badge when TestOrder.appointmentDate hasn't been
+      // synced yet (e.g., appointment booked AFTER the test order existed,
+      // or booked outside the in-app phone-intake flow).
+      appointments: {
+        where: { startTime: { gte: new Date() } },
+        orderBy: { startTime: "asc" },
+        take: 1,
+        select: { id: true, startTime: true, googleEventId: true },
+      },
       _count: { select: { testOrders: true, documents: true } },
     },
   });
