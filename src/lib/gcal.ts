@@ -86,6 +86,82 @@ function getClient(): calendar_v3.Calendar | null {
 
 export type BusyInterval = { start: Date; end: Date };
 
+export type CalendarEventLite = {
+  id: string;
+  calendarId: string;
+  summary: string | null;
+  description: string | null;
+  start: Date;
+  end: Date;
+  /** Attendee emails attached to the event (Google may strip these for
+   * privacy depending on the source — Square sometimes encodes them in
+   * the description instead). Always returned as lowercase strings. */
+  attendeeEmails: string[];
+};
+
+/**
+ * List events across all configured calendars in a time range. Returns the
+ * full event payload our matchers need (id, summary, description, start,
+ * attendees) — used by the calendar→case sync job to match events back to
+ * cases and detect new Square Appointments bookings that haven't been
+ * imported yet.
+ *
+ * Fails open: returns [] on any error so a sync run never crashes.
+ */
+export async function listCalendarEvents(
+  rangeStart: Date,
+  rangeEnd: Date
+): Promise<CalendarEventLite[]> {
+  const client = getClient();
+  if (!client || allCalendarIds.length === 0) return [];
+
+  const allEvents: CalendarEventLite[] = [];
+
+  for (const calId of allCalendarIds) {
+    try {
+      let pageToken: string | undefined = undefined;
+      do {
+        const res: { data: calendar_v3.Schema$Events } =
+          await client.events.list({
+            calendarId: calId,
+            timeMin: rangeStart.toISOString(),
+            timeMax: rangeEnd.toISOString(),
+            singleEvents: true,
+            orderBy: "startTime",
+            maxResults: 250,
+            pageToken,
+          });
+        const events = res.data.items ?? [];
+        for (const ev of events) {
+          if (ev.status === "cancelled") continue;
+          const start = ev.start?.dateTime ?? ev.start?.date;
+          const end = ev.end?.dateTime ?? ev.end?.date;
+          const id = ev.id;
+          if (!start || !end || !id) continue;
+          allEvents.push({
+            id,
+            calendarId: calId,
+            summary: ev.summary ?? null,
+            description: ev.description ?? null,
+            start: new Date(start),
+            end: new Date(end),
+            attendeeEmails: (ev.attendees ?? [])
+              .map((a) => a.email?.toLowerCase().trim() ?? "")
+              .filter(Boolean),
+          });
+        }
+        pageToken = res.data.nextPageToken ?? undefined;
+      } while (pageToken);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[gcal] listCalendarEvents failed for ${calId}: ${msg}`);
+      // Continue to next calendar
+    }
+  }
+
+  return allEvents;
+}
+
 /**
  * Query ALL events on the configured calendars for a time range. Returns
  * their start/end times as busy intervals that block appointment slots.
