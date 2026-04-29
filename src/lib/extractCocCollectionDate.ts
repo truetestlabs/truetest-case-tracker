@@ -25,6 +25,32 @@ export type CocCollectionDateResult = {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * Sanity guard: if the AI returns a date more than this many days from
+ * today (in either direction), reject it as "could not extract." Catches
+ * the dominant Vision failure mode — misreading a single handwritten
+ * digit (e.g. "2026" → "2006", "04/28" → "04/25" in a different month).
+ *
+ * 30 days handles backlog uploads of recent collections without forcing
+ * staff to re-type every CoC. Anything further out probably indicates
+ * a misread; the modal will fall back to an empty input + the
+ * "could not extract" banner so staff types the date in by hand.
+ */
+const RECENCY_WINDOW_DAYS = 30;
+
+function isWithinRecencyWindow(iso: string): boolean {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return false;
+  const [, y, mo, d] = m;
+  const date = new Date(
+    Date.UTC(parseInt(y, 10), parseInt(mo, 10) - 1, parseInt(d, 10), 12, 0, 0)
+  );
+  if (Number.isNaN(date.getTime())) return false;
+  const diffDays =
+    Math.abs(Date.now() - date.getTime()) / (1000 * 60 * 60 * 24);
+  return diffDays <= RECENCY_WINDOW_DAYS;
+}
+
 export async function extractCocCollectionDate(
   buffer: Buffer
 ): Promise<CocCollectionDateResult> {
@@ -45,7 +71,13 @@ export async function extractCocCollectionDate(
       if (text.trim().length > 50) {
         const fromText = matchPrintedCollectionDate(text);
         if (fromText) {
-          return { collectionDate: fromText, source: "text" };
+          if (!isWithinRecencyWindow(fromText)) {
+            console.warn(
+              `[extractCocCollectionDate] text-extracted ${fromText} is outside the ${RECENCY_WINDOW_DAYS}-day window — rejecting as a likely misread`
+            );
+          } else {
+            return { collectionDate: fromText, source: "text" };
+          }
         }
       }
     }
@@ -114,7 +146,14 @@ or
     };
     const raw = parsed.collectionDate;
     if (typeof raw === "string" && ISO_DATE.test(raw.trim())) {
-      return { collectionDate: raw.trim(), source: "vision" };
+      const trimmed = raw.trim();
+      if (!isWithinRecencyWindow(trimmed)) {
+        console.warn(
+          `[extractCocCollectionDate] vision-extracted ${trimmed} is outside the ${RECENCY_WINDOW_DAYS}-day window — rejecting as a likely handwriting misread`
+        );
+        return { collectionDate: null, source: "vision" };
+      }
+      return { collectionDate: trimmed, source: "vision" };
     }
     return { collectionDate: null, source: "vision" };
   } catch (e) {
