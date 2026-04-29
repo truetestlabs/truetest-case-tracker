@@ -39,6 +39,15 @@ export async function GET(
         documents: { orderBy: { uploadedAt: "desc" } },
         courtOrders: { include: { document: true } },
         statusLogs: { orderBy: { changedAt: "desc" }, take: 20 },
+        // Used as a fallback for any pre-collection TestOrder whose
+        // appointmentDate hasn't been synced (e.g., booking happened after
+        // the test order existed, or via Square Appointments outside our
+        // phone-intake flow).
+        appointments: {
+          where: { startTime: { gte: new Date() } },
+          orderBy: { startTime: "asc" },
+          select: { id: true, startTime: true, endTime: true, googleEventId: true },
+        },
       },
     });
 
