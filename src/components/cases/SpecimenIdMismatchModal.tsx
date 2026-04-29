@@ -34,10 +34,21 @@ export function SpecimenIdMismatchModal({
   onConfirm,
   onCancel,
 }: Props) {
-  const initial =
-    filenameSpecimenId && filenameSpecimenId === recordSpecimenId
-      ? filenameSpecimenId
-      : recordSpecimenId || "";
+  // Pre-fill priority:
+  //   - filename + record agree → high confidence, use that value
+  //   - record empty (typical: order_created status, no specimenId yet) →
+  //     trust the filename token; the user named the file deliberately
+  //   - record present but disagrees with filename → fall back to record
+  //     so the user has to actively replace it, not just confirm
+  const initial = (() => {
+    if (filenameSpecimenId && filenameSpecimenId === recordSpecimenId) {
+      return filenameSpecimenId;
+    }
+    if (!recordSpecimenId && filenameSpecimenId) {
+      return filenameSpecimenId;
+    }
+    return recordSpecimenId || "";
+  })();
   const [value, setValue] = useState(initial);
 
   const trimmed = value.trim();
@@ -83,7 +94,7 @@ export function SpecimenIdMismatchModal({
               value={filenameSpecimenId ?? "—"}
               highlight={filenameSpecimenId !== null && filenameSpecimenId !== recordSpecimenId}
             />
-            <IdBox label="Record" value={recordSpecimenId} />
+            <IdBox label="Record" value={recordSpecimenId || "—"} />
           </div>
 
           <div>

@@ -132,11 +132,13 @@ export async function POST(
     // proceed with the upload; we never block the user on OCR failures.
     let parsedCocSpecimenId: string | null = null;
     let referenceSpecimenId: string | null = null;
+    let targetOrderSpecimenId: string | null = null;
+    const filenameSpecimenId = extractFilenameSpecimenId(originalFileName);
     if (documentType === "chain_of_custody" && ext.toLowerCase() === ".pdf") {
       // If the upload targets a specific test order, its specimenId wins
       // over latestOrder.specimenId as the reference. Only query if
       // testOrderId differs from the latest order we already loaded.
-      let targetOrderSpecimenId: string | null = latestOrder?.specimenId ?? null;
+      targetOrderSpecimenId = latestOrder?.specimenId ?? null;
       if (testOrderId) {
         const target = await prisma.testOrder.findUnique({
           where: { id: testOrderId },
@@ -144,7 +146,16 @@ export async function POST(
         });
         targetOrderSpecimenId = target?.specimenId ?? null;
       }
-      referenceSpecimenId = (manualSpecimenId?.trim() || targetOrderSpecimenId) ?? null;
+      // Reference cascade: manual prompt > existing record > filename token.
+      // The filename fallback is what makes this work when staff create a
+      // fresh order, leave the prompt blank, and rely on their renamed PDF
+      // to carry the specimen ID — Vision-vs-filename disagreement still
+      // fires the dialog instead of silently saving a wrong filename.
+      referenceSpecimenId =
+        manualSpecimenId?.trim() ||
+        targetOrderSpecimenId ||
+        filenameSpecimenId ||
+        null;
 
       const extraction = await extractCocSpecimenId(buffer);
       parsedCocSpecimenId = extraction.specimenId;
@@ -159,8 +170,12 @@ export async function POST(
           {
             error: "specimen_id_mismatch",
             parsedSpecimenId: parsedCocSpecimenId,
-            filenameSpecimenId: extractFilenameSpecimenId(originalFileName),
-            recordSpecimenId: referenceSpecimenId,
+            filenameSpecimenId,
+            // Send the actual record value (may be empty) — not the reference,
+            // which could be the filename token. The modal renders the empty
+            // case as "—" so staff aren't misled into thinking the record
+            // already had a specimen ID.
+            recordSpecimenId: targetOrderSpecimenId ?? "",
             storagePath,
           },
           { status: 409 }
@@ -176,6 +191,7 @@ export async function POST(
     const effectiveSpecimenId =
       correctedSpecimenId?.trim() ||
       manualSpecimenId?.trim() ||
+      filenameSpecimenId ||
       parsedCocSpecimenId ||
       latestOrder?.specimenId ||
       latestOrder?.labAccessionNumber ||
@@ -274,12 +290,16 @@ export async function POST(
 
       for (const order of testOrders) {
         // Specimen-ID fallback for the auto-advance: when no correction was
-        // submitted, manualSpecimenId fills in if the order has none yet
-        // (preserves legacy behavior). The corrected case is already handled
-        // above for the targeted order.
+        // submitted, fill in from the manual prompt or the filename token if
+        // the order has none yet. The standard flow has the order in
+        // order_created with no specimenId — the CoC upload is when the ID
+        // enters the system, usually via the renamed filename. The corrected
+        // case is already handled above for the targeted order.
+        const fallbackSpecimenId =
+          manualSpecimenId?.trim() || filenameSpecimenId;
         const specimenIdWrite =
-          !corrected && manualSpecimenId && !order.specimenId
-            ? { specimenId: manualSpecimenId }
+          !corrected && fallbackSpecimenId && !order.specimenId
+            ? { specimenId: fallbackSpecimenId }
             : {};
         await prisma.testOrder.update({
           where: { id: order.id },
