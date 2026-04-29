@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatChicagoLongDateKey } from "@/lib/dateChicago";
 
 /**
  * Confirmation modal shown after a chain-of-custody PDF is uploaded.
@@ -37,6 +38,29 @@ export function CocConfirmModal({
   const [date, setDate] = useState<string>(extractedDate ?? "");
   const isValid = /^\d{4}-\d{2}-\d{2}$/.test(date);
   const dateChanged = !!extractedDate && date !== extractedDate;
+
+  // Format the (possibly edited) date in long form so the year is
+  // unmissable. The default <input type="date"> rendering ("04/25/2006")
+  // makes a wrong-year misread easy to skim past — showing
+  // "Saturday, April 25, 2006" alongside it forces the year into view.
+  const formattedDate = isValid
+    ? formatChicagoLongDateKey(
+        new Date(
+          Date.UTC(
+            parseInt(date.slice(0, 4), 10),
+            parseInt(date.slice(5, 7), 10) - 1,
+            parseInt(date.slice(8, 10), 10),
+            12,
+            0,
+            0
+          )
+        )
+      )
+    : null;
+
+  const currentYear = new Date().getUTCFullYear();
+  const dateYear = isValid ? parseInt(date.slice(0, 4), 10) : currentYear;
+  const yearMismatch = isValid && dateYear !== currentYear;
 
   return (
     <div
@@ -105,6 +129,33 @@ export function CocConfirmModal({
                 className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
               />
             </label>
+
+            {formattedDate && (
+              <div
+                className={`rounded-md px-3 py-2 ${
+                  yearMismatch
+                    ? "bg-red-50 border border-red-300"
+                    : "bg-gray-50 border border-gray-200"
+                }`}
+              >
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-0.5">
+                  Reads as
+                </p>
+                <p
+                  className={`text-base font-semibold ${
+                    yearMismatch ? "text-red-800" : "text-gray-900"
+                  }`}
+                >
+                  {formattedDate}
+                </p>
+                {yearMismatch && (
+                  <p className="text-xs text-red-700 mt-1">
+                    ⚠ Year ({dateYear}) is not the current year ({currentYear}). Double-check
+                    against the PDF before confirming.
+                  </p>
+                )}
+              </div>
+            )}
 
             {extractedDate === null && (
               <div className="rounded-md bg-yellow-50 border border-yellow-200 px-3 py-2">
