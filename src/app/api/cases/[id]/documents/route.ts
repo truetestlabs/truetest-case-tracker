@@ -9,9 +9,38 @@ import { detectCocMisclassification } from "@/lib/detectCocMisclassification";
 import { uploadFile } from "@/lib/storage";
 import { buildCcfFilename } from "@/lib/filename";
 import { extractCocSpecimenId } from "@/lib/extractCocSpecimenId";
+import { extractCocCollectionDate } from "@/lib/extractCocCollectionDate";
+import { formatChicagoMediumDate } from "@/lib/dateChicago";
 
 // Allow longer execution for AI summary generation on upload
 export const maxDuration = 60;
+
+/**
+ * Parse a YYYY-MM-DD date-only string into a Date pinned to noon UTC.
+ * Per CLAUDE.md: never use `new Date(s + "T12:00:00")` (inherits process TZ)
+ * or `new Date(y, m, d)` (inherits process TZ). `Date.UTC` is the only safe
+ * construction for a date-only value that should round-trip through
+ * America/Chicago formatters.
+ */
+function parseIsoDateUtcNoon(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const match = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  const date = new Date(
+    Date.UTC(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10), 12, 0, 0)
+  );
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Format a Date as YYYY-MM-DD using its UTC components. Used for the
+ * result-confirmation 409 envelope so the client renders the same string
+ * that the AI extractor produced (no TZ shifts).
+ */
+function dateToUtcDateKey(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
 
 export async function POST(
   request: NextRequest,
@@ -30,10 +59,9 @@ export async function POST(
     let buffer: Buffer;
     let storagePath: string;
     let ext: string;
-    // When the client re-submits after acknowledging a specimen-ID mismatch
-    // modal, it sets this flag. Server skips the mismatch check for this
-    // upload and records the ack in the StatusLog.
-    let confirmSpecimenMismatch = false;
+    let confirmCocUpload = false;
+    let confirmedCollectionDate: string | null = null;
+    let confirmResultUpload = false;
 
     if (isJson) {
       // NEW MODE: File already uploaded directly to Supabase Storage
@@ -43,7 +71,12 @@ export async function POST(
       testOrderId = body.testOrderId || null;
       originalFileName = body.fileName;
       storagePath = body.storagePath;
-      confirmSpecimenMismatch = body.confirmSpecimenMismatch === true;
+      confirmCocUpload = body.confirmCocUpload === true;
+      confirmedCollectionDate =
+        typeof body.confirmedCollectionDate === "string"
+          ? body.confirmedCollectionDate
+          : null;
+      confirmResultUpload = body.confirmResultUpload === true;
       ext = originalFileName.includes(".") ? "." + originalFileName.split(".").pop() : ".pdf";
 
       // Download from Supabase to get buffer for parsing/AI summary
@@ -57,7 +90,10 @@ export async function POST(
       documentType = formData.get("documentType") as string;
       manualSpecimenId = formData.get("specimenId") as string | null;
       testOrderId = formData.get("testOrderId") as string | null;
-      confirmSpecimenMismatch = formData.get("confirmSpecimenMismatch") === "true";
+      confirmCocUpload = formData.get("confirmCocUpload") === "true";
+      confirmedCollectionDate =
+        (formData.get("confirmedCollectionDate") as string | null) || null;
+      confirmResultUpload = formData.get("confirmResultUpload") === "true";
 
       if (!file) {
         return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -78,10 +114,10 @@ export async function POST(
 
     // === From here, both modes converge — buffer and storagePath are set ===
 
-    // Fetch case with donor and latest test order for smart file naming.
-    // CCF filenames don't embed a date anymore (see buildCcfFilename); we
-    // still need `collectionDate` for the legacy result_report filename
-    // format below, so we pull it on the latest order.
+    // Fetch case + latest order (for filename construction). Note: per the
+    // new "one CoC per test order" rule we no longer broadcast writes to
+    // every pre-collection order on the case — writes are scoped to the
+    // specific testOrderId in the payload.
     const caseData = await prisma.case.findUnique({
       where: { id: caseId },
       include: {
@@ -100,27 +136,20 @@ export async function POST(
 
     const donor = caseData?.donor;
     const latestOrder = caseData?.testOrders[0];
-    const collectionDate = latestOrder?.collectionDate
-      ? new Date(latestOrder.collectionDate).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit", timeZone: "America/Chicago" }).replace(/\//g, ".")
-      : new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit", timeZone: "America/Chicago" }).replace(/\//g, ".");
 
-    // --- CoC specimen ID validation ---------------------------------------
-    // For CCF PDFs: read the printed specimen ID from the "CONTROL #" box and
-    // compare to the reference ID (the one the user typed in this upload
-    // flow, or the one already on the targeted test order). If they differ
-    // and the user has not acknowledged the mismatch, return 409 so the
-    // client can show a confirmation modal. The file stays in storage; the
-    // client will either re-POST with confirmSpecimenMismatch=true or fire
-    // an orphan-cleanup DELETE on cancel.
-    //
-    // Vision failures (null extraction) → skip validation silently and
-    // proceed with the upload; we never block the user on OCR failures.
+    // ── CoC PDF — confirmation gate ────────────────────────────────────
+    // We always require an explicit confirmation before persisting a CoC,
+    // because the confirmed collection date IS the source of truth for the
+    // test order. Run both extractors in parallel to minimize wait time.
     let parsedCocSpecimenId: string | null = null;
+    let parsedCocCollectionDate: string | null = null;
+    let cocDateSource: "text" | "vision" | null = null;
     let referenceSpecimenId: string | null = null;
+    let specimenIdMismatch = false;
+
     if (documentType === "chain_of_custody" && ext.toLowerCase() === ".pdf") {
-      // If the upload targets a specific test order, its specimenId wins
-      // over latestOrder.specimenId as the reference. Only query if
-      // testOrderId differs from the latest order we already loaded.
+      // Resolve the targeted test order's existing specimen ID for the
+      // mismatch check.
       let targetOrderSpecimenId: string | null = latestOrder?.specimenId ?? null;
       if (testOrderId) {
         const target = await prisma.testOrder.findUnique({
@@ -131,49 +160,43 @@ export async function POST(
       }
       referenceSpecimenId = (manualSpecimenId?.trim() || targetOrderSpecimenId) ?? null;
 
-      const extraction = await extractCocSpecimenId(buffer);
-      parsedCocSpecimenId = extraction.specimenId;
+      const [specimenExtraction, dateExtraction] = await Promise.all([
+        extractCocSpecimenId(buffer),
+        extractCocCollectionDate(buffer),
+      ]);
+      parsedCocSpecimenId = specimenExtraction.specimenId;
+      parsedCocCollectionDate = dateExtraction.collectionDate;
+      cocDateSource = dateExtraction.source;
 
-      if (
-        parsedCocSpecimenId &&
-        referenceSpecimenId &&
-        parsedCocSpecimenId !== referenceSpecimenId &&
-        !confirmSpecimenMismatch
-      ) {
+      specimenIdMismatch =
+        !!parsedCocSpecimenId &&
+        !!referenceSpecimenId &&
+        parsedCocSpecimenId !== referenceSpecimenId;
+
+      if (!confirmCocUpload) {
         return NextResponse.json(
           {
-            error: "specimen_id_mismatch",
+            error: "coc_needs_confirmation",
+            storagePath,
             parsedSpecimenId: parsedCocSpecimenId,
             recordSpecimenId: referenceSpecimenId,
-            storagePath,
+            specimenIdMismatch,
+            extractedCollectionDate: parsedCocCollectionDate,
+            dateSource: cocDateSource,
           },
           { status: 409 }
         );
       }
+
+      if (!confirmedCollectionDate || !parseIsoDateUtcNoon(confirmedCollectionDate)) {
+        return NextResponse.json(
+          { error: "confirmedCollectionDate is required for CoC uploads" },
+          { status: 400 }
+        );
+      }
     }
 
-    // Build smart file name based on document type
-    let displayName = originalFileName;
-    if (documentType === "result_report" && donor) {
-      displayName = `${donor.firstName} ${donor.lastName} Results ${collectionDate}${ext}`;
-    } else if (documentType === "chain_of_custody") {
-      const specimenId =
-        manualSpecimenId?.trim() ||
-        parsedCocSpecimenId ||
-        latestOrder?.specimenId ||
-        latestOrder?.labAccessionNumber ||
-        "";
-      const donorFirst = donor?.firstName || "Unknown";
-      const donorLast = donor?.lastName || "Donor";
-      displayName = buildCcfFilename(specimenId, donorFirst, donorLast, ext);
-    }
-
-    // For result reports: generate the narrative summary first (the human-
-    // readable paragraph that feeds the compose-results email), THEN parse
-    // structured data out of that summary. Sequential because the structured
-    // extractor is dramatically more reliable when fed clean prose than when
-    // asked to read the PDF directly — the "read PDF + structure output"
-    // combined task empirically fails on ~40% of real lab PDFs.
+    // ── Result PDF — extract early so the gate has data to check ──────
     let extractedData: { summary: string } | null = null;
     let structuredResult: ExtractedLabResult | null = null;
     let cocMisclassificationWarning: string | null = null;
@@ -184,15 +207,172 @@ export async function POST(
         pdfBuffer: buffer,
         summaryText: summary,
       });
-      // Catch COC forms misfiled as result reports before we write a bogus
-      // LabResult row + incorrectly advance the test order status. If this
-      // fires, we still save the Document (so the user has a record of
-      // what they uploaded) but downstream side effects are skipped and
-      // the response includes a warning for the client to surface.
       cocMisclassificationWarning = detectCocMisclassification(
         summary,
         structuredResult
       );
+    }
+
+    // ── Result PDF — confirmation gate ─────────────────────────────────
+    // Hard requirements before any DB writes:
+    //   1) The targeted test order must already have a chain-of-custody
+    //      document. Results can only follow CoC. (Bypassable only by
+    //      uploading the CoC first — there is no "upload anyway" override.)
+    //   2) Critical mismatches (e.g., specimen ID doesn't match) HARD BLOCK.
+    //      No override on the server, even if the client tries to set
+    //      confirmResultUpload=true.
+    //   3) Warning-only mismatches require an explicit confirmResultUpload.
+    //   4) Clean match (no findings) — auto-save silently.
+    let resultFindings: ReturnType<typeof runLabResultCrosschecks> = [];
+    let resultTargetOrder: {
+      id: string;
+      collectionDate: Date | null;
+      specimenId: string | null;
+      labAccessionNumber: string | null;
+      paymentMethod: string | null;
+      testStatus: TestStatus;
+    } | null = null;
+
+    if (
+      documentType === "result_report" &&
+      ext.toLowerCase() === ".pdf" &&
+      !cocMisclassificationWarning
+    ) {
+      // Resolve the target test order. Result uploads should always carry a
+      // testOrderId (the upload UI only enables the slot per-order); fall
+      // back to the most-recent pre-result order otherwise to preserve the
+      // legacy POST surface.
+      const candidateOrders = await prisma.testOrder.findMany({
+        where: {
+          caseId,
+          ...(testOrderId
+            ? { id: testOrderId }
+            : { testStatus: { in: ["specimen_collected", "sent_to_lab"] as TestStatus[] } }),
+        },
+        orderBy: { updatedAt: "desc" },
+        take: testOrderId ? 1 : 1,
+        select: {
+          id: true,
+          collectionDate: true,
+          specimenId: true,
+          labAccessionNumber: true,
+          paymentMethod: true,
+          testStatus: true,
+        },
+      });
+      resultTargetOrder = candidateOrders[0] ?? null;
+
+      if (resultTargetOrder) {
+        // Hard requirement: a chain-of-custody document must exist for this
+        // test order before results can be uploaded.
+        const existingCoc = await prisma.document.findFirst({
+          where: {
+            caseId,
+            testOrderId: resultTargetOrder.id,
+            documentType: "chain_of_custody",
+          },
+          select: { id: true },
+        });
+
+        if (!existingCoc) {
+          return NextResponse.json(
+            {
+              error: "coc_required",
+              storagePath,
+              message:
+                "Upload the chain of custody for this test order before uploading the lab result.",
+            },
+            { status: 409 }
+          );
+        }
+
+        resultFindings = structuredResult
+          ? runLabResultCrosschecks(structuredResult, {
+              collectionDate: resultTargetOrder.collectionDate,
+              specimenId: resultTargetOrder.specimenId,
+              labAccessionNumber: resultTargetOrder.labAccessionNumber,
+            })
+          : [];
+
+        const hasCriticalMismatch = resultFindings.some(
+          (f) => f.severity === "critical"
+        );
+
+        // Critical mismatch — hard block, no override path on the server.
+        if (hasCriticalMismatch) {
+          return NextResponse.json(
+            {
+              error: "result_critical_mismatch",
+              storagePath,
+              extracted: {
+                specimenId: structuredResult?.labSpecimenId ?? null,
+                collectionDate: structuredResult?.reportedCollectionDate ?? null,
+              },
+              order: {
+                specimenId: resultTargetOrder.specimenId,
+                collectionDate: resultTargetOrder.collectionDate
+                  ? dateToUtcDateKey(resultTargetOrder.collectionDate)
+                  : null,
+              },
+              findings: resultFindings,
+            },
+            { status: 409 }
+          );
+        }
+
+        // Warning-only mismatches — require explicit confirmation.
+        if (resultFindings.length > 0 && !confirmResultUpload) {
+          return NextResponse.json(
+            {
+              error: "result_needs_confirmation",
+              storagePath,
+              extracted: {
+                specimenId: structuredResult?.labSpecimenId ?? null,
+                collectionDate: structuredResult?.reportedCollectionDate ?? null,
+              },
+              order: {
+                specimenId: resultTargetOrder.specimenId,
+                collectionDate: resultTargetOrder.collectionDate
+                  ? dateToUtcDateKey(resultTargetOrder.collectionDate)
+                  : null,
+              },
+              findings: resultFindings,
+            },
+            { status: 409 }
+          );
+        }
+        // Else: clean match (or warnings already confirmed) — fall through.
+      }
+    }
+
+    // === All gates passed — commit DB writes from here on ==============
+
+    // Build smart file name based on document type
+    const collectionDateForName = parseIsoDateUtcNoon(confirmedCollectionDate)
+      ?? latestOrder?.collectionDate
+      ?? new Date();
+    const collectionDateStr = collectionDateForName
+      .toLocaleDateString("en-US", {
+        month: "numeric",
+        day: "numeric",
+        year: "2-digit",
+        timeZone: "America/Chicago",
+      })
+      .replace(/\//g, ".");
+
+    let displayName = originalFileName;
+    if (documentType === "result_report" && donor) {
+      displayName = `${donor.firstName} ${donor.lastName} Results ${collectionDateStr}${ext}`;
+    } else if (documentType === "chain_of_custody") {
+      const specimenId =
+        manualSpecimenId?.trim() ||
+        parsedCocSpecimenId ||
+        latestOrder?.specimenId ||
+        latestOrder?.labAccessionNumber ||
+        "";
+      const donorFirst = donor?.firstName || "Unknown";
+      const donorLast = donor?.lastName || "Donor";
+      displayName = buildCcfFilename(specimenId, donorFirst, donorLast, ext);
     }
 
     // Create document record
@@ -220,183 +400,200 @@ export async function POST(
       },
     });
 
-    // Auto-advance test orders when chain of custody is uploaded → specimen_collected.
-    //
-    // We deliberately do NOT write `collectionDate` here anymore. The prior
-    // Vision-based date extraction misread handwritten dates too often, and
-    // the upload-day fallback silently substituted a wrong value when the
-    // extraction failed. collectionDate is now populated only by explicit
-    // staff entry (EditTestOrderModal) or other authoritative paths.
+    // ── CoC commit: scope writes to the SINGLE targeted test order ────
+    // Per the "one CoC per test order" rule we no longer loop over every
+    // pre-collection order on the case. The collection date confirmed in
+    // the modal is the source of truth and is written here; manual entry
+    // in EditTestOrderModal remains as an emergency fallback.
     if (documentType === "chain_of_custody") {
-      const preCollectionStatuses = ["order_created", "awaiting_payment", "payment_received"] as TestStatus[];
-      const testOrders = await prisma.testOrder.findMany({
-        where: {
-          caseId,
-          testStatus: { in: preCollectionStatuses },
-          ...(testOrderId ? { id: testOrderId } : {}), // scope to specific test order if provided
-        },
-      });
+      const confirmedDate = parseIsoDateUtcNoon(confirmedCollectionDate);
 
-      for (const order of testOrders) {
-        await prisma.testOrder.update({
-          where: { id: order.id },
-          data: {
-            testStatus: "specimen_collected",
-            ...(manualSpecimenId && !order.specimenId ? { specimenId: manualSpecimenId } : {}),
-          },
-        });
-        await prisma.statusLog.create({
-          data: {
-            caseId,
-            testOrderId: order.id,
-            oldStatus: order.testStatus,
-            newStatus: "specimen_collected",
-            changedBy: "admin",
-            note: "Auto-advanced: chain of custody uploaded.",
-          },
-        });
-      }
+      const targetOrderId =
+        testOrderId ??
+        (await prisma.testOrder
+          .findFirst({
+            where: {
+              caseId,
+              testStatus: {
+                in: ["order_created", "awaiting_payment", "payment_received"] as TestStatus[],
+              },
+            },
+            orderBy: { updatedAt: "desc" },
+            select: { id: true },
+          })
+          .then((o) => o?.id ?? null));
 
-      // If the upload proceeded despite a detected specimen-ID mismatch
-      // (user acknowledged via the confirmation modal), record the ack so
-      // the provenance is queryable later.
-      if (
-        confirmSpecimenMismatch &&
-        parsedCocSpecimenId &&
-        referenceSpecimenId &&
-        parsedCocSpecimenId !== referenceSpecimenId
-      ) {
-        await prisma.statusLog.create({
-          data: {
-            caseId,
-            testOrderId: testOrderId || null,
-            oldStatus: "—",
-            newStatus: "specimen_id_mismatch_ack",
-            changedBy: "admin",
-            note: `CoC uploaded with acknowledged specimen ID mismatch (PDF: ${parsedCocSpecimenId}, record: ${referenceSpecimenId}).`,
-          },
+      if (targetOrderId && confirmedDate) {
+        const order = await prisma.testOrder.findUnique({
+          where: { id: targetOrderId },
+          select: { id: true, testStatus: true, specimenId: true },
         });
+        if (order) {
+          const preCollection: TestStatus[] = [
+            "order_created",
+            "awaiting_payment",
+            "payment_received",
+          ];
+          const advancing = preCollection.includes(order.testStatus);
+
+          await prisma.testOrder.update({
+            where: { id: order.id },
+            data: {
+              collectionDate: confirmedDate,
+              ...(advancing ? { testStatus: "specimen_collected" } : {}),
+              ...(manualSpecimenId && !order.specimenId
+                ? { specimenId: manualSpecimenId }
+                : {}),
+            },
+          });
+
+          const sourceLabel =
+            cocDateSource === "text"
+              ? "AI-extracted from text"
+              : cocDateSource === "vision"
+                ? "AI-extracted via Vision"
+                : "manually entered";
+          const dateLabel = formatChicagoMediumDate(confirmedDate);
+
+          if (advancing) {
+            await prisma.statusLog.create({
+              data: {
+                caseId,
+                testOrderId: order.id,
+                oldStatus: order.testStatus,
+                newStatus: "specimen_collected",
+                changedBy: "admin",
+                note: `Auto-advanced: chain of custody uploaded. Collection date set to ${dateLabel} (${sourceLabel}, confirmed by admin).`,
+              },
+            });
+          } else {
+            await prisma.statusLog.create({
+              data: {
+                caseId,
+                testOrderId: order.id,
+                oldStatus: order.testStatus,
+                newStatus: order.testStatus,
+                changedBy: "admin",
+                note: `Chain of custody uploaded. Collection date set to ${dateLabel} (${sourceLabel}, confirmed by admin).`,
+              },
+            });
+          }
+
+          if (specimenIdMismatch) {
+            await prisma.statusLog.create({
+              data: {
+                caseId,
+                testOrderId: order.id,
+                oldStatus: "—",
+                newStatus: "specimen_id_mismatch_ack",
+                changedBy: "admin",
+                note: `CoC uploaded with acknowledged specimen ID mismatch (PDF: ${parsedCocSpecimenId}, record: ${referenceSpecimenId}).`,
+              },
+            });
+          }
+        }
       }
     }
 
-    // Auto-advance test orders when lab results are uploaded.
-    // Skip the whole block if the COC-misclassification detector fired —
-    // we saved the file, but we don't want to advance status or write a
-    // LabResult based on a document that isn't actually a results report.
-    if (documentType === "result_report" && !cocMisclassificationWarning) {
-      const caseInfo = await prisma.case.findUnique({
-        where: { id: caseId },
-        select: { isMonitored: true },
-      });
-      const isMonitored = caseInfo?.isMonitored ?? false;
+    // ── Result commit: scope to the single targeted test order ────────
+    if (
+      documentType === "result_report" &&
+      !cocMisclassificationWarning &&
+      resultTargetOrder
+    ) {
+      const order = resultTargetOrder;
+      const isPaid =
+        !!order.paymentMethod && order.paymentMethod !== "invoiced";
+      const newStatus = isPaid ? "results_received" : "results_held";
 
-      const preResultStatuses = ["specimen_collected", "sent_to_lab"] as TestStatus[];
-      const testOrders = await prisma.testOrder.findMany({
-        where: {
+      await prisma.testOrder.update({
+        where: { id: order.id },
+        data: {
+          testStatus: newStatus as TestStatus,
+          resultsReceivedDate: new Date(),
+        },
+      });
+      await prisma.statusLog.create({
+        data: {
           caseId,
-          testStatus: { in: preResultStatuses },
-          ...(testOrderId ? { id: testOrderId } : {}),
+          testOrderId: order.id,
+          oldStatus: order.testStatus,
+          newStatus,
+          changedBy: "admin",
+          note: isPaid
+            ? "Auto-advanced: lab results uploaded (paid)"
+            : "Auto-held: lab results uploaded but payment outstanding",
         },
       });
 
-      for (const order of testOrders) {
-        // Auto-route based on payment: paid → results_received, unpaid → results_held
-        const isPaid = !!order.paymentMethod && order.paymentMethod !== "invoiced";
-        const newStatus = isPaid ? "results_received" : "results_held";
-        await prisma.testOrder.update({
-          where: { id: order.id },
+      // LabResult row
+      await prisma.labResult.create({
+        data: {
+          testOrderId: order.id,
+          documentId: document.id,
+          source: "pdf_upload",
+          parserVersion: LAB_RESULT_PARSER_VERSION,
+          overallStatus: (structuredResult?.overallStatus ?? "unknown") as LabResultStatus,
+          reportedCollectionDate: parseIsoDateUtcNoon(structuredResult?.reportedCollectionDate),
+          receivedAtLab: parseIsoDateUtcNoon(structuredResult?.receivedAtLab),
+          reportDate: parseIsoDateUtcNoon(structuredResult?.reportDate),
+          mroVerificationDate: parseIsoDateUtcNoon(structuredResult?.mroVerificationDate),
+          labReportNumber: structuredResult?.labReportNumber ?? null,
+          labSpecimenId: structuredResult?.labSpecimenId ?? null,
+          labName: structuredResult?.labName ?? null,
+          analytes: structuredResult?.analytes ?? [],
+          specimenValidity: structuredResult?.specimenValidity ?? undefined,
+          mismatches: resultFindings,
+          rawSummary: extractedData?.summary ?? null,
+        },
+      });
+
+      // Audit: explicit human acknowledgment when crosschecks raised
+      // (warning-only) findings and staff confirmed via the modal.
+      if (resultFindings.length > 0) {
+        await prisma.statusLog.create({
           data: {
-            testStatus: newStatus as TestStatus,
-            resultsReceivedDate: new Date(),
+            caseId,
+            testOrderId: order.id,
+            oldStatus: newStatus,
+            newStatus: "needs_review",
+            changedBy: "admin",
+            note:
+              `Lab result cross-check flagged ${resultFindings.length} mismatch${resultFindings.length === 1 ? "" : "es"}: ` +
+              resultFindings.map((f) => `${f.severity.toUpperCase()} ${f.type} — ${f.message}`).join(" | "),
           },
         });
         await prisma.statusLog.create({
           data: {
             caseId,
             testOrderId: order.id,
-            oldStatus: order.testStatus,
-            newStatus: newStatus,
+            oldStatus: "—",
+            newStatus: "result_upload_confirmed",
             changedBy: "admin",
-            note: isPaid
-              ? "Auto-advanced: lab results uploaded (paid)"
-              : "Auto-held: lab results uploaded but payment outstanding",
+            note: "Lab result upload confirmed by admin despite warning-level mismatches.",
           },
         });
-
-        // ── Create the LabResult row ─────────────────────────────────────
-        // We write a row whether or not the structured extractor succeeded:
-        // a pending row with no analytes still gives us somewhere to attach
-        // the source Document and receivedByUs timestamp, and the UI can
-        // show "parser couldn't read this — please review manually".
-        const findings = structuredResult
-          ? runLabResultCrosschecks(structuredResult, {
-              collectionDate: order.collectionDate,
-              specimenId: order.specimenId,
-              labAccessionNumber: order.labAccessionNumber,
-            })
-          : [];
-
-        const parseIsoDate = (s: string | null | undefined): Date | null => {
-          if (!s) return null;
-          const match = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
-          if (!match) return null;
-          const [, y, m, d] = match;
-          const date = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10), 12, 0, 0);
-          return Number.isNaN(date.getTime()) ? null : date;
-        };
-
-        await prisma.labResult.create({
-          data: {
-            testOrderId: order.id,
-            documentId: document.id,
-            source: "pdf_upload",
-            parserVersion: LAB_RESULT_PARSER_VERSION,
-            overallStatus: (structuredResult?.overallStatus ?? "unknown") as LabResultStatus,
-            reportedCollectionDate: parseIsoDate(structuredResult?.reportedCollectionDate),
-            receivedAtLab: parseIsoDate(structuredResult?.receivedAtLab),
-            reportDate: parseIsoDate(structuredResult?.reportDate),
-            mroVerificationDate: parseIsoDate(structuredResult?.mroVerificationDate),
-            labReportNumber: structuredResult?.labReportNumber ?? null,
-            labSpecimenId: structuredResult?.labSpecimenId ?? null,
-            labName: structuredResult?.labName ?? null,
-            analytes: structuredResult?.analytes ?? [],
-            specimenValidity: structuredResult?.specimenValidity ?? undefined,
-            mismatches: findings,
-            rawSummary: extractedData?.summary ?? null,
-          },
-        });
-
-        if (findings.length > 0) {
-          await prisma.statusLog.create({
-            data: {
-              caseId,
-              testOrderId: order.id,
-              oldStatus: newStatus,
-              newStatus: "needs_review",
-              changedBy: "admin",
-              note:
-                `Lab result cross-check flagged ${findings.length} mismatch${findings.length === 1 ? "" : "es"}: ` +
-                findings.map((f) => `${f.severity.toUpperCase()} ${f.type} — ${f.message}`).join(" | "),
-            },
-          });
-        }
       }
 
-      // Reopen case if it was closed (results need review before re-closing)
-      if (testOrders.length > 0) {
-        const currentCase = await prisma.case.findUnique({ where: { id: caseId }, select: { caseStatus: true } });
-        if (currentCase?.caseStatus === "closed") {
-          await prisma.case.update({ where: { id: caseId }, data: { caseStatus: "active" } });
-          await prisma.statusLog.create({
-            data: {
-              caseId,
-              oldStatus: "closed",
-              newStatus: "active",
-              changedBy: "admin",
-              note: "Auto-reopened: new lab results uploaded on closed case",
-            },
-          });
-        }
+      // Reopen case if it was closed
+      const currentCase = await prisma.case.findUnique({
+        where: { id: caseId },
+        select: { caseStatus: true },
+      });
+      if (currentCase?.caseStatus === "closed") {
+        await prisma.case.update({
+          where: { id: caseId },
+          data: { caseStatus: "active" },
+        });
+        await prisma.statusLog.create({
+          data: {
+            caseId,
+            oldStatus: "closed",
+            newStatus: "active",
+            changedBy: "admin",
+            note: "Auto-reopened: new lab results uploaded on closed case",
+          },
+        });
       }
     }
 

@@ -2,7 +2,9 @@
 
 import { useState, useRef } from "react";
 import { apiError } from "@/lib/clientErrors";
-import { SpecimenIdMismatchModal } from "./SpecimenIdMismatchModal";
+import { CocConfirmModal } from "./CocConfirmModal";
+import { ResultConfirmModal } from "./ResultConfirmModal";
+import type { MismatchFinding } from "@/lib/labResultCrosscheck";
 
 type Doc = {
   id: string;
@@ -30,25 +32,40 @@ type ProcessPayload = {
   documentType: string;
   testOrderId: string;
   specimenId?: string;
-  confirmSpecimenMismatch?: boolean;
+  confirmCocUpload?: boolean;
+  confirmedCollectionDate?: string;
+  confirmResultUpload?: boolean;
 };
 
-type MismatchState = {
-  parsedSpecimenId: string;
-  recordSpecimenId: string;
+type CocConfirmState = {
   storagePath: string;
-  payload: ProcessPayload; // the original POST body, reused on confirm
+  fileName: string;
+  parsedSpecimenId: string | null;
+  recordSpecimenId: string | null;
+  specimenIdMismatch: boolean;
+  extractedCollectionDate: string | null;
+  dateSource: "text" | "vision" | null;
+  payload: ProcessPayload;
+};
+
+type ResultConfirmState = {
+  storagePath: string;
+  fileName: string;
+  extracted: { specimenId: string | null; collectionDate: string | null };
+  order: { specimenId: string | null; collectionDate: string | null };
+  findings: MismatchFinding[];
+  hasCriticalMismatch: boolean;
+  payload: ProcessPayload;
 };
 
 export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }: Props) {
   const [uploading, setUploading] = useState<string | null>(null);
-  const [specimenIdInput, setSpecimenIdInput] = useState("");
-  const [pendingFile, setPendingFile] = useState<{ file: File; type: string } | null>(null);
-  const [mismatch, setMismatch] = useState<MismatchState | null>(null);
+  const [cocConfirm, setCocConfirm] = useState<CocConfirmState | null>(null);
+  const [resultConfirm, setResultConfirm] = useState<ResultConfirmState | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  // POST step only — used both for the initial attempt and for the
-  // "Upload Anyway" retry after the user acknowledges a mismatch.
+  // POST step only — used both for the initial upload and for the
+  // re-POST after the user confirms via the CoC or Result modal.
   async function postProcess(payload: ProcessPayload): Promise<boolean> {
     const processRes = await fetch(`/api/cases/${caseId}/documents`, {
       method: "POST",
@@ -56,17 +73,43 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
       body: JSON.stringify(payload),
     });
 
-    // 409 = specimen-ID mismatch. Capture the mismatch details, keep the
-    // file in storage, and let the user decide via the modal.
     if (processRes.status === 409) {
       const body = await processRes.json().catch(() => null);
-      if (body?.error === "specimen_id_mismatch") {
-        setMismatch({
-          parsedSpecimenId: body.parsedSpecimenId,
-          recordSpecimenId: body.recordSpecimenId,
+
+      if (body?.error === "coc_needs_confirmation") {
+        setCocConfirm({
           storagePath: body.storagePath,
+          fileName: payload.fileName,
+          parsedSpecimenId: body.parsedSpecimenId ?? null,
+          recordSpecimenId: body.recordSpecimenId ?? null,
+          specimenIdMismatch: !!body.specimenIdMismatch,
+          extractedCollectionDate: body.extractedCollectionDate ?? null,
+          dateSource: body.dateSource ?? null,
           payload,
         });
+        return false;
+      }
+
+      if (
+        body?.error === "result_needs_confirmation" ||
+        body?.error === "result_critical_mismatch"
+      ) {
+        setResultConfirm({
+          storagePath: body.storagePath,
+          fileName: payload.fileName,
+          extracted: body.extracted,
+          order: body.order,
+          findings: body.findings ?? [],
+          hasCriticalMismatch: body.error === "result_critical_mismatch",
+          payload,
+        });
+        return false;
+      }
+
+      if (body?.error === "coc_required") {
+        // Hard block — tell the user, then clean up the orphaned upload.
+        alert(body.message || "Upload chain of custody first.");
+        if (body.storagePath) await orphanCleanup(body.storagePath);
         return false;
       }
     }
@@ -88,7 +131,18 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
     return true;
   }
 
-  async function uploadFile(file: File, docType: string, extraSpecimenId?: string) {
+  async function orphanCleanup(storagePath: string) {
+    try {
+      await fetch(
+        `/api/storage/orphan?caseId=${encodeURIComponent(caseId)}&storagePath=${encodeURIComponent(storagePath)}`,
+        { method: "DELETE" }
+      );
+    } catch (e) {
+      console.warn("[TestOrderDocuments] orphan cleanup failed:", e);
+    }
+  }
+
+  async function uploadFile(file: File, docType: string) {
     setUploading(docType);
 
     try {
@@ -107,7 +161,6 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
       const { uploadUrl, storagePath, headers } = await urlRes.json();
 
       // Step 2: Upload file directly to Supabase Storage (bypasses Vercel size limit)
-      // Retry on transient 5xx errors (Supabase occasionally returns 502/503/504)
       let uploadRes: Response | null = null;
       let lastError = "";
       for (let attempt = 1; attempt <= 3; attempt++) {
@@ -118,7 +171,6 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
             body: file,
           });
           if (uploadRes.ok) break;
-          // 5xx = retry; 4xx = don't retry (bad request)
           if (uploadRes.status < 500) {
             const err = await uploadRes.text();
             throw new Error(`Storage upload failed: ${uploadRes.status} — ${err.slice(0, 200)}`);
@@ -135,28 +187,31 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
         throw new Error(`Storage upload failed after 3 attempts — ${lastError}. Please try again.`);
       }
 
-      // Step 3: Tell the API to process the uploaded file.
+      // Step 3: Tell the API to process the uploaded file. The server will
+      // return a 409 for CoC (always — confirmation modal) and for results
+      // with mismatches; clean-match results auto-save here.
       const payload: ProcessPayload = {
         storagePath,
         fileName: file.name,
         documentType: docType,
         testOrderId,
-        ...(extraSpecimenId ? { specimenId: extraSpecimenId } : {}),
       };
       await postProcess(payload);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(null);
-      setPendingFile(null);
-      setSpecimenIdInput("");
     }
   }
 
-  async function handleMismatchConfirm() {
-    if (!mismatch) return;
-    const payload = { ...mismatch.payload, confirmSpecimenMismatch: true };
-    setMismatch(null);
+  async function handleCocConfirm(collectionDate: string) {
+    if (!cocConfirm) return;
+    const payload: ProcessPayload = {
+      ...cocConfirm.payload,
+      confirmCocUpload: true,
+      confirmedCollectionDate: collectionDate,
+    };
+    setCocConfirm(null);
     setUploading(payload.documentType);
     try {
       await postProcess(payload);
@@ -165,29 +220,34 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
     }
   }
 
-  async function handleMismatchCancel() {
-    if (!mismatch) return;
-    const { storagePath } = mismatch;
-    setMismatch(null);
-    // Clean up the orphaned file. Fire-and-forget — failures just leave a
-    // stray file in storage; they don't affect the user.
+  async function handleCocCancel() {
+    if (!cocConfirm) return;
+    const { storagePath } = cocConfirm;
+    setCocConfirm(null);
+    await orphanCleanup(storagePath);
+  }
+
+  async function handleResultConfirm() {
+    if (!resultConfirm) return;
+    if (resultConfirm.hasCriticalMismatch) return; // server blocks; no-op
+    const payload: ProcessPayload = {
+      ...resultConfirm.payload,
+      confirmResultUpload: true,
+    };
+    setResultConfirm(null);
+    setUploading(payload.documentType);
     try {
-      await fetch(
-        `/api/storage/orphan?caseId=${encodeURIComponent(caseId)}&storagePath=${encodeURIComponent(storagePath)}`,
-        { method: "DELETE" }
-      );
-    } catch (e) {
-      console.warn("[TestOrderDocuments] orphan cleanup failed:", e);
+      await postProcess(payload);
+    } finally {
+      setUploading(null);
     }
   }
 
-  function handleFileSelect(file: File, docType: string) {
-    if (docType === "chain_of_custody") {
-      // COC needs specimen ID prompt
-      setPendingFile({ file, type: docType });
-    } else {
-      uploadFile(file, docType);
-    }
+  async function handleResultCancel() {
+    if (!resultConfirm) return;
+    const { storagePath } = resultConfirm;
+    setResultConfirm(null);
+    await orphanCleanup(storagePath);
   }
 
   function handleDownload(docId: string) {
@@ -244,7 +304,7 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
                     accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                     onChange={(e) => {
                       const f = e.target.files?.[0];
-                      if (f) handleFileSelect(f, slot.type);
+                      if (f) uploadFile(f, slot.type);
                       e.target.value = "";
                     }}
                   />
@@ -256,42 +316,28 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
         );
       })}
 
-      {/* COC Specimen ID prompt */}
-      {pendingFile && pendingFile.type === "chain_of_custody" && (
-        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
-          <p className="text-blue-800 font-medium mb-1">Specimen ID for {pendingFile.file.name}</p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={specimenIdInput}
-              onChange={(e) => setSpecimenIdInput(e.target.value)}
-              placeholder="e.g. 8079207"
-              className="flex-1 px-2 py-1 border border-blue-300 rounded text-xs"
-              autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter") uploadFile(pendingFile.file, "chain_of_custody", specimenIdInput); }}
-            />
-            <button
-              onClick={() => uploadFile(pendingFile.file, "chain_of_custody", specimenIdInput)}
-              className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium"
-            >
-              Upload
-            </button>
-            <button
-              onClick={() => { setPendingFile(null); setSpecimenIdInput(""); }}
-              className="text-gray-500 text-xs"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+      {cocConfirm && (
+        <CocConfirmModal
+          fileName={cocConfirm.fileName}
+          pdfId={cocConfirm.parsedSpecimenId}
+          recordId={cocConfirm.recordSpecimenId}
+          specimenIdMismatch={cocConfirm.specimenIdMismatch}
+          extractedDate={cocConfirm.extractedCollectionDate}
+          dateSource={cocConfirm.dateSource}
+          onConfirm={handleCocConfirm}
+          onCancel={handleCocCancel}
+        />
       )}
 
-      {mismatch && (
-        <SpecimenIdMismatchModal
-          pdfId={mismatch.parsedSpecimenId}
-          recordId={mismatch.recordSpecimenId}
-          onConfirm={handleMismatchConfirm}
-          onCancel={handleMismatchCancel}
+      {resultConfirm && (
+        <ResultConfirmModal
+          fileName={resultConfirm.fileName}
+          extracted={resultConfirm.extracted}
+          order={resultConfirm.order}
+          findings={resultConfirm.findings}
+          hasCriticalMismatch={resultConfirm.hasCriticalMismatch}
+          onConfirm={handleResultConfirm}
+          onCancel={handleResultCancel}
         />
       )}
     </div>
