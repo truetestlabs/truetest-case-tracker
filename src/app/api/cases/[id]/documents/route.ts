@@ -13,6 +13,15 @@ import { extractCocSpecimenId } from "@/lib/extractCocSpecimenId";
 // Allow longer execution for AI summary generation on upload
 export const maxDuration = 60;
 
+// Staff routinely rename CoC PDFs with the actual specimen ID as the leading
+// token (e.g. "4070522 Benjamin Mundt 5p ua.pdf"). When Vision misreads the
+// printed barcode, that filename token is a strong tiebreaker — surface it
+// to the client so the mismatch dialog can pre-populate the corrected ID.
+function extractFilenameSpecimenId(name: string): string | null {
+  const match = name.match(/^\s*(\d{5,})[\s_-]/);
+  return match ? match[1] : null;
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -34,6 +43,10 @@ export async function POST(
     // modal, it sets this flag. Server skips the mismatch check for this
     // upload and records the ack in the StatusLog.
     let confirmSpecimenMismatch = false;
+    // The corrected specimen ID the user typed into the mismatch modal.
+    // When present, it wins over manualSpecimenId / parsedCocSpecimenId
+    // for filename construction AND is written back to the test order.
+    let correctedSpecimenId: string | null = null;
 
     if (isJson) {
       // NEW MODE: File already uploaded directly to Supabase Storage
@@ -44,6 +57,7 @@ export async function POST(
       originalFileName = body.fileName;
       storagePath = body.storagePath;
       confirmSpecimenMismatch = body.confirmSpecimenMismatch === true;
+      correctedSpecimenId = body.correctedSpecimenId || null;
       ext = originalFileName.includes(".") ? "." + originalFileName.split(".").pop() : ".pdf";
 
       // Download from Supabase to get buffer for parsing/AI summary
@@ -58,6 +72,7 @@ export async function POST(
       manualSpecimenId = formData.get("specimenId") as string | null;
       testOrderId = formData.get("testOrderId") as string | null;
       confirmSpecimenMismatch = formData.get("confirmSpecimenMismatch") === "true";
+      correctedSpecimenId = (formData.get("correctedSpecimenId") as string | null) || null;
 
       if (!file) {
         return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -144,6 +159,7 @@ export async function POST(
           {
             error: "specimen_id_mismatch",
             parsedSpecimenId: parsedCocSpecimenId,
+            filenameSpecimenId: extractFilenameSpecimenId(originalFileName),
             recordSpecimenId: referenceSpecimenId,
             storagePath,
           },
@@ -152,20 +168,27 @@ export async function POST(
       }
     }
 
+    // Single source of truth for the specimen ID we treat as authoritative
+    // for this upload. correctedSpecimenId (from the mismatch modal) wins;
+    // then manualSpecimenId from the upload prompt; then whatever Vision read;
+    // then whatever's already on the latest order. Used for both the saved
+    // CCF filename and the test-order specimenId write-back below.
+    const effectiveSpecimenId =
+      correctedSpecimenId?.trim() ||
+      manualSpecimenId?.trim() ||
+      parsedCocSpecimenId ||
+      latestOrder?.specimenId ||
+      latestOrder?.labAccessionNumber ||
+      "";
+
     // Build smart file name based on document type
     let displayName = originalFileName;
     if (documentType === "result_report" && donor) {
       displayName = `${donor.firstName} ${donor.lastName} Results ${collectionDate}${ext}`;
     } else if (documentType === "chain_of_custody") {
-      const specimenId =
-        manualSpecimenId?.trim() ||
-        parsedCocSpecimenId ||
-        latestOrder?.specimenId ||
-        latestOrder?.labAccessionNumber ||
-        "";
       const donorFirst = donor?.firstName || "Unknown";
       const donorLast = donor?.lastName || "Donor";
-      displayName = buildCcfFilename(specimenId, donorFirst, donorLast, ext);
+      displayName = buildCcfFilename(effectiveSpecimenId, donorFirst, donorLast, ext);
     }
 
     // For result reports: generate the narrative summary first (the human-
@@ -228,6 +251,18 @@ export async function POST(
     // extraction failed. collectionDate is now populated only by explicit
     // staff entry (EditTestOrderModal) or other authoritative paths.
     if (documentType === "chain_of_custody") {
+      // The corrected specimen ID overrides whatever the order has, regardless
+      // of testStatus — staff explicitly told us the existing value was wrong,
+      // so a sent_to_lab or later order should still be corrected. This is
+      // separate from auto-advance, which only fires on pre-collection orders.
+      const corrected = correctedSpecimenId?.trim();
+      if (corrected && testOrderId) {
+        await prisma.testOrder.update({
+          where: { id: testOrderId },
+          data: { specimenId: corrected },
+        });
+      }
+
       const preCollectionStatuses = ["order_created", "awaiting_payment", "payment_received"] as TestStatus[];
       const testOrders = await prisma.testOrder.findMany({
         where: {
@@ -238,11 +273,19 @@ export async function POST(
       });
 
       for (const order of testOrders) {
+        // Specimen-ID fallback for the auto-advance: when no correction was
+        // submitted, manualSpecimenId fills in if the order has none yet
+        // (preserves legacy behavior). The corrected case is already handled
+        // above for the targeted order.
+        const specimenIdWrite =
+          !corrected && manualSpecimenId && !order.specimenId
+            ? { specimenId: manualSpecimenId }
+            : {};
         await prisma.testOrder.update({
           where: { id: order.id },
           data: {
             testStatus: "specimen_collected",
-            ...(manualSpecimenId && !order.specimenId ? { specimenId: manualSpecimenId } : {}),
+            ...specimenIdWrite,
           },
         });
         await prisma.statusLog.create({
@@ -266,6 +309,7 @@ export async function POST(
         referenceSpecimenId &&
         parsedCocSpecimenId !== referenceSpecimenId
       ) {
+        const correctedTo = correctedSpecimenId?.trim() || referenceSpecimenId;
         await prisma.statusLog.create({
           data: {
             caseId,
@@ -273,7 +317,7 @@ export async function POST(
             oldStatus: "—",
             newStatus: "specimen_id_mismatch_ack",
             changedBy: "admin",
-            note: `CoC uploaded with acknowledged specimen ID mismatch (PDF: ${parsedCocSpecimenId}, record: ${referenceSpecimenId}).`,
+            note: `CoC uploaded with acknowledged specimen ID mismatch (PDF: ${parsedCocSpecimenId}, record: ${referenceSpecimenId}, corrected to: ${correctedTo}).`,
           },
         });
       }

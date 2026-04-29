@@ -1,24 +1,53 @@
 "use client";
 
+import { useState } from "react";
+
 /**
  * Confirmation modal shown when the specimen ID printed on a CoC PDF does
- * not match the specimen ID on the test record. Staff can confirm the
- * upload anyway (rare but real — e.g., a lab printed a corrected form) or
- * cancel, which aborts the upload and cleans up the orphaned storage file.
+ * not match the specimen ID on the test record. Staff enter the correct
+ * specimen ID; on confirm the upload proceeds and the corrected ID is
+ * written back to the test order.
  *
- * Follows the overlay pattern used by EditTestOrderModal / EditCaseModal:
- * full-screen dim backdrop with click-to-close, rounded white content box,
- * X button in the header. No shadcn dependency.
+ * Three signals are surfaced:
+ *   - PDF: what Claude Vision read off the barcode/printed field.
+ *   - Filename: numeric token at the start of the uploaded filename, if any.
+ *     Staff routinely rename CoC PDFs as `<specimen_id> <donor>.pdf`, so
+ *     this is a strong tiebreaker when Vision misreads.
+ *   - Record: what's already on the test order in the DB.
+ *
+ * Pre-fill priority: filename if it agrees with record (one-click confirm
+ * path), else record (the safe fallback), else empty.
  */
 
 type Props = {
-  pdfId: string;
-  recordId: string;
-  onConfirm: () => void;
+  parsedSpecimenId: string;
+  filenameSpecimenId: string | null;
+  recordSpecimenId: string;
+  onConfirm: (correctedSpecimenId: string) => void;
   onCancel: () => void;
 };
 
-export function SpecimenIdMismatchModal({ pdfId, recordId, onConfirm, onCancel }: Props) {
+export function SpecimenIdMismatchModal({
+  parsedSpecimenId,
+  filenameSpecimenId,
+  recordSpecimenId,
+  onConfirm,
+  onCancel,
+}: Props) {
+  const initial =
+    filenameSpecimenId && filenameSpecimenId === recordSpecimenId
+      ? filenameSpecimenId
+      : recordSpecimenId || "";
+  const [value, setValue] = useState(initial);
+
+  const trimmed = value.trim();
+  const isValid = /^\d{5,}$/.test(trimmed);
+
+  function handleSubmit() {
+    if (!isValid) return;
+    onConfirm(trimmed);
+  }
+
   return (
     <div
       className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
@@ -42,22 +71,41 @@ export function SpecimenIdMismatchModal({ pdfId, recordId, onConfirm, onCancel }
           </div>
 
           <p className="text-sm text-gray-700">
-            The specimen ID on the PDF doesn&apos;t match the ID on this test record.
+            The specimen ID Vision read from the PDF doesn&apos;t match this
+            test record. Confirm the correct ID and we&apos;ll save it to the
+            test order.
           </p>
 
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">PDF</p>
-              <p className="font-mono text-gray-900">{pdfId}</p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Record</p>
-              <p className="font-mono text-gray-900">{recordId}</p>
-            </div>
+          <div className="grid grid-cols-3 gap-2 text-sm">
+            <IdBox label="PDF" value={parsedSpecimenId} highlight />
+            <IdBox
+              label="Filename"
+              value={filenameSpecimenId ?? "—"}
+              highlight={filenameSpecimenId !== null && filenameSpecimenId !== recordSpecimenId}
+            />
+            <IdBox label="Record" value={recordSpecimenId} />
+          </div>
+
+          <div>
+            <label htmlFor="corrected-specimen-id" className="block text-xs font-medium text-gray-700 mb-1">
+              Correct specimen ID
+            </label>
+            <input
+              id="corrected-specimen-id"
+              type="text"
+              inputMode="numeric"
+              pattern="\d*"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+              autoFocus
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="e.g. 4070522"
+            />
           </div>
 
           <p className="text-xs text-gray-500">
-            If you upload anyway, the mismatch will be recorded in the case history.
+            The mismatch and your correction will be recorded in the case history.
           </p>
 
           <div className="flex items-center justify-end gap-2 pt-2">
@@ -70,14 +118,24 @@ export function SpecimenIdMismatchModal({ pdfId, recordId, onConfirm, onCancel }
             </button>
             <button
               type="button"
-              onClick={onConfirm}
-              className="px-4 py-2 bg-[#1e3a5f] text-white rounded-lg text-sm font-medium hover:bg-[#2a5490]"
+              onClick={handleSubmit}
+              disabled={!isValid}
+              className="px-4 py-2 bg-[#1e3a5f] text-white rounded-lg text-sm font-medium hover:bg-[#2a5490] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Upload Anyway
+              Confirm and Upload
             </button>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function IdBox({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className={`rounded-lg p-3 ${highlight ? "bg-red-50 border border-red-200" : "bg-gray-50"}`}>
+      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">{label}</p>
+      <p className={`font-mono text-sm ${highlight ? "text-red-900" : "text-gray-900"}`}>{value}</p>
     </div>
   );
 }

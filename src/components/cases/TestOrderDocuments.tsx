@@ -31,10 +31,12 @@ type ProcessPayload = {
   testOrderId: string;
   specimenId?: string;
   confirmSpecimenMismatch?: boolean;
+  correctedSpecimenId?: string;
 };
 
 type MismatchState = {
   parsedSpecimenId: string;
+  filenameSpecimenId: string | null;
   recordSpecimenId: string;
   storagePath: string;
   payload: ProcessPayload; // the original POST body, reused on confirm
@@ -63,6 +65,7 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
       if (body?.error === "specimen_id_mismatch") {
         setMismatch({
           parsedSpecimenId: body.parsedSpecimenId,
+          filenameSpecimenId: body.filenameSpecimenId ?? null,
           recordSpecimenId: body.recordSpecimenId,
           storagePath: body.storagePath,
           payload,
@@ -153,9 +156,13 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
     }
   }
 
-  async function handleMismatchConfirm() {
+  async function handleMismatchConfirm(corrected: string) {
     if (!mismatch) return;
-    const payload = { ...mismatch.payload, confirmSpecimenMismatch: true };
+    const payload: ProcessPayload = {
+      ...mismatch.payload,
+      confirmSpecimenMismatch: true,
+      correctedSpecimenId: corrected,
+    };
     setMismatch(null);
     setUploading(payload.documentType);
     try {
@@ -288,8 +295,9 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
 
       {mismatch && (
         <SpecimenIdMismatchModal
-          pdfId={mismatch.parsedSpecimenId}
-          recordId={mismatch.recordSpecimenId}
+          parsedSpecimenId={mismatch.parsedSpecimenId}
+          filenameSpecimenId={mismatch.filenameSpecimenId}
+          recordSpecimenId={mismatch.recordSpecimenId}
           onConfirm={handleMismatchConfirm}
           onCancel={handleMismatchCancel}
         />
