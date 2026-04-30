@@ -32,7 +32,9 @@ import {
 export async function GET(request: NextRequest) {
   const block = guardCron(request);
   if (block) return block;
-
+  if (process.env.CRON_CREATE_ORDERS_DISABLED === "1") {
+    return NextResponse.json({ ok: true, skipped: "kill switch" });
+  }
   // DST-safe firing gate. `utcInstantForChicagoHour` returns the UTC
   // moment corresponding to 04:00 America/Chicago on today's Chicago
   // calendar day. Whichever of the two cron firings falls within 90 min
