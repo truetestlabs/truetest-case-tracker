@@ -590,6 +590,12 @@ model LabResult {
   // ── Raw AI text summary (human-readable narrative) ──
   rawSummary              String?          @db.Text
 
+  // ── Summary regenerate history (newest first) ──
+  // Each entry: { summary: string, replacedAt: ISO datetime, replacedBy: userId }
+  // Appended (prepended) by /api/lab-results/[id]/regenerate-summary so prior
+  // narrative versions survive prompt iterations.
+  summaryHistory          Json             @default("[]")
+
   // ── Extraction metadata (useful for debugging + future reprocessing) ──
   source                  String           @default("pdf_upload") // "pdf_upload" | "hl7_webhook" | "manual"
   parserVersion           String?          // prompt/extractor version that wrote this row

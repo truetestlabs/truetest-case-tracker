@@ -149,6 +149,9 @@ export default function CaseDetailPage() {
   const [expandedSummary, setExpandedSummary] = useState<string | null>(null);
   const [sendingResults, setSendingResults] = useState(false);
   const [resultsSentMsg, setResultsSentMsg] = useState<string | null>(null);
+  const [regeneratingDocId, setRegeneratingDocId] = useState<string | null>(null);
+  const [confirmingRegenerate, setConfirmingRegenerate] = useState<{ docId: string; labResultId: string } | null>(null);
+  const [regenerateMsg, setRegenerateMsg] = useState<{ docId: string; type: "success" | "error"; text: string } | null>(null);
   const [sendingCollection, setSendingCollection] = useState(false);
   const [collectionSentMsg, setCollectionSentMsg] = useState<string | null>(null);
   const [collectionConfirmed, setCollectionConfirmed] = useState(false);
@@ -206,6 +209,26 @@ export default function CaseDetailPage() {
     document.addEventListener("visibilitychange", onVisible);
     return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); };
   }, [params.id, loadNotifications]);
+
+  async function performRegenerate(docId: string, labResultId: string) {
+    setRegeneratingDocId(docId);
+    setRegenerateMsg(null);
+    setConfirmingRegenerate(null);
+    try {
+      const res = await fetch(`/api/lab-results/${labResultId}/regenerate-summary`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setRegenerateMsg({ docId, type: "error", text: data.error || "Regeneration failed" });
+      } else {
+        setRegenerateMsg({ docId, type: "success", text: "Summary regenerated. Previous version archived." });
+        loadCase();
+      }
+    } catch (e) {
+      setRegenerateMsg({ docId, type: "error", text: e instanceof Error ? e.message : "Regeneration failed" });
+    } finally {
+      setRegeneratingDocId(null);
+    }
+  }
 
   if (loading) return <div className="text-center py-12 text-gray-400">Loading case...</div>;
   if (error || !caseData) return <div className="text-center py-12 text-red-500">Case not found</div>;
@@ -570,6 +593,10 @@ export default function CaseDetailPage() {
                   .map((doc) => {
                     const summary = (doc.extractedData as { summary?: string })?.summary!;
                     const isExpanded = expandedSummary === doc.id;
+                    const labResultId = caseData.testOrders
+                      .flatMap((t) => t.labResults || [])
+                      .find((r) => r.documentId === doc.id)?.id;
+                    const isRegenerating = regeneratingDocId === doc.id;
                     return (
                       <div key={doc.id} className="border border-slate-200 rounded-lg overflow-hidden">
                         <button
@@ -585,6 +612,23 @@ export default function CaseDetailPage() {
                         {isExpanded && (
                           <div className="px-4 py-4 bg-white">
                             <pre className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed font-sans">{summary}</pre>
+                            {labResultId && (
+                              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+                                <button
+                                  onClick={() => setConfirmingRegenerate({ docId: doc.id, labResultId })}
+                                  disabled={isRegenerating}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+                                  style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #2a5490 100%)" }}
+                                >
+                                  {isRegenerating ? "Regenerating…" : "↻ Regenerate Summary"}
+                                </button>
+                                {regenerateMsg?.docId === doc.id && (
+                                  <span className={`text-xs font-medium ${regenerateMsg.type === "success" ? "text-green-600" : "text-red-600"}`}>
+                                    {regenerateMsg.text}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1043,6 +1087,34 @@ export default function CaseDetailPage() {
           )}
         </div>
       </div>
+
+      {confirmingRegenerate && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setConfirmingRegenerate(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md" role="dialog" aria-modal="true" aria-label="Confirm Regenerate Summary" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-slate-800 mb-2">Regenerate Summary?</h3>
+              <p className="text-sm text-slate-600 mb-5">
+                This will overwrite the current summary. The previous version will be saved in history. Continue?
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setConfirmingRegenerate(null)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => performRegenerate(confirmingRegenerate.docId, confirmingRegenerate.labResultId)}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-white hover:brightness-110"
+                  style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #2a5490 100%)" }}
+                >
+                  Regenerate
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
