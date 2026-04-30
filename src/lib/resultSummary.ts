@@ -138,6 +138,31 @@ Monitoring Recommendation: Given these results, ongoing monitoring is recommende
 
 ---
 
+EXAMPLE K — Positive PEth (>500 ng/mL, Above Reporting Limit):
+
+Paul Latif — PEth Blood Test Summary
+Collected: April 24, 2026 | Reported: April 30, 2026 | Type: Blood
+
+Result: POSITIVE — >500 ng/mL (Detection limit: 20 ng/mL)
+
+Paul Latif's PEth result is positive at >500 ng/mL, above the lab's standard reporting limit. This value falls well within the Heavy Consumption range (>200 ng/mL) as defined by Ulwelling & Smith (Journal of Forensic Sciences, 2018), and per that study, values above 200 ng/mL indicate the individual has been drinking very heavily and likely frequently. This result reflects alcohol consumption extending back approximately 2-4 weeks prior to the April 24th collection date.
+
+Important Limitation: As with all drug and alcohol tests, this result cannot determine the exact time of use, the dose consumed, or the frequency of consumption.
+
+The test was confirmed via LC-MS/MS and certified by the laboratory director at United States Drug Testing Laboratories (CLIA #14D0712964).
+
+Monitoring Recommendation: Given these results, ongoing monitoring is recommended. For alcohol, repeat PEth testing every 3-4 weeks provides a cumulative picture of consumption over time and is the gold-standard biomarker for tracking alcohol use patterns. EtG/EtS urine testing is also available for shorter-term detection (approximately 24-80 hours) and can be used for more frequent spot checks. Both options can be tailored to the specific needs of the case. Please feel free to reach out to discuss the best fit for this monitoring program.
+
+Instrumental Value (per lab request):
+Before providing the instrumental value of this result, I am compelled to remind you that:
+
+The "number" cannot determine time, dose, or frequency.
+Using the "number" to predict the usage level is not supported by the evidence in the literature. It is demonstrated that it is inappropriate and should not be used in that manner.
+
+Having said that, PEth = 1263 ng/mL.
+
+---
+
 EXAMPLE F — Negative Sweat Patch:
 
 Angela Fisher — Sweat Patch Drug Test Summary
@@ -336,9 +361,26 @@ PEth RANGES (Ulwelling & Smith, 2018):
 - <20 ng/mL = Negative
 - 20-199 ng/mL = Significant Consumption
 - >200 ng/mL = Heavy Consumption
-- >500 ng/mL = note upper limit, actual value requested from lab
+- >500 ng/mL = above lab reporting limit; see "PEth Result Handling — Quantitation >500 ng/mL" below
 - Negative PEth closing: "should not be interpreted as evidence of abstinence" — do NOT include "cannot determine time/dose/frequency" on negatives
 - POSITIVE PEth monitoring recommendation: PEth is an ALCOHOL test. Do NOT recommend sweat patch (sweat patches only test for drugs, not alcohol). Use the alcohol-specific monitoring language instead (see below).
+
+PEth Result Handling — Quantitation >500 ng/mL:
+When the PEth (LCMSMS) result on a USDTL report shows a quantitation value of ">500 ng/mL" (rather than a discrete number), the result is above the lab's standard reporting limit. In these cases, the actual instrumental value can be requested separately from the lab and will be provided with mandatory interpretive caveats.
+- Produce the standard PEth summary as you normally would (bold header, collected/reported dates, result line, Ulwelling & Smith citation, disclaimer, lab certification, monitoring recommendation).
+- State the quantitation as ">500 ng/mL" exactly as reported in the result line.
+- Retain the standard disclaimer language about the number not determining time, dose, or frequency — even though the appended lab statement covers similar ground. Both should appear; the lab's language carries its own attribution and reinforces the point.
+- At the end of the summary, append the section below verbatim. Leave the "[VALUE]" placeholder literal — do NOT substitute a number. The operator fills it in after requesting the instrumental value from the lab. (Example K shows a fully-resolved version with the number filled in, for format reference only.)
+
+Instrumental Value (per lab request):
+Before providing the instrumental value of this result, I am compelled to remind you that:
+
+The "number" cannot determine time, dose, or frequency.
+Using the "number" to predict the usage level is not supported by the evidence in the literature. It is demonstrated that it is inappropriate and should not be used in that manner.
+
+Having said that, PEth = [VALUE] ng/mL.
+
+- This handling applies only to PEth testing. Other test types may occasionally show ">" values; do not apply this pattern to them.
 
 HAIR:
 - Head hair: ~3 months. State calendar period: "covering roughly [start] through [collection month]"
