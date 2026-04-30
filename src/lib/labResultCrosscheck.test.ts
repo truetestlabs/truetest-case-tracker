@@ -266,3 +266,82 @@ describe("runLabResultCrosschecks — patch_wear_days", () => {
     ).toBeUndefined();
   });
 });
+
+// Regression tests for the timezone bug family. All three previously
+// false-positived under the production server's UTC timezone because
+// (a) parseIsoDate constructed YYYY-MM-DD as server-local-tz noon,
+// (b) sameDay compared via server-local Y/M/D, and (c) the patch-
+// lifecycle "after collection" checks compared real Prisma instants
+// against parseIsoDate's synthetic noon anchor with raw getTime().
+// All three should now bucket through Chicago calendar day.
+describe("runLabResultCrosschecks — Chicago calendar-day bucketing (regression)", () => {
+  it("does NOT flag collection_date for an evening-CT collection on the lab's reported day", () => {
+    // 2026-04-20 21:00 America/Chicago = 2026-04-21T02:00:00Z. Stored as
+    // a real instant on TestOrder.collectionDate, this straddles UTC
+    // midnight: Apr 20 in Chicago, Apr 21 in UTC. Lab reports the
+    // donor's Chicago day ("2026-04-20"). Pre-fix on a UTC server,
+    // sameDay compared (Apr 21 UTC) vs (Apr 20 noon-UTC anchor) and
+    // false-fired the specimen-mixup warning.
+    const order: TestOrderSnapshot = {
+      collectionDate: new Date("2026-04-21T02:00:00Z"),
+      specimenId: null,
+      labAccessionNumber: null,
+    };
+    const findings = runLabResultCrosschecks(
+      extracted({ reportedCollectionDate: "2026-04-20" }),
+      order,
+    );
+    expect(
+      findings.find((f) => f.type === "collection_date"),
+    ).toBeUndefined();
+  });
+
+  it("does NOT flag patch_application_date for a PM-CT application on the lab's reported day", () => {
+    // 2026-04-20 15:00 America/Chicago = 2026-04-20T20:00:00Z. Pre-fix,
+    // applicationDate.getTime() (20:00Z) > parseIsoDate("2026-04-20")
+    // .getTime() (12:00Z noon-UTC anchor) → CRITICAL fired despite both
+    // dates being on the same Chicago calendar day.
+    const order: TestOrderSnapshot = {
+      collectionDate: null,
+      specimenId: null,
+      labAccessionNumber: null,
+      patchDetails: {
+        applicationDate: new Date("2026-04-20T20:00:00Z"),
+        removalDate: null,
+        panel: "WA07",
+      },
+    };
+    const findings = runLabResultCrosschecks(
+      extracted({ reportedCollectionDate: "2026-04-20" }),
+      order,
+    );
+    expect(
+      findings.find((f) => f.type === "patch_application_date"),
+    ).toBeUndefined();
+  });
+
+  it("does NOT flag patch_removal_date for a PM-CT removal on the lab's reported day", () => {
+    // 2026-04-20 14:00 America/Chicago = 2026-04-20T19:00:00Z. Pre-fix,
+    // removalDate.getTime() (19:00Z) > parseIsoDate("2026-04-20")
+    // .getTime() (12:00Z noon-UTC anchor) → WARNING fired despite both
+    // dates being on the same Chicago calendar day. applicationDate is
+    // set 7 days earlier so the wear-days check stays in its happy band.
+    const order: TestOrderSnapshot = {
+      collectionDate: null,
+      specimenId: null,
+      labAccessionNumber: null,
+      patchDetails: {
+        applicationDate: new Date("2026-04-13T12:00:00Z"),
+        removalDate: new Date("2026-04-20T19:00:00Z"),
+        panel: "WA07",
+      },
+    };
+    const findings = runLabResultCrosschecks(
+      extracted({ reportedCollectionDate: "2026-04-20" }),
+      order,
+    );
+    expect(
+      findings.find((f) => f.type === "patch_removal_date"),
+    ).toBeUndefined();
+  });
+});

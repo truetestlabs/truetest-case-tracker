@@ -10,7 +10,7 @@
  */
 import type { ExtractedLabResult } from "@/lib/resultExtract";
 import type { PatchPanel } from "@prisma/client";
-import { formatChicagoMediumDate } from "@/lib/dateChicago";
+import { chicagoDateKey, formatChicagoMediumDate } from "@/lib/dateChicago";
 import {
   computeWearDays,
   specimenIdsMatch,
@@ -63,16 +63,12 @@ function parseIsoDate(s: string | undefined | null): Date | null {
   const match = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
   const [, y, m, d] = match;
-  const date = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10), 12, 0, 0);
+  const date = new Date(Date.UTC(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10), 12, 0, 0));
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function sameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+  return chicagoDateKey(a) === chicagoDateKey(b);
 }
 
 function formatDate(d: Date): string {
@@ -144,7 +140,10 @@ export function runLabResultCrosschecks(
     // Application after collection — physically impossible. Either our
     // applicationDate is wrong or the lab report is for a different
     // patch. CRITICAL.
-    if (applicationDate && applicationDate.getTime() > theirDate.getTime()) {
+    if (
+      applicationDate &&
+      chicagoDateKey(applicationDate) > chicagoDateKey(theirDate)
+    ) {
       findings.push({
         type: "patch_application_date",
         severity: "critical",
@@ -157,7 +156,10 @@ export function runLabResultCrosschecks(
 
     // Removal after collection — suspicious but not impossible (could be
     // a transit-day rounding difference). WARNING.
-    if (removalDate && removalDate.getTime() > theirDate.getTime()) {
+    if (
+      removalDate &&
+      chicagoDateKey(removalDate) > chicagoDateKey(theirDate)
+    ) {
       findings.push({
         type: "patch_removal_date",
         severity: "warning",
