@@ -37,6 +37,7 @@ export type Mismatch = {
 
 export type LabResultData = {
   id: string;
+  documentId?: string | null;
   overallStatus: string;
   reportedCollectionDate?: string | null;
   receivedAtLab?: string | null;

@@ -1,0 +1,169 @@
+/**
+ * POST /api/lab-results/[id]/regenerate-summary
+ *
+ * Re-runs generateResultSummary against the source PDF using the current
+ * RESULT_SUMMARY_PROMPT and overwrites the cached narrative summary on
+ * both LabResult.rawSummary and the linked Document.extractedData.summary.
+ * The previous rawSummary (if any) is prepended to LabResult.summaryHistory
+ * with timestamp + userId before overwrite, so prior versions survive
+ * future prompt iterations and can be inspected later.
+ *
+ * SCOPE — narrative summary ONLY.
+ * This endpoint refreshes the human-readable narrative produced by
+ * generateResultSummary. It does NOT re-run structured extraction —
+ * LabResult.analytes, overallStatus, specimenValidity, mismatches,
+ * reportedCollectionDate, labName, etc. all stay frozen at their
+ * upload-time values. That is intentional: this endpoint exists for
+ * prompt changes that only affect prose (e.g., the PEth >500 handling
+ * change in resultSummary.ts).
+ *
+ * If a prompt change affects analyte parsing or any other structured
+ * field, this endpoint is the wrong tool. Use
+ * POST /api/admin/backfill-lab-results?reprocessEmpty=true (or extend
+ * that route to accept a labResultId filter) — it re-runs the full
+ * extractLabResult orchestrator and rewrites the structured columns.
+ *
+ * Admin-only (server-enforced; the UI button is rendered to all signed-in
+ * users and the 403 here is the actual security boundary).
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
+import { generateResultSummary } from "@/lib/resultSummary";
+import { downloadFile } from "@/lib/storage";
+
+export const maxDuration = 60;
+
+type SummaryHistoryEntry = {
+  summary: string;
+  replacedAt: string;
+  replacedBy: string;
+};
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: labResultId } = await params;
+
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+  const user = auth.user;
+
+  if (user.role !== "admin") {
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  }
+
+  try {
+    const labResult = await prisma.labResult.findUnique({
+      where: { id: labResultId },
+      include: {
+        document: true,
+        testOrder: { select: { id: true, caseId: true, testStatus: true } },
+      },
+    });
+
+    if (!labResult) {
+      return NextResponse.json({ error: "LabResult not found" }, { status: 404 });
+    }
+    if (!labResult.document) {
+      return NextResponse.json(
+        { error: "No source document attached to this LabResult — cannot regenerate." },
+        { status: 404 }
+      );
+    }
+
+    let buffer: Buffer;
+    try {
+      const downloaded = await downloadFile(labResult.document.filePath);
+      buffer = downloaded.buffer;
+    } catch (e) {
+      console.error("[regenerate-summary] download failed:", e);
+      return NextResponse.json(
+        { error: "Failed to download source PDF from storage." },
+        { status: 500 }
+      );
+    }
+
+    const newSummary = await generateResultSummary(buffer);
+    if (!newSummary) {
+      return NextResponse.json(
+        {
+          error:
+            "LLM returned no summary — original preserved. Try again or check the source PDF.",
+        },
+        { status: 502 }
+      );
+    }
+
+    const previousHistory =
+      (labResult.summaryHistory as unknown as SummaryHistoryEntry[] | null) ?? [];
+    const updatedHistory: SummaryHistoryEntry[] = labResult.rawSummary
+      ? [
+          {
+            summary: labResult.rawSummary,
+            replacedAt: new Date().toISOString(),
+            replacedBy: user.id,
+          },
+          ...previousHistory,
+        ]
+      : previousHistory;
+
+    const prevExtracted =
+      (labResult.document.extractedData as Record<string, unknown> | null) ?? {};
+
+    // changedBy and note are plain String columns on StatusLog — interpolating
+    // user.email here snapshots the identifier at regenerate time. No relation
+    // join, so this won't drift if the user is renamed or removed later.
+    const actorLabel = user.email || user.name || "admin";
+
+    await prisma.$transaction([
+      prisma.labResult.update({
+        where: { id: labResultId },
+        data: {
+          rawSummary: newSummary,
+          summaryHistory: updatedHistory,
+        },
+      }),
+      prisma.document.update({
+        where: { id: labResult.document.id },
+        data: {
+          extractedData: { ...prevExtracted, summary: newSummary },
+        },
+      }),
+      prisma.statusLog.create({
+        data: {
+          caseId: labResult.testOrder.caseId,
+          testOrderId: labResult.testOrder.id,
+          oldStatus: labResult.testOrder.testStatus,
+          newStatus: labResult.testOrder.testStatus,
+          changedBy: actorLabel,
+          note: `Lab result summary regenerated by ${actorLabel}. Previous version archived (history length ${updatedHistory.length}).`,
+        },
+      }),
+    ]);
+
+    logAudit({
+      userId: user.id,
+      action: "lab_result.summary.regenerated",
+      resource: "lab_result",
+      resourceId: labResultId,
+      metadata: {
+        documentId: labResult.document.id,
+        historyLength: updatedHistory.length,
+      },
+    }).catch((e) => console.error("[regenerate-summary] audit failed:", e));
+
+    return NextResponse.json({
+      summary: newSummary,
+      historyLength: updatedHistory.length,
+    });
+  } catch (error) {
+    console.error("[regenerate-summary] error:", error);
+    return NextResponse.json(
+      { error: "Failed to regenerate summary." },
+      { status: 500 }
+    );
+  }
+}
