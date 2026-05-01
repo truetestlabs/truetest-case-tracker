@@ -481,27 +481,6 @@ export default function CaseDetailPage() {
                       documents={test.documents || []}
                       onUpdated={loadCase}
                     />
-                    {/* Edit Test Order Modal */}
-                    {editingTestOrder === test.id && (
-                      <EditTestOrderModal
-                        caseId={caseData.id}
-                        testOrder={{
-                          ...test,
-                          // If this test order has no appointmentDate cached
-                          // but the case has an upcoming Appointment row,
-                          // surface it here so staff sees the scheduled date
-                          // instead of an empty input. Saving the modal will
-                          // persist whatever's in the field, which is fine —
-                          // it commits the same value.
-                          appointmentDate:
-                            test.appointmentDate ??
-                            caseData.appointments?.[0]?.startTime ??
-                            null,
-                        }}
-                        onSaved={() => { setEditingTestOrder(null); loadCase(); }}
-                        onClose={() => setEditingTestOrder(null)}
-                      />
-                    )}
                     {/* Confirm Test Modal */}
                     {confirmingTestOrderId === test.id && (
                       <ConfirmTestModal
@@ -1087,6 +1066,36 @@ export default function CaseDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Edit Test Order Modal — mounted once at the page level so it
+          works for both patch and non-patch test orders. The patch
+          lifecycle UI (PatchSection) renders in a separate pass that
+          can't host this modal; mounting inside the non-patch loop
+          (the prior shape) silently dropped the click for patch rows.
+          Lookup by id covers both lanes. */}
+      {editingTestOrder && (() => {
+        const editingOrder = caseData.testOrders.find((t) => t.id === editingTestOrder);
+        if (!editingOrder) return null;
+        return (
+          <EditTestOrderModal
+            caseId={caseData.id}
+            testOrder={{
+              ...editingOrder,
+              // If this test order has no appointmentDate cached but the
+              // case has an upcoming Appointment row, surface it here so
+              // staff sees the scheduled date instead of an empty input.
+              // Saving the modal will persist whatever's in the field,
+              // which is fine — it commits the same value.
+              appointmentDate:
+                editingOrder.appointmentDate ??
+                caseData.appointments?.[0]?.startTime ??
+                null,
+            }}
+            onSaved={() => { setEditingTestOrder(null); loadCase(); }}
+            onClose={() => setEditingTestOrder(null)}
+          />
+        );
+      })()}
 
       {confirmingRegenerate && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setConfirmingRegenerate(null)}>
