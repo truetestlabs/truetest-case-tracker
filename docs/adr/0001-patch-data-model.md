@@ -1,11 +1,9 @@
----
-status: Proposed
-date: 2026-05-05
-deciders: Michael Gammel (with workflow-truth input from Colleen via docs/patch-workflow.md)
-supersedes: the locked decisions in `~/.claude/plans/sweat-patch-schema-handoff.md` ("Option C", recorded as outcome but not as deliberated tradeoff)
----
-
 # ADR-0001: Patch data model
+
+**Status:** Proposed  
+**Date:** 2026-05-05  
+**Deciders:** Michael Gammel (with workflow-truth input from Colleen via `docs/patch-workflow.md`)  
+**Supersedes:** the locked decisions in `~/.claude/plans/sweat-patch-schema-handoff.md` ("Option C", recorded as outcome but not as deliberated tradeoff)
 
 ## Context
 
