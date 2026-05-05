@@ -12,3 +12,9 @@ tests/eval/extract/truth/
 tests/eval/extract/parser-dump.json
 tests/eval/extract/results/
 tests/eval/extract/AUTHORING_NOTES.md
+
+# Eval environment (separate Anthropic key — DO NOT commit)
+.env.eval
+
+# Script run artifacts
+scripts/backfill-output/
