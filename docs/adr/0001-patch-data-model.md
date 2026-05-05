@@ -1,6 +1,6 @@
 # ADR-0001: Patch data model
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-05-05  
 **Deciders:** Michael Gammel (with workflow-truth input from Colleen via `docs/patch-workflow.md`)  
 **Supersedes:** the locked decisions in `~/.claude/plans/sweat-patch-schema-handoff.md` ("Option C", recorded as outcome but not as deliberated tradeoff)
@@ -313,21 +313,39 @@ These must be resolved before the rebuild starts. They are scoped to Option 2.
 
 1. **PharmChek number immutability enforcement.** Spec 5.10 requires it. Enforce in application code (refuse to update via API), via DB trigger, or via Prisma middleware? Pick one.
 
+   **RESOLVED 2026-05-05:** Application-level enforcement. The PATCH handler refuses any update that would change `pharmchekNumber` after it is set. Matches the existing pattern in the codebase (`createTestOrderWithPatchDetails` enforces invariants at the application layer, not via DB triggers or Prisma middleware). DB triggers and Prisma middleware were considered and rejected: triggers don't fit the `db push` migration workflow, and Prisma middleware would set a precedent the codebase doesn't currently use.
+
 2. **Cycle representation in queries.** Spec 6.3 says cycle is derived. Confirm: does the case-detail GET response include a computed `cycleId` per Patch (server-side grouping), or does the UI derive cycle boundaries client-side from the Patch list?
+
+   **RESOLVED 2026-05-05:** Client-side derivation. The case-detail GET response returns Patches as a flat list ordered by applicationDate. The UI groups them into cycles based on temporal gaps at render time. Server-side computation was rejected: cycle is explicitly a UI affordance per spec 6.3 (no metadata, no rules, no first-class existence), and computing it server-side would dignify it as a domain concept it isn't. The 25-patch volume and case-scoped queries make client-side grouping cheap.
 
 3. **Cancellation reason → billing classification mapping.** Spec 8.1 has 12 reasons; 7.2 has 2 billing classes; 3 reasons (8.2, 8.3, 11.4) allow override. Enforce the default mapping in code with explicit override, or allow both fields to be set independently with a validation rule?
 
+   **RESOLVED 2026-05-05:** Auto-fill with override. The UI auto-fills the billing classification based on the selected cancellation reason using the default mapping. For the three override-eligible reasons (per spec 8.2, 8.3, 11.4), an override checkbox + free-text reason field appears. The override-reason text becomes part of the forensic record. Forcing manual selection on every cancellation was rejected: routine cancellations have obvious billing answers, and adding friction increases the chance of fat-finger errors more than it catches them.
+
 4. **8 orphan TestOrders.** Hand-reconstruct, tombstone, or delete? Decision needed per orphan from Colleen.
+
+   **RESOLVED 2026-05-05:** Hand-reconstruct, after migration, with visibility safeguards. The rebuild ships first; orphans come along into the new model as best-effort migrated rows with a `migrationStatus` flag set to `needs_reconstruction`. The UI shows flagged rows with distinct visual treatment so they can't be mistaken for complete records. The reminder system surfaces "N patches need reconstruction" until the count reaches zero. Colleen reconstructs each one using paper records (CoCs, results) at her own pace post-launch. The "needs_reconstruction" flag is the mitigation against "after migration" silently becoming "never."
 
 5. **Appointment ↔ Patch back-references.** Add inverse Prisma relations for "Patches whose applicationAppointmentId is this Appointment" and same for removal? Useful for "what was touched at this appointment" queries.
 
+   **RESOLVED 2026-05-05:** Add the inverse Prisma relations. `Appointment.applicationPatches` (Patches whose applicationAppointmentId points at this Appointment) and `Appointment.removalPatches` (same for removal). Cost is one schema declaration each — no DB columns added. Benefit is a readable query API for "what was touched at this appointment," which the spec implies is a real query (one appointment can touch two patches at a removal-and-application visit).
+
 6. **Replacement-patch chaining.** Current schema has `replacementPatchApplied: Boolean?` and `replacementPatchDate: DateTime?` (a deceptively-named pair, not a FK). Option 2 changes to `replacementPatchId: String?` self-relation. Confirm.
+
+   **RESOLVED 2026-05-05:** Add `replacementPatchId` as a nullable self-relation FK on Patch. Replaces the legacy `replacementPatchApplied: Boolean?` + `replacementPatchDate: DateTime?` pair, which recorded that a replacement happened but did not link to the actual replacement row. The new shape makes the chain auditable end-to-end: a cancelled patch's record links directly to its replacement, which is necessary for "what happened next" testimony queries.
 
 7. **EmailDraft polymorphism.** Add `patchId` as nullable parallel to `testOrderId` (polymorphic-by-FK), or introduce a tagged-polymorphism pattern (`parentType`, `parentId`)? Current codebase uses the former pattern elsewhere; consistency argues for FK-parallel.
 
+   **RESOLVED 2026-05-05:** Add `patchId` as a parallel nullable FK column on EmailDraft. EmailDraft now has both `testOrderId` (nullable, used for non-patch drafts) and `patchId` (nullable, used for patch drafts) — exactly one is set per row. Matches the existing parallel-FK polymorphism pattern in the codebase. Tagged polymorphism (`parentType` + `parentId`) was rejected: inconsistent with the rest of the schema, loses Prisma's relational query support, no precedent in the codebase to justify the inconsistency.
+
 8. **Document polymorphism.** Same question for `Document.testOrderId` — add `patchId` parallel? Or keep Document.testOrderId for non-patches and let Patch hold direct FKs to working/executed CoC documents (Document still has a `caseId` link so it's discoverable from the case)?
 
+   **RESOLVED 2026-05-05:** Same shape as EmailDraft — add `patchId` as a parallel nullable FK column on Document. Patch additionally holds direct FKs to its working-copy and executed-CoC documents (per the Option 2 schema sketch); the `patchId` column on Document covers other patch-related documents (cancellation notice PDFs, result PDFs, per-event photos) that aren't reachable via the working/executed FKs. Tagged polymorphism rejected for the same reasons as EmailDraft.
+
 9. **Build sequencing.** Migrate schema first and dual-write for a period, then cut over? Or migrate and cut over in one shot? The 25-patch volume and "manually rebuildable" property argue for cut-over with a verification window.
+
+   **RESOLVED 2026-05-05:** Cut-over, not dual-write. The migration script transforms all 25 patches in one transaction, the new model goes live, the old PatchDetails table sits unused but undropped for a verification window before being dropped. Dual-write was considered and rejected: the patch tracker is currently frozen (no new patches entering the system, all going to TestVault), the volume of rows is small enough to verify the migration manually, and dual-write's complexity buys nothing for a frozen low-volume table.
 
 10. **Items #5–#7 from the prior handoff: PARTIALLY DECOUPLED.** The CRL native-cocaine fix in `resultExtract.ts` (the tool-schema / prompt change to mandate paired Cocaine + Benzoylecgonine emission on CRL sweat-patch reports) is independent of the new data model and should ship in parallel with the rebuild — not after it. Per the discovery report, this bug currently produces forensically incomplete extraction on every CRL sweat-patch result; deferring it 5–8 weeks behind the rebuild leaves a known forensic-accuracy gap untouched throughout that period. The remainder of items #5–#7 (parserVersion bump, model bump, `testOrderContext` threading, `LabResult.create` patchSnapshot, `resultSummary.ts` patch-context update including Example F redo and Example O re-gating) does depend on the new model and ships after the rebuild. Confirm sequencing: native-cocaine fix in parallel, remainder after.
 
