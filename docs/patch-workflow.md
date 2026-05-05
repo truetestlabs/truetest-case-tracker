@@ -784,6 +784,47 @@ A specimen held for an extended period (months) before shipment introduces a cha
 
 The cancellation notification (per 11.2) is in addition to, not a replacement for, the cancelled-CoC circulation specified in 5.7. The cancelled CoC is a forensic document sent as proof of attempt; the cancellation notification is an immediate email at the moment of cancellation telling the contact list "this happened today." Both go to the same contact list but they are different artifacts — one is a notification, one is a document.
 
+### 11.7 Notification review workflow
+
+Not every patch notification carries the same forensic weight. Some are logistical — a record of an event that has happened — and some are forensic claims that, once sent to a contact list that includes attorneys and the court, become part of the case record. The review workflow distinguishes the two and gates only the higher-stakes class through human approval before sending.
+
+**The two buckets.** Notifications fall into one of two paths based on whether they describe an event or make a claim about disposition or billing.
+
+Notifications that **fire immediately**, without review:
+
+- **Application notification** (per 11.2) — the patch went on the donor; the recipient gets the same factual record TrueTest holds.
+- **Removal notification, paid variant** (per 11.2) — the patch was removed and the sample is in flight to the lab; no claim about disposition has been made.
+- **Held-sample-shipped follow-up** (per 11.2) — an update referencing a known prior event; no new claim is introduced.
+
+These are operational receipts. They describe events that have already happened in unambiguous ways. Routing them through a review queue would add latency without adding scrutiny.
+
+Notifications that **go through review** before sending:
+
+- **Removal notification, unpaid (held pending payment) variant** (per 11.2) — the recipient is being told that the test is paused on payment. Payment-related framing is sensitive and the wording should be confirmed before send.
+- **Pre-shipment cancellation notification** (per 11.2) — the recipient is being told the test will not produce a result and is being given a reason and (implicitly) a billing classification per 7.2. Both the reason and the billing implication are forensically consequential.
+- **Post-shipment cancellation notification** (per 11.2) — the same logic applies, plus the lab-stated reason has to be transcribed accurately. The recipient was expecting a result; the wording explaining why none will arrive is the highest-stakes notification in the patch flow.
+
+The underlying principle: notifications that *describe an event* fire immediately; notifications that *make a claim about disposition or billing* go through review.
+
+**The review mechanism.** Reviewed notifications use the existing `EmailDraft` / "Approve & Send" pattern — the same pattern that already gates results emails and cancellation reports in the tracker today. When the underlying patch event is recorded, the tracker creates a draft notification in pending-review state with the spec-defined body (per 11.2) pre-filled and the case's standard recipient list resolved. The pending draft surfaces in the Reminders sidebar, where drafts sort to the top of the reminder list ahead of all other reminder types. A reviewer opens the draft, sees a "Review Before Sending" modal showing recipients, subject, and body, edits if needed, and approves and sends — or discards. On send, the draft transitions to sent and the email goes out via the standard send path.
+
+This is an extension of an existing surface, not a new one. The review queue, the modal, and the action verb are the same ones already in use for results emails and cancellation reports.
+
+**Who can review.** Any logged-in TrueTest user can approve and send a patch notification draft. There is no role gating in the first cut. The operating assumption is that any staff member working a patch through the tracker is qualified to review and send the notification associated with it. If experience reveals a need for a narrower approval surface — e.g., cancellation drafts requiring a senior reviewer — role gating can be added later.
+
+**Body model.** The reviewer sees a pre-filled draft and edits before sending if needed. The pre-fill is the spec-defined template from 11.2 with the patch's specifics interpolated (donor name, case reference, dates, specimen ID, cancellation reason, lab-stated reason). The reviewer can adjust wording, add context, or correct anything the template can't capture, and the edited version is what reaches the recipients. The pre-fill is a starting point, not a contract; the reviewer is responsible for the final wording.
+
+**Lifecycle independence.** Drafts do not block patch state transitions. A patch can move from Removed to Shipped, or from Applied to Cancelled, regardless of whether an associated notification draft is still pending review. The draft is a communication artifact attached to the event; the patch's lifecycle is governed by the events themselves, not by the review queue. If a cancellation draft sits unreviewed for a week, the patch is still cancelled — the notification is just delayed. The draft body should include the original event date (per the templates in 11.2) so a delayed-send recipient understands the timing. This separation means a backlog of unreviewed drafts cannot stall the patch flow. The expectation is that drafts are reviewed quickly — the reminder system surfaces unreviewed drafts at the top of the reminder list (per "Reminder cadence" below) to keep this gap short. A multi-day delay between event and notification is operationally tolerable but should be the exception, not the norm.
+
+**Reminder cadence.** Drafts surface in the existing reminder system from the moment they are created and persist until they are approved-and-sent or discarded. Drafts sort to the top of the reminder list ahead of other reminder types — the existing pattern for results and cancellation drafts already does this. Per 11.3, the notification trigger is described as "immediate"; for reviewed drafts, "immediate" means the draft appears in the sidebar at the moment the event is recorded, while the email itself goes to recipients when the reviewer approves. Whether long-unreviewed drafts warrant additional escalation (e.g., a visual indicator after a threshold) is a build-time decision, not a spec requirement.
+
+**Deferred follow-ups.** The first cut of this workflow does not include the following, which are noted here to keep them on the roadmap:
+
+- **Audit log of original-vs-sent body.** Today only the sent version is stored. A future enhancement should preserve both the spec-defined original and the reviewer-edited final so the difference is auditable. This matters for high-stakes templates where the wording is consequential and a recipient may later question what was claimed.
+- **Locked sentence patterns for high-stakes templates.** Some sentences in cancellation notifications — particularly the post-shipment lab-rejection wording — may need to be uneditable to ensure forensic accuracy is not eroded by reviewer-side rephrasing. A future enhancement should distinguish editable framing text from locked forensic sentences within a template.
+
+Both are **explicitly deferred**: the first cut treats every word in the draft as editable and stores only the sent version. If experience reveals problems — recipients receiving inconsistent wording on similar cancellations, or audit gaps surfacing during disputes — the deferred items move to the active queue.
+
 ---
 
 ## Appendix A: Prior locked decisions
