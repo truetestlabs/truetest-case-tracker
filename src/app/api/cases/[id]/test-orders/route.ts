@@ -240,6 +240,33 @@ export async function PATCH(
       });
     }
 
+    // PatchDetails.applicationDate / removalDate update — sweat-patch-only
+    // side channel from EditTestOrderModal. Same shape as patchPanel above:
+    // these columns live on PatchDetails, not TestOrder, so they bypass the
+    // manualFields loop. Modal mirrors removalDate → TestOrder.collectionDate
+    // client-side so downstream collection-based logic and the
+    // specimen_collected guard see the canonical date (matches
+    // executePatchCoc's server-side mirror semantics).
+    if (
+      updated.specimenType === "sweat_patch" &&
+      (Object.prototype.hasOwnProperty.call(updateData, "applicationDate") ||
+        Object.prototype.hasOwnProperty.call(updateData, "removalDate"))
+    ) {
+      const patchUpdate: { applicationDate?: Date | null; removalDate?: Date | null } = {};
+      if (Object.prototype.hasOwnProperty.call(updateData, "applicationDate")) {
+        const v = updateData.applicationDate;
+        patchUpdate.applicationDate = v ? new Date(v as string) : null;
+      }
+      if (Object.prototype.hasOwnProperty.call(updateData, "removalDate")) {
+        const v = updateData.removalDate;
+        patchUpdate.removalDate = v ? new Date(v as string) : null;
+      }
+      await prisma.patchDetails.updateMany({
+        where: { testOrderId },
+        data: patchUpdate,
+      });
+    }
+
     console.log("[PATCH test-order] saved collectionDate:", updated.collectionDate);
 
     // Log status change + trigger email notifications
