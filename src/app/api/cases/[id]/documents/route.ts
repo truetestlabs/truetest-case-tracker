@@ -182,7 +182,7 @@ export async function POST(
             {
               error: "patch_coc_invalid_state",
               message:
-                "Sweat-patch test order is missing PatchDetails. Open the test order and finish staff selection before uploading a CoC.",
+                "This sweat-patch test order is missing setup data and can't accept a CoC upload. Contact the system administrator.",
             },
             { status: 409 },
           );
