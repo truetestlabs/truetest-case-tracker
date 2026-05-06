@@ -11,6 +11,7 @@ import {
   type PatchLifecycleStatus,
 } from "@/lib/patchValidation";
 import { CancelPatchModal } from "@/components/cases/CancelPatchModal";
+import { PatchCocUploadButton } from "@/components/cases/PatchCocUploadButton";
 import { PendingSelectionBanner } from "@/components/cases/PendingSelectionBanner";
 import { ConfirmTestModal } from "@/components/cases/ConfirmTestModal";
 import { needsStaffSelection } from "@/lib/case-utils";
@@ -117,6 +118,7 @@ export function PatchSection({
             onCancelClick={() => setCancellingPatchId(order.patchDetails?.id ?? null)}
             onConfirmClick={() => setConfirmingTestOrderId(order.id)}
             onEdit={() => onEdit(order.id)}
+            onUploadComplete={onChanged}
             onGenerateReport={async () => {
               if (!order.patchDetails) return;
               setGeneratingReportId(order.patchDetails.id);
@@ -210,6 +212,7 @@ function PatchRow({
   onConfirmClick,
   onEdit,
   onGenerateReport,
+  onUploadComplete,
   generating,
 }: {
   order: PatchOrderForUI;
@@ -218,12 +221,9 @@ function PatchRow({
   onConfirmClick: () => void;
   onEdit: () => void;
   onGenerateReport: () => void;
+  onUploadComplete: () => void;
   generating: boolean;
 }) {
-  // caseId is destructured but not currently read — kept in props
-  // signature for future row-scoped fetches (e.g., per-row regenerate).
-  void caseId;
-
   const pd = order.patchDetails;
   const lifecycle: PatchLifecycleStatus | null = pd
     ? patchLifecycleStatus({
@@ -300,6 +300,13 @@ function PatchRow({
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
+          {pd && lifecycle === null && !pd.workingCopyDocumentId && (
+            <PatchCocUploadButton
+              caseId={caseId}
+              testOrderId={order.id}
+              onUploadComplete={onUploadComplete}
+            />
+          )}
           {lifecycle === "WORN" && (
             <button
               type="button"
