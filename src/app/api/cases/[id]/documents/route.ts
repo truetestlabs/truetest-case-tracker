@@ -11,6 +11,8 @@ import { buildCcfFilename } from "@/lib/filename";
 import { extractCocSpecimenId } from "@/lib/extractCocSpecimenId";
 import { extractCocCollectionDate } from "@/lib/extractCocCollectionDate";
 import { formatChicagoMediumDate } from "@/lib/dateChicago";
+import { requireAuth } from "@/lib/auth";
+import { specimenIdsMatch } from "@/lib/patchValidation";
 
 // Allow longer execution for AI summary generation on upload
 export const maxDuration = 60;
@@ -47,6 +49,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: caseId } = await params;
+
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+  const user = auth.user;
+  const actorLabel = user.email || user.name || "admin";
 
   try {
     // Detect mode: JSON (direct upload already in Supabase) vs FormData (legacy)
@@ -171,7 +178,7 @@ export async function POST(
       specimenIdMismatch =
         !!parsedCocSpecimenId &&
         !!referenceSpecimenId &&
-        parsedCocSpecimenId !== referenceSpecimenId;
+        !specimenIdsMatch(parsedCocSpecimenId, referenceSpecimenId);
 
       if (!confirmCocUpload) {
         return NextResponse.json(
@@ -383,7 +390,7 @@ export async function POST(
         documentType: documentType as "court_order" | "chain_of_custody" | "result_report" | "invoice" | "agreement" | "correspondence" | "other",
         fileName: displayName,
         filePath: storagePath,
-        uploadedBy: "admin",
+        uploadedBy: actorLabel,
         notes: null,
         ...(extractedData ? { extractedData } : {}),
       },
@@ -395,7 +402,7 @@ export async function POST(
         caseId,
         oldStatus: "—",
         newStatus: "document_uploaded",
-        changedBy: "admin",
+        changedBy: actorLabel,
         note: `Uploaded ${documentType.replace("_", " ")}: ${originalFileName}`,
       },
     });
@@ -462,8 +469,8 @@ export async function POST(
                 testOrderId: order.id,
                 oldStatus: order.testStatus,
                 newStatus: "specimen_collected",
-                changedBy: "admin",
-                note: `Auto-advanced: chain of custody uploaded. Collection date set to ${dateLabel} (${sourceLabel}, confirmed by admin).`,
+                changedBy: actorLabel,
+                note: `Auto-advanced: chain of custody uploaded. Collection date set to ${dateLabel} (${sourceLabel}, confirmed by ${actorLabel}).`,
               },
             });
           } else {
@@ -473,8 +480,8 @@ export async function POST(
                 testOrderId: order.id,
                 oldStatus: order.testStatus,
                 newStatus: order.testStatus,
-                changedBy: "admin",
-                note: `Chain of custody uploaded. Collection date set to ${dateLabel} (${sourceLabel}, confirmed by admin).`,
+                changedBy: actorLabel,
+                note: `Chain of custody uploaded. Collection date set to ${dateLabel} (${sourceLabel}, confirmed by ${actorLabel}).`,
               },
             });
           }
@@ -486,7 +493,7 @@ export async function POST(
                 testOrderId: order.id,
                 oldStatus: "—",
                 newStatus: "specimen_id_mismatch_ack",
-                changedBy: "admin",
+                changedBy: actorLabel,
                 note: `CoC uploaded with acknowledged specimen ID mismatch (PDF: ${parsedCocSpecimenId}, record: ${referenceSpecimenId}).`,
               },
             });
@@ -519,7 +526,7 @@ export async function POST(
           testOrderId: order.id,
           oldStatus: order.testStatus,
           newStatus,
-          changedBy: "admin",
+          changedBy: actorLabel,
           note: isPaid
             ? "Auto-advanced: lab results uploaded (paid)"
             : "Auto-held: lab results uploaded but payment outstanding",
@@ -557,7 +564,7 @@ export async function POST(
             testOrderId: order.id,
             oldStatus: newStatus,
             newStatus: "needs_review",
-            changedBy: "admin",
+            changedBy: actorLabel,
             note:
               `Lab result cross-check flagged ${resultFindings.length} mismatch${resultFindings.length === 1 ? "" : "es"}: ` +
               resultFindings.map((f) => `${f.severity.toUpperCase()} ${f.type} — ${f.message}`).join(" | "),
@@ -569,8 +576,8 @@ export async function POST(
             testOrderId: order.id,
             oldStatus: "—",
             newStatus: "result_upload_confirmed",
-            changedBy: "admin",
-            note: "Lab result upload confirmed by admin despite warning-level mismatches.",
+            changedBy: actorLabel,
+            note: `Lab result upload confirmed by ${actorLabel} despite warning-level mismatches.`,
           },
         });
       }
@@ -590,7 +597,7 @@ export async function POST(
             caseId,
             oldStatus: "closed",
             newStatus: "active",
-            changedBy: "admin",
+            changedBy: actorLabel,
             note: "Auto-reopened: new lab results uploaded on closed case",
           },
         });
@@ -607,7 +614,7 @@ export async function POST(
           testOrderId: testOrderId || null,
           oldStatus: "—",
           newStatus: "coc_misclassified",
-          changedBy: "admin",
+          changedBy: actorLabel,
           note: `COC misclassified upload flagged: "${document.fileName}". ${cocMisclassificationWarning}`,
         },
       });
