@@ -170,6 +170,24 @@ enum PatchCancellationKind {
   expired        // Wore past the 30-day max — set when manually cancelled after the red badge appears
 }
 
+// CoC lifecycle stage — applies only to chain_of_custody Documents tied to
+// a sweat-patch TestOrder. Null for all other Documents (non-CoC, or CoCs
+// for non-patch tests). Set by the patch CoC upload route:
+//   working_copy — uploaded at patch application; partial CoC (application
+//                  date + specimen ID + patch number + donor signature for
+//                  application). Linked from PatchDetails.workingCopyDocumentId.
+//   executed    — uploaded at patch removal; same physical form, now also
+//                  bearing removal date and removal signature. Linked from
+//                  PatchDetails.executedDocumentId. Supersedes the working copy.
+//   archived    — a previous working copy whose role was taken over by a later
+//                  upload. Stays in the DB for audit trail; not linked from
+//                  either of PatchDetails' two scalar FKs.
+enum CocLifecycleStage {
+  working_copy
+  executed
+  archived
+}
+
 // ============================================================
 // MODELS
 // ============================================================
@@ -436,6 +454,10 @@ model Document {
   id              String       @id @default(cuid())
   caseId          String
   documentType    DocumentType
+  // CoC-specific: working_copy / executed / archived for sweat-patch CoCs.
+  // Null for all other Documents. See enum comment above. Migration is
+  // greenfield — no backfill needed; existing rows remain null.
+  cocLifecycleStage CocLifecycleStage?
   fileName        String
   filePath        String       // Supabase storage URL
   icloudSyncPath  String?      // local iCloud path
