@@ -25,7 +25,11 @@ type TestOrderData = {
   collectionDate: string | null;
   notes: string | null;
   // Present only when specimenType === 'sweat_patch'. Null otherwise.
-  patchDetails?: { panel: "WA07" | "WC82" } | null;
+  patchDetails?: {
+    panel: "WA07" | "WC82";
+    applicationDate: string | null;
+    removalDate: string | null;
+  } | null;
 };
 
 type CatalogItem = {
@@ -116,9 +120,30 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
     const apptDate = form.get("appointmentDate") as string;
     if (apptDate) data.appointmentDate = new Date(apptDate + "T12:00:00").toISOString();
 
-    const collDate = form.get("collectionDate") as string;
-    if (collDate) data.collectionDate = new Date(collDate + "T12:00:00").toISOString();
-    else data.collectionDate = null;
+    if (isSweatPatchOrder) {
+      // Sweat-patch dates live on PatchDetails. The server side-channel routes
+      // these to PatchDetails.applicationDate / removalDate. We also mirror
+      // removalDate → TestOrder.collectionDate so the existing
+      // specimen_collected guard and downstream collection-based logic see
+      // the canonical date — matches executePatchCoc's server-side mirror.
+      const appDateStr = form.get("applicationDate") as string;
+      data.applicationDate = appDateStr
+        ? new Date(appDateStr + "T12:00:00").toISOString()
+        : null;
+
+      const remDateStr = form.get("removalDate") as string;
+      data.removalDate = remDateStr
+        ? new Date(remDateStr + "T12:00:00").toISOString()
+        : null;
+
+      data.collectionDate = remDateStr
+        ? new Date(remDateStr + "T12:00:00").toISOString()
+        : null;
+    } else {
+      const collDate = form.get("collectionDate") as string;
+      if (collDate) data.collectionDate = new Date(collDate + "T12:00:00").toISOString();
+      else data.collectionDate = null;
+    }
 
     try {
       const res = await fetch(`/api/cases/${caseId}/test-orders`, {
@@ -210,29 +235,24 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
           {/* Status */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-            {(() => {
-              const isSweat = testOrder.testDescription?.toLowerCase().includes("sweat patch");
-              return (
-                <select
-                  name="testStatus"
-                  value={currentStatus}
-                  onChange={(e) => setCurrentStatus(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                >
-                  <option value="order_created">{isSweat ? "Patch Applied" : "Order Created"}</option>
-                  <option value="specimen_collected">{isSweat ? "Patch Removed" : "Specimen Collected"}</option>
-                  <option value="sent_to_lab">Sent to Lab</option>
-                  <option value="results_received">Lab Results Received</option>
-                  <option value="results_held">Results Held — Payment Required</option>
-                  <option value="results_released">Lab Results Released</option>
-                  <option value="at_mro">Results at MRO</option>
-                  <option value="mro_released">MRO Results Released</option>
-                  <option value="closed">Test Closed</option>
-                  <option value="no_show">No Show</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              );
-            })()}
+            <select
+              name="testStatus"
+              value={currentStatus}
+              onChange={(e) => setCurrentStatus(e.target.value)}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+            >
+              <option value="order_created">Order Created</option>
+              <option value="specimen_collected">Specimen Collected</option>
+              <option value="sent_to_lab">Sent to Lab</option>
+              <option value="results_received">Lab Results Received</option>
+              <option value="results_held">Results Held — Payment Required</option>
+              <option value="results_released">Lab Results Released</option>
+              <option value="at_mro">Results at MRO</option>
+              <option value="mro_released">MRO Results Released</option>
+              <option value="closed">Test Closed</option>
+              <option value="no_show">No Show</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
             {notifSent && (
               <p className="text-xs text-green-600 mt-1">✓ No Show notification sent</p>
             )}
@@ -258,28 +278,70 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
             </div>
           )}
 
-          {/* Specimen ID + Collection Date */}
+          {/* Specimen ID + Date(s) */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Specimen ID</label>
               <input type="text" name="specimenId" defaultValue={testOrder.specimenId || ""} placeholder="e.g., TTL-2026-04-001" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {testOrder.testDescription?.toLowerCase().includes("sweat patch") ? "Application Date" : "Collection Date"}
-                {collectionDateRequired && <span className="text-red-500 ml-0.5">*</span>}
-              </label>
-              <input
-                type="date"
-                name="collectionDate"
-                defaultValue={testOrder.collectionDate ? new Date(testOrder.collectionDate).toISOString().split("T")[0] : ""}
-                required={collectionDateRequired}
-                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-              />
-              {collectionDateRequired && (
-                <p className="text-[10px] text-gray-500 mt-0.5">Required when marking specimen collected.</p>
-              )}
-            </div>
+            {isSweatPatchOrder ? (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Application Date</label>
+                  <input
+                    type="date"
+                    name="applicationDate"
+                    defaultValue={
+                      testOrder.patchDetails?.applicationDate
+                        ? new Date(testOrder.patchDetails.applicationDate)
+                            .toISOString()
+                            .split("T")[0]
+                        : ""
+                    }
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Removal Date
+                    {collectionDateRequired && <span className="text-red-500 ml-0.5">*</span>}
+                  </label>
+                  <input
+                    type="date"
+                    name="removalDate"
+                    defaultValue={
+                      testOrder.patchDetails?.removalDate
+                        ? new Date(testOrder.patchDetails.removalDate)
+                            .toISOString()
+                            .split("T")[0]
+                        : ""
+                    }
+                    required={collectionDateRequired}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  />
+                  {collectionDateRequired && (
+                    <p className="text-[10px] text-gray-500 mt-0.5">Required when marking specimen collected.</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Collection Date
+                  {collectionDateRequired && <span className="text-red-500 ml-0.5">*</span>}
+                </label>
+                <input
+                  type="date"
+                  name="collectionDate"
+                  defaultValue={testOrder.collectionDate ? new Date(testOrder.collectionDate).toISOString().split("T")[0] : ""}
+                  required={collectionDateRequired}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                />
+                {collectionDateRequired && (
+                  <p className="text-[10px] text-gray-500 mt-0.5">Required when marking specimen collected.</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Collection details */}
