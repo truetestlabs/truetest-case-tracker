@@ -304,6 +304,7 @@ function PatchRow({
             <PatchCocUploadButton
               caseId={caseId}
               testOrderId={order.id}
+              uploadType="working_copy"
               onUploadComplete={onUploadComplete}
             />
           )}

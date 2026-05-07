@@ -15,6 +15,7 @@ import { CocConfirmModal } from "./CocConfirmModal";
 type Props = {
   caseId: string;
   testOrderId: string;
+  uploadType: "working_copy" | "executed";
   onUploadComplete: () => void;
 };
 
@@ -23,6 +24,7 @@ type ProcessPayload = {
   fileName: string;
   documentType: string;
   testOrderId: string;
+  cocLifecycleStage: "working_copy" | "executed";
   confirmCocUpload?: boolean;
   confirmedCollectionDate?: string;
 };
@@ -41,11 +43,19 @@ type CocConfirmState = {
 export function PatchCocUploadButton({
   caseId,
   testOrderId,
+  uploadType,
   onUploadComplete,
 }: Props) {
   const [uploading, setUploading] = useState(false);
   const [cocConfirm, setCocConfirm] = useState<CocConfirmState | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const buttonLabel =
+    uploadType === "executed" ? "Upload executed CoC" : "Upload working-copy CoC";
+  const modalDateLabel =
+    uploadType === "executed" ? "Removal date" : "Application date";
+  const modalTitle =
+    uploadType === "executed" ? "Confirm Removal" : "Confirm Application";
 
   async function postProcess(payload: ProcessPayload): Promise<boolean> {
     const processRes = await fetch(`/api/cases/${caseId}/documents`, {
@@ -151,6 +161,7 @@ export function PatchCocUploadButton({
         fileName: file.name,
         documentType: "chain_of_custody",
         testOrderId,
+        cocLifecycleStage: uploadType === "executed" ? "executed" : "working_copy",
       };
       await postProcess(payload);
     } catch (e) {
@@ -186,7 +197,7 @@ export function PatchCocUploadButton({
   return (
     <>
       <label className="cursor-pointer text-xs px-2.5 py-1 rounded border border-blue-300 text-blue-700 hover:bg-blue-50 font-medium inline-flex items-center gap-1">
-        {uploading ? "Uploading…" : "Upload working-copy CoC"}
+        {uploading ? "Uploading…" : buttonLabel}
         <input
           ref={fileInputRef}
           type="file"
@@ -208,6 +219,8 @@ export function PatchCocUploadButton({
           specimenIdMismatch={cocConfirm.specimenIdMismatch}
           extractedDate={cocConfirm.extractedCollectionDate}
           dateSource={cocConfirm.dateSource}
+          dateLabel={modalDateLabel}
+          title={modalTitle}
           onConfirm={handleCocConfirm}
           onCancel={handleCocCancel}
         />
