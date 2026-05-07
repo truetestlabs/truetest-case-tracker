@@ -21,6 +21,12 @@ type Props = {
   specimenIdMismatch: boolean;
   extractedDate: string | null; // YYYY-MM-DD
   dateSource: "text" | "vision" | null;
+  dateLabel?: string;
+  title?: string;
+  // The `collectionDate` parameter name mirrors the schema field
+  // (TestOrder.collectionDate). For patch executed uploads, the
+  // value is semantically a removal date — PatchDetails.removalDate
+  // is mirrored into TestOrder.collectionDate by the server route.
   onConfirm: (collectionDate: string) => void;
   onCancel: () => void;
 };
@@ -32,6 +38,11 @@ export function CocConfirmModal({
   specimenIdMismatch,
   extractedDate,
   dateSource,
+  // Defaults preserve legacy "Collection date" / "Confirm Chain of Custody"
+  // copy for non-patch and working-copy flows (TestOrderDocuments + working-
+  // copy PatchCocUploadButton). Patch executed-copy uploads override both.
+  dateLabel = "Collection date",
+  title = "Confirm Chain of Custody",
   onConfirm,
   onCancel,
 }: Props) {
@@ -74,7 +85,7 @@ export function CocConfirmModal({
         <div className="p-6 space-y-4">
           <div className="flex items-start justify-between">
             <h3 className="text-lg font-semibold text-gray-900">
-              Confirm Chain of Custody
+              {title}
             </h3>
             <button
               type="button"
@@ -120,7 +131,7 @@ export function CocConfirmModal({
           <div className="space-y-2">
             <label className="block">
               <span className="text-sm font-medium text-gray-900">
-                Collection date
+                {dateLabel}
               </span>
               <input
                 type="date"
@@ -160,7 +171,7 @@ export function CocConfirmModal({
             {extractedDate === null && (
               <div className="rounded-md bg-yellow-50 border border-yellow-200 px-3 py-2">
                 <p className="text-xs text-yellow-800">
-                  Could not extract collection date from the PDF. Please type
+                  Could not extract {dateLabel.toLowerCase()} from the PDF. Please type
                   the date from the chain of custody.
                 </p>
               </div>
