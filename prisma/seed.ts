@@ -15,6 +15,7 @@ async function main() {
     { category: "Urine", testName: "5 Panel Urine Non-DOT", panelSize: "5 panel", specimenType: "urine" as const, lab: "crl_quest" as const, labTestCode: "P705", clientPrice: 75, labCost: 0, description: "Can be ordered at Quest PSCs" },
     { category: "Urine", testName: "5 Panel with EtG", panelSize: "5 panel", specimenType: "urine" as const, lab: "crl_quest" as const, labTestCode: "N060+P705", clientPrice: 155, labCost: 0, description: "Can be ordered at Quest PSCs" },
     { category: "Urine", testName: "7 Panel Urine", panelSize: "7 panel", specimenType: "urine" as const, lab: "crl_quest" as const, labTestCode: "P707", clientPrice: 77, labCost: 0 },
+    { category: "Urine", testName: "7 Panel with EtG Urine", panelSize: "7 panel", specimenType: "urine" as const, lab: "quest" as const, labTestCode: "26322N+44010N", clientPrice: 145, labCost: 0 },
     { category: "Urine", testName: "9 Panel Urine", panelSize: "9 panel", specimenType: "urine" as const, lab: "crl_quest" as const, labTestCode: "P711", clientPrice: 80, labCost: 0 },
     { category: "Urine", testName: "10 Panel Urine", panelSize: "10 panel", specimenType: "urine" as const, lab: "crl_quest" as const, labTestCode: "P710", clientPrice: 95, labCost: 0, description: "Can be ordered at Quest PSCs" },
     { category: "Urine", testName: "10 Panel Expanded Opiates", panelSize: "10 panel", specimenType: "urine" as const, lab: "quest" as const, labTestCode: "35639N", clientPrice: 105, labCost: 0, description: "Can be ordered at Quest PSCs" },
