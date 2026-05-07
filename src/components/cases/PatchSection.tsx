@@ -40,6 +40,7 @@ export type PatchOrderForUI = {
   specimenId: string | null;
   lab: string;
   testStatus: string;
+  paymentMethod: string | null;
   documents: Array<{
     id: string;
     documentType: string;
@@ -291,7 +292,23 @@ function PatchRow({
           </p>
 
           <div className="mt-2 flex items-center gap-2 flex-wrap">
-            {lifecycle && <LifecycleBadge status={lifecycle} />}
+            {/* AT_LAB rows show a payment-aware badge instead of the generic
+                "At Lab" label. Heavy purple "Sent to lab" when paid; pastel
+                amber "Held pending payment" when not. The visual mismatch is
+                intentional — heavy means stable, pastel means action needed. */}
+            {lifecycle === "AT_LAB" ? (
+              order.paymentMethod ? (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide bg-[#4338ca] text-white">
+                  Sent to lab
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                  Held pending payment
+                </span>
+              )
+            ) : (
+              lifecycle && <LifecycleBadge status={lifecycle} />
+            )}
             {wearBadge && wearBadge.kind === "wearing" && (
               <WearChip days={wearBadge.days} status={wearBadge.status} />
             )}
@@ -305,6 +322,14 @@ function PatchRow({
               caseId={caseId}
               testOrderId={order.id}
               uploadType="working_copy"
+              onUploadComplete={onUploadComplete}
+            />
+          )}
+          {pd && lifecycle === "WORN" && !pd.executedDocumentId && (
+            <PatchCocUploadButton
+              caseId={caseId}
+              testOrderId={order.id}
+              uploadType="executed"
               onUploadComplete={onUploadComplete}
             />
           )}
