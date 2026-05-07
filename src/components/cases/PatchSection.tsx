@@ -11,6 +11,7 @@ import {
   type PatchLifecycleStatus,
 } from "@/lib/patchValidation";
 import { CancelPatchModal } from "@/components/cases/CancelPatchModal";
+import { PatchCocUploadButton } from "@/components/cases/PatchCocUploadButton";
 import { PendingSelectionBanner } from "@/components/cases/PendingSelectionBanner";
 import { ConfirmTestModal } from "@/components/cases/ConfirmTestModal";
 import { needsStaffSelection } from "@/lib/case-utils";
@@ -39,6 +40,7 @@ export type PatchOrderForUI = {
   specimenId: string | null;
   lab: string;
   testStatus: string;
+  paymentMethod: string | null;
   documents: Array<{
     id: string;
     documentType: string;
@@ -117,6 +119,7 @@ export function PatchSection({
             onCancelClick={() => setCancellingPatchId(order.patchDetails?.id ?? null)}
             onConfirmClick={() => setConfirmingTestOrderId(order.id)}
             onEdit={() => onEdit(order.id)}
+            onUploadComplete={onChanged}
             onGenerateReport={async () => {
               if (!order.patchDetails) return;
               setGeneratingReportId(order.patchDetails.id);
@@ -210,6 +213,7 @@ function PatchRow({
   onConfirmClick,
   onEdit,
   onGenerateReport,
+  onUploadComplete,
   generating,
 }: {
   order: PatchOrderForUI;
@@ -218,12 +222,9 @@ function PatchRow({
   onConfirmClick: () => void;
   onEdit: () => void;
   onGenerateReport: () => void;
+  onUploadComplete: () => void;
   generating: boolean;
 }) {
-  // caseId is destructured but not currently read — kept in props
-  // signature for future row-scoped fetches (e.g., per-row regenerate).
-  void caseId;
-
   const pd = order.patchDetails;
   const lifecycle: PatchLifecycleStatus | null = pd
     ? patchLifecycleStatus({
@@ -291,7 +292,23 @@ function PatchRow({
           </p>
 
           <div className="mt-2 flex items-center gap-2 flex-wrap">
-            {lifecycle && <LifecycleBadge status={lifecycle} />}
+            {/* AT_LAB rows show a payment-aware badge instead of the generic
+                "At Lab" label. Heavy purple "Sent to lab" when paid; pastel
+                amber "Held pending payment" when not. The visual mismatch is
+                intentional — heavy means stable, pastel means action needed. */}
+            {lifecycle === "AT_LAB" ? (
+              order.paymentMethod ? (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide bg-[#4338ca] text-white">
+                  Sent to lab
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                  Held pending payment
+                </span>
+              )
+            ) : (
+              lifecycle && <LifecycleBadge status={lifecycle} />
+            )}
             {wearBadge && wearBadge.kind === "wearing" && (
               <WearChip days={wearBadge.days} status={wearBadge.status} />
             )}
@@ -300,6 +317,22 @@ function PatchRow({
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
+          {pd && lifecycle === null && !pd.workingCopyDocumentId && (
+            <PatchCocUploadButton
+              caseId={caseId}
+              testOrderId={order.id}
+              uploadType="working_copy"
+              onUploadComplete={onUploadComplete}
+            />
+          )}
+          {pd && lifecycle === "WORN" && !pd.executedDocumentId && (
+            <PatchCocUploadButton
+              caseId={caseId}
+              testOrderId={order.id}
+              uploadType="executed"
+              onUploadComplete={onUploadComplete}
+            />
+          )}
           {lifecycle === "WORN" && (
             <button
               type="button"

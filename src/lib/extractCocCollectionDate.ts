@@ -23,6 +23,22 @@ export type CocCollectionDateResult = {
   source: "text" | "vision" | null;
 };
 
+/**
+ * Which date the extractor should target.
+ *   "working_copy" — application date (existing behavior; non-patch CoCs and
+ *                    sweat-patch working-copy uploads).
+ *   "executed"     — patch removal date from box 10 of a PharmChek sweat-patch
+ *                    CoC (executed-copy upload). Field is in the "PharmChek
+ *                    Removal" section of the same physical form.
+ *
+ * The return shape is unchanged across modes — caller decides whether to
+ * write the resulting date to TestOrder.collectionDate, PatchDetails
+ * .applicationDate, or PatchDetails.removalDate. The JSON key returned by
+ * the Vision pass also stays "collectionDate" so the response shape is
+ * stable across modes; the field name is a vestige of pre-patch usage.
+ */
+export type CocUploadType = "working_copy" | "executed";
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -52,7 +68,8 @@ function isWithinRecencyWindow(iso: string): boolean {
 }
 
 export async function extractCocCollectionDate(
-  buffer: Buffer
+  buffer: Buffer,
+  uploadType: CocUploadType = "working_copy"
 ): Promise<CocCollectionDateResult> {
   // --- Text pass -----------------------------------------------------------
   try {
@@ -69,7 +86,7 @@ export async function extractCocCollectionDate(
       const result = await parser.getText();
       const text: string = result.text || "";
       if (text.trim().length > 50) {
-        const fromText = matchPrintedCollectionDate(text);
+        const fromText = matchPrintedCollectionDate(text, uploadType);
         if (fromText) {
           if (!isWithinRecencyWindow(fromText)) {
             console.warn(
@@ -92,24 +109,32 @@ export async function extractCocCollectionDate(
 
   try {
     const base64 = buffer.toString("base64");
-    const response = await claude.messages.create({
-      model: "claude-opus-4-6",
-      max_tokens: 128,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: base64,
-              },
-            },
-            {
-              type: "text",
-              text: `Return the donor specimen collection date from this chain-of-custody form.
+    const visionPrompt =
+      uploadType === "executed"
+        ? `Return the PATCH REMOVAL DATE from this PharmChek sweat-patch chain-of-custody form.
+
+The PharmChek CoC has two sections: an Application section (top, around boxes 2–9) and a Removal section (right side, around boxes 10–16). The removal date is in the **PharmChek Removal** section, in the field labeled with the **number 10** ("Date" field of the Removal portion). It is the date the patch was physically removed from the donor.
+
+DO NOT return:
+- The application date (top section, in the "PharmChek Application" portion, often labeled with the number 4 — that's a different date)
+- The donor's date of birth
+- The signature date (observer or donor signatures)
+- The ship date / received-by-lab date / "Date Sent" / "Date Rec'd"
+- The order date / requisition date
+- Any printed form-revision date in the page footer
+
+Date handling rules — these are critical:
+- If the date in box 10 is clearly printed (typed/digital), return it.
+- If the date is HANDWRITTEN and you cannot read it with high confidence — including any ambiguity about the day, month, or year — return null. DO NOT guess. A wrong date silently saved is worse than asking the user to type it.
+- If box 10 is blank or you cannot identify the PharmChek Removal section, return null.
+- If the year is missing or ambiguous, return null.
+- A 2-digit year like "26" should be interpreted as 2026.
+
+Respond with JSON only, in this exact shape:
+{"collectionDate": "YYYY-MM-DD"}
+or
+{"collectionDate": null}`
+        : `Return the donor specimen collection date from this chain-of-custody form.
 
 The collection date is the date the donor's specimen (urine/oral fluid/hair/sweat patch) was physically collected from the donor. It is typically in a field labeled "Date Collected", "Collection Date", "Date of Collection", or similar, on the collector's portion of the form (Step 4 / Step 5 on USDTL CCFs).
 
@@ -130,8 +155,24 @@ Date handling rules — these are critical:
 Respond with JSON only, in this exact shape:
 {"collectionDate": "YYYY-MM-DD"}
 or
-{"collectionDate": null}`,
+{"collectionDate": null}`;
+
+    const response = await claude.messages.create({
+      model: "claude-opus-4-6",
+      max_tokens: 128,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "document",
+              source: {
+                type: "base64",
+                media_type: "application/pdf",
+                data: base64,
+              },
             },
+            { type: "text", text: visionPrompt },
           ],
         },
       ],
@@ -163,19 +204,32 @@ or
 }
 
 /**
- * Look for a printed collection date in the extracted PDF text. Tries label-
- * anchored regexes first (the safe path), then a fully-qualified date near
- * the word "Collected". Returns YYYY-MM-DD or null.
+ * Look for a printed date in the extracted PDF text. Tries label-anchored
+ * regexes (the safe path) and returns YYYY-MM-DD or null.
  *
- * Conservative on purpose — if the format isn't clearly anchored to a
- * collection-date label, return null and let the Vision pass handle it.
+ * Conservative on purpose — if the format isn't clearly anchored to the
+ * expected label (collection vs removal), return null and let the Vision
+ * pass handle it. Sweat-patch CoCs are typically scanned paper forms with
+ * handwritten dates, so text-mode rarely succeeds for `executed`; the
+ * patterns below are best-effort for the rare case where a PharmChek form
+ * has a typed removal date.
+ *
+ * Exported for unit testing — keep the surface narrow.
  */
-function matchPrintedCollectionDate(text: string): string | null {
-  // Label-anchored: "Date Collected: 04/21/2026", "Collection Date 2026-04-21", etc.
-  // Tolerate optional newlines/spaces between the label and the date.
-  const labelPatterns = [
-    /(?:date\s*collected|collection\s*date|date\s*of\s*collection)[:\s]*([0-9]{1,4}[-/.][0-9]{1,2}[-/.][0-9]{1,4})/i,
-  ];
+export function matchPrintedCollectionDate(
+  text: string,
+  uploadType: CocUploadType = "working_copy"
+): string | null {
+  const labelPatterns =
+    uploadType === "executed"
+      ? [
+          // Sweat-patch executed: "Removal Date: 04/22/2026", "Date Removed 2026-04-22", etc.
+          /(?:date\s*removed|removal\s*date|date\s*of\s*removal|patch\s*removal\s*date)[:\s]*([0-9]{1,4}[-/.][0-9]{1,2}[-/.][0-9]{1,4})/i,
+        ]
+      : [
+          // Working-copy / non-patch: "Date Collected: 04/21/2026", "Collection Date 2026-04-21", etc.
+          /(?:date\s*collected|collection\s*date|date\s*of\s*collection)[:\s]*([0-9]{1,4}[-/.][0-9]{1,2}[-/.][0-9]{1,4})/i,
+        ];
   for (const re of labelPatterns) {
     const m = text.match(re);
     if (m?.[1]) {

@@ -11,6 +11,9 @@ import { buildCcfFilename } from "@/lib/filename";
 import { extractCocSpecimenId } from "@/lib/extractCocSpecimenId";
 import { extractCocCollectionDate } from "@/lib/extractCocCollectionDate";
 import { formatChicagoMediumDate } from "@/lib/dateChicago";
+import { requireAuth } from "@/lib/auth";
+import { specimenIdsMatch } from "@/lib/patchValidation";
+import { executePatchCoc } from "@/lib/patchStatus";
 
 // Allow longer execution for AI summary generation on upload
 export const maxDuration = 60;
@@ -48,6 +51,11 @@ export async function POST(
 ) {
   const { id: caseId } = await params;
 
+  const auth = await requireAuth(request);
+  if (auth.response) return auth.response;
+  const user = auth.user;
+  const actorLabel = user.email || user.name || "admin";
+
   try {
     // Detect mode: JSON (direct upload already in Supabase) vs FormData (legacy)
     const isJson = request.headers.get("content-type")?.includes("application/json");
@@ -62,6 +70,11 @@ export async function POST(
     let confirmCocUpload = false;
     let confirmedCollectionDate: string | null = null;
     let confirmResultUpload = false;
+    // Informational only per Decision 7: client tells the route what it
+    // thinks it's uploading; route validates against PatchDetails state
+    // and rejects on mismatch. Only carried by the JSON body — the legacy
+    // FormData path doesn't read it (patch flow is JSON-only).
+    let clientCocLifecycleStage: string | null = null;
 
     if (isJson) {
       // NEW MODE: File already uploaded directly to Supabase Storage
@@ -77,6 +90,10 @@ export async function POST(
           ? body.confirmedCollectionDate
           : null;
       confirmResultUpload = body.confirmResultUpload === true;
+      clientCocLifecycleStage =
+        typeof body.cocLifecycleStage === "string"
+          ? body.cocLifecycleStage
+          : null;
       ext = originalFileName.includes(".") ? "." + originalFileName.split(".").pop() : ".pdf";
 
       // Download from Supabase to get buffer for parsing/AI summary
@@ -137,6 +154,397 @@ export async function POST(
     const donor = caseData?.donor;
     const latestOrder = caseData?.testOrders[0];
 
+    // ── Patch CoC — working-copy path (Cap 1) ─────────────────────────
+    // Branches BEFORE the non-patch CoC logic. Sweat-patch CoCs follow a
+    // different commit shape: the confirmed date is the patch's
+    // applicationDate (not TestOrder.collectionDate), testStatus does NOT
+    // advance (specimen is collected at removal, not application), and
+    // the document is tagged via cocLifecycleStage. Returns early on
+    // every patch path; non-patch CoCs fall through to the existing
+    // logic below.
+    if (
+      documentType === "chain_of_custody" &&
+      ext.toLowerCase() === ".pdf" &&
+      testOrderId
+    ) {
+      const patchOrder = await prisma.testOrder.findUnique({
+        where: { id: testOrderId },
+        select: {
+          id: true,
+          specimenType: true,
+          specimenId: true,
+          testStatus: true,
+          patchDetails: {
+            select: {
+              id: true,
+              applicationDate: true,
+              removalDate: true,
+              workingCopyDocumentId: true,
+              executedDocumentId: true,
+              cancellationKind: true,
+            },
+          },
+        },
+      });
+
+      if (patchOrder?.specimenType === "sweat_patch") {
+        const pd = patchOrder.patchDetails;
+        if (!pd) {
+          return NextResponse.json(
+            {
+              error: "patch_coc_invalid_state",
+              message:
+                "This sweat-patch test order is missing setup data and can't accept a CoC upload. Contact the system administrator.",
+            },
+            { status: 409 },
+          );
+        }
+
+        // Cancellation precedence — applies to all CoC-upload paths.
+        if (pd.cancellationKind) {
+          return NextResponse.json(
+            {
+              error: "patch_coc_invalid_state",
+              message:
+                "This patch has been cancelled and cannot accept further CoC uploads.",
+            },
+            { status: 409 },
+          );
+        }
+
+        // State-inferred dispatch (Option α / Decision 7). Two valid
+        // upload windows, plus a fallthrough for anything else.
+        const isPendingWorkingCopy =
+          pd.applicationDate === null && pd.workingCopyDocumentId === null;
+        const isPendingExecuted =
+          pd.applicationDate !== null &&
+          pd.workingCopyDocumentId !== null &&
+          pd.executedDocumentId === null;
+
+        // Strict cocLifecycleStage validation (Decision 7). Client tells
+        // the route what it thinks it's uploading; if that disagrees with
+        // PatchDetails state, reject so the modal forces a refresh
+        // rather than committing the wrong shape.
+        if (clientCocLifecycleStage === "executed" && !isPendingExecuted) {
+          return NextResponse.json(
+            {
+              error: "patch_coc_state_mismatch",
+              message:
+                "This patch is not ready for an executed CoC. Refresh the page and try again.",
+            },
+            { status: 409 },
+          );
+        }
+        if (
+          clientCocLifecycleStage === "working_copy" &&
+          !isPendingWorkingCopy
+        ) {
+          return NextResponse.json(
+            {
+              error: "patch_coc_state_mismatch",
+              message:
+                "This patch is not awaiting a working-copy CoC. Refresh the page and try again.",
+            },
+            { status: 409 },
+          );
+        }
+
+        if (isPendingWorkingCopy) {
+          // ── 3b: Working-copy CoC upload ──────────────────────────
+          const [specimenExtraction, dateExtraction] = await Promise.all([
+            extractCocSpecimenId(buffer),
+            extractCocCollectionDate(buffer),
+          ]);
+          const parsedSpecimenId = specimenExtraction.specimenId;
+          const parsedApplicationDate = dateExtraction.collectionDate;
+          const dateSource = dateExtraction.source;
+          const referenceSpecimenIdPatch =
+            (manualSpecimenId?.trim() || patchOrder.specimenId) ?? null;
+          const patchSpecimenIdMismatch =
+            !!parsedSpecimenId &&
+            !!referenceSpecimenIdPatch &&
+            !specimenIdsMatch(parsedSpecimenId, referenceSpecimenIdPatch);
+
+          if (!confirmCocUpload) {
+            return NextResponse.json(
+              {
+                error: "coc_needs_confirmation",
+                storagePath,
+                parsedSpecimenId,
+                recordSpecimenId: referenceSpecimenIdPatch,
+                specimenIdMismatch: patchSpecimenIdMismatch,
+                extractedCollectionDate: parsedApplicationDate,
+                dateSource,
+              },
+              { status: 409 },
+            );
+          }
+
+          const confirmedDate = parseIsoDateUtcNoon(confirmedCollectionDate);
+          if (!confirmedDate) {
+            return NextResponse.json(
+              { error: "confirmedCollectionDate is required for CoC uploads" },
+              { status: 400 },
+            );
+          }
+
+          const sourceLabel =
+            dateSource === "text"
+              ? "AI-extracted from text"
+              : dateSource === "vision"
+                ? "AI-extracted via Vision"
+                : "manually entered";
+          const dateLabel = formatChicagoMediumDate(confirmedDate);
+
+          const filenameSpecimenId =
+            manualSpecimenId?.trim() ||
+            parsedSpecimenId ||
+            patchOrder.specimenId ||
+            "";
+          const donorFirst = donor?.firstName || "Unknown";
+          const donorLast = donor?.lastName || "Donor";
+          const displayName = buildCcfFilename(
+            filenameSpecimenId,
+            donorFirst,
+            donorLast,
+            ext,
+          );
+
+          const document = await prisma.$transaction(async (tx) => {
+            const doc = await tx.document.create({
+              data: {
+                caseId,
+                testOrderId,
+                documentType: "chain_of_custody",
+                fileName: displayName,
+                filePath: storagePath,
+                uploadedBy: actorLabel,
+                cocLifecycleStage: "working_copy",
+              },
+            });
+
+            await tx.patchDetails.update({
+              where: { testOrderId },
+              data: {
+                applicationDate: confirmedDate,
+                workingCopyDocumentId: doc.id,
+              },
+            });
+
+            // testStatus intentionally NOT advanced — patch is on the
+            // donor; specimen collection happens at removal.
+            await tx.statusLog.create({
+              data: {
+                caseId,
+                testOrderId,
+                oldStatus: patchOrder.testStatus,
+                newStatus: patchOrder.testStatus,
+                changedBy: actorLabel,
+                note: `Working-copy CoC uploaded. Application date set to ${dateLabel} (${sourceLabel}, confirmed by ${actorLabel}). Patch is now WORN.`,
+              },
+            });
+
+            if (patchSpecimenIdMismatch) {
+              await tx.statusLog.create({
+                data: {
+                  caseId,
+                  testOrderId,
+                  oldStatus: "—",
+                  newStatus: "specimen_id_mismatch_ack",
+                  changedBy: actorLabel,
+                  note: `Working-copy CoC uploaded with acknowledged specimen ID mismatch (PDF: ${parsedSpecimenId}, record: ${referenceSpecimenIdPatch}).`,
+                },
+              });
+            }
+
+            return doc;
+          });
+
+          return NextResponse.json(document, { status: 201 });
+        } else if (isPendingExecuted) {
+          // ── 3c: Executed-copy CoC upload ─────────────────────────
+          // Defensive check on the isPendingExecuted invariant. Should
+          // be unreachable in normal flow — guards against future
+          // refactors of the dispatch booleans silently violating the
+          // non-null assumption.
+          if (!pd.applicationDate || !pd.workingCopyDocumentId) {
+            throw new Error("isPendingExecuted invariant violated");
+          }
+          // Bind to a local — TypeScript narrows pd.workingCopyDocumentId
+          // to non-null after the throw above, but loses that narrowing
+          // inside the `prisma.$transaction(async (tx) => {...})` closure
+          // below. Capture once here so the archival update doesn't need
+          // a non-null assertion.
+          const priorWorkingCopyDocumentId = pd.workingCopyDocumentId;
+          // The extractor's `collectionDate` field name and the 409
+          // envelope's `extractedCollectionDate` key are preserved
+          // across both modes; for the executed path the value is
+          // semantically a removal date.
+          const [specimenExtraction, dateExtraction] = await Promise.all([
+            extractCocSpecimenId(buffer),
+            extractCocCollectionDate(buffer, "executed"),
+          ]);
+          const parsedSpecimenId = specimenExtraction.specimenId;
+          const parsedRemovalDate = dateExtraction.collectionDate;
+          const dateSource = dateExtraction.source;
+          const referenceSpecimenIdPatch =
+            (manualSpecimenId?.trim() || patchOrder.specimenId) ?? null;
+          const patchSpecimenIdMismatch =
+            !!parsedSpecimenId &&
+            !!referenceSpecimenIdPatch &&
+            !specimenIdsMatch(parsedSpecimenId, referenceSpecimenIdPatch);
+
+          if (!confirmCocUpload) {
+            return NextResponse.json(
+              {
+                error: "coc_needs_confirmation",
+                storagePath,
+                parsedSpecimenId,
+                recordSpecimenId: referenceSpecimenIdPatch,
+                specimenIdMismatch: patchSpecimenIdMismatch,
+                extractedCollectionDate: parsedRemovalDate,
+                dateSource,
+              },
+              { status: 409 },
+            );
+          }
+
+          const confirmedDate = parseIsoDateUtcNoon(confirmedCollectionDate);
+          if (!confirmedDate) {
+            return NextResponse.json(
+              { error: "confirmedCollectionDate is required for CoC uploads" },
+              { status: 400 },
+            );
+          }
+
+          // Hard reject: removal date cannot precede application date.
+          // Same-day allowed. Inline check (Decision 4) — avoids pulling
+          // in validatePatchDates' future-date rules; that's a separate
+          // scope decision if/when needed.
+          const storedApplicationDate = pd.applicationDate;
+          if (confirmedDate.getTime() < storedApplicationDate.getTime()) {
+            return NextResponse.json(
+              {
+                error: "removal_before_application",
+                message: `Removal date (${formatChicagoMediumDate(confirmedDate)}) cannot be before application date (${formatChicagoMediumDate(storedApplicationDate)}).`,
+              },
+              { status: 409 },
+            );
+          }
+
+          const sourceLabel =
+            dateSource === "text"
+              ? "AI-extracted from text"
+              : dateSource === "vision"
+                ? "AI-extracted via Vision"
+                : "manually entered";
+          const dateLabel = formatChicagoMediumDate(confirmedDate);
+
+          const filenameSpecimenId =
+            manualSpecimenId?.trim() ||
+            parsedSpecimenId ||
+            patchOrder.specimenId ||
+            "";
+          const donorFirst = donor?.firstName || "Unknown";
+          const donorLast = donor?.lastName || "Donor";
+          const displayName = buildCcfFilename(
+            filenameSpecimenId,
+            donorFirst,
+            donorLast,
+            ext,
+          );
+
+          const document = await prisma.$transaction(async (tx) => {
+            const doc = await tx.document.create({
+              data: {
+                caseId,
+                testOrderId,
+                documentType: "chain_of_custody",
+                fileName: displayName,
+                filePath: storagePath,
+                uploadedBy: actorLabel,
+                cocLifecycleStage: "executed",
+              },
+            });
+
+            // Archive the prior working copy (Decision 9). The
+            // isPendingExecuted gate already validated that
+            // workingCopyDocumentId is non-null.
+            await tx.document.update({
+              where: { id: priorWorkingCopyDocumentId },
+              data: { cocLifecycleStage: "archived" },
+            });
+
+            // PatchDetails update + TestOrder.collectionDate mirror via
+            // the executePatchCoc helper. Helper sets removalDate,
+            // executedDocumentId, workingCopyDocumentId=null, AND
+            // mirrors removalDate to TestOrder.collectionDate.
+            await executePatchCoc(tx, {
+              patchDetailsId: pd.id,
+              executedDocumentId: doc.id,
+              removalDate: confirmedDate,
+            });
+
+            // testStatus intentionally NOT advanced (Decision 1).
+            // Lifecycle WORN → AT_LAB is derived by patchLifecycleStatus()
+            // automatically from the new executedDocumentId.
+            await tx.statusLog.create({
+              data: {
+                caseId,
+                testOrderId,
+                oldStatus: patchOrder.testStatus,
+                newStatus: patchOrder.testStatus,
+                changedBy: actorLabel,
+                note: `Executed CoC uploaded. Removal date set to ${dateLabel} (${sourceLabel}, confirmed by ${actorLabel}). Patch is now AT_LAB.`,
+              },
+            });
+
+            if (patchSpecimenIdMismatch) {
+              await tx.statusLog.create({
+                data: {
+                  caseId,
+                  testOrderId,
+                  oldStatus: "—",
+                  newStatus: "specimen_id_mismatch_ack",
+                  changedBy: actorLabel,
+                  note: `Executed CoC uploaded with acknowledged specimen ID mismatch (PDF: ${parsedSpecimenId}, record: ${referenceSpecimenIdPatch}).`,
+                },
+              });
+            }
+
+            return doc;
+          });
+
+          return NextResponse.json(document, { status: 201 });
+        } else {
+          // Fallthrough — patch is in a state that doesn't accept any
+          // CoC upload right now. Compose a state-specific message.
+          let stateMsg: string;
+          if (pd.executedDocumentId) {
+            stateMsg =
+              "An executed chain of custody has already been uploaded for this patch.";
+          } else if (pd.workingCopyDocumentId) {
+            stateMsg =
+              "A working-copy chain of custody has already been uploaded for this patch.";
+          } else if (pd.applicationDate) {
+            // Orphan state: applicationDate set, no working-copy and
+            // no executed document — shouldn't happen in normal flow,
+            // but kept for observability if data integrity drifts.
+            stateMsg =
+              "This patch has an application date but no working-copy CoC on file. Contact the system administrator.";
+          } else {
+            stateMsg =
+              "This patch is not in a state that accepts a chain-of-custody upload.";
+          }
+          return NextResponse.json(
+            { error: "patch_coc_invalid_state", message: stateMsg },
+            { status: 409 },
+          );
+        }
+      }
+      // Not a sweat patch — fall through to non-patch CoC logic below.
+    }
+
     // ── CoC PDF — confirmation gate ────────────────────────────────────
     // We always require an explicit confirmation before persisting a CoC,
     // because the confirmed collection date IS the source of truth for the
@@ -171,7 +579,7 @@ export async function POST(
       specimenIdMismatch =
         !!parsedCocSpecimenId &&
         !!referenceSpecimenId &&
-        parsedCocSpecimenId !== referenceSpecimenId;
+        !specimenIdsMatch(parsedCocSpecimenId, referenceSpecimenId);
 
       if (!confirmCocUpload) {
         return NextResponse.json(
@@ -383,7 +791,7 @@ export async function POST(
         documentType: documentType as "court_order" | "chain_of_custody" | "result_report" | "invoice" | "agreement" | "correspondence" | "other",
         fileName: displayName,
         filePath: storagePath,
-        uploadedBy: "admin",
+        uploadedBy: actorLabel,
         notes: null,
         ...(extractedData ? { extractedData } : {}),
       },
@@ -395,7 +803,7 @@ export async function POST(
         caseId,
         oldStatus: "—",
         newStatus: "document_uploaded",
-        changedBy: "admin",
+        changedBy: actorLabel,
         note: `Uploaded ${documentType.replace("_", " ")}: ${originalFileName}`,
       },
     });
@@ -462,8 +870,8 @@ export async function POST(
                 testOrderId: order.id,
                 oldStatus: order.testStatus,
                 newStatus: "specimen_collected",
-                changedBy: "admin",
-                note: `Auto-advanced: chain of custody uploaded. Collection date set to ${dateLabel} (${sourceLabel}, confirmed by admin).`,
+                changedBy: actorLabel,
+                note: `Auto-advanced: chain of custody uploaded. Collection date set to ${dateLabel} (${sourceLabel}, confirmed by ${actorLabel}).`,
               },
             });
           } else {
@@ -473,8 +881,8 @@ export async function POST(
                 testOrderId: order.id,
                 oldStatus: order.testStatus,
                 newStatus: order.testStatus,
-                changedBy: "admin",
-                note: `Chain of custody uploaded. Collection date set to ${dateLabel} (${sourceLabel}, confirmed by admin).`,
+                changedBy: actorLabel,
+                note: `Chain of custody uploaded. Collection date set to ${dateLabel} (${sourceLabel}, confirmed by ${actorLabel}).`,
               },
             });
           }
@@ -486,7 +894,7 @@ export async function POST(
                 testOrderId: order.id,
                 oldStatus: "—",
                 newStatus: "specimen_id_mismatch_ack",
-                changedBy: "admin",
+                changedBy: actorLabel,
                 note: `CoC uploaded with acknowledged specimen ID mismatch (PDF: ${parsedCocSpecimenId}, record: ${referenceSpecimenId}).`,
               },
             });
@@ -519,7 +927,7 @@ export async function POST(
           testOrderId: order.id,
           oldStatus: order.testStatus,
           newStatus,
-          changedBy: "admin",
+          changedBy: actorLabel,
           note: isPaid
             ? "Auto-advanced: lab results uploaded (paid)"
             : "Auto-held: lab results uploaded but payment outstanding",
@@ -557,7 +965,7 @@ export async function POST(
             testOrderId: order.id,
             oldStatus: newStatus,
             newStatus: "needs_review",
-            changedBy: "admin",
+            changedBy: actorLabel,
             note:
               `Lab result cross-check flagged ${resultFindings.length} mismatch${resultFindings.length === 1 ? "" : "es"}: ` +
               resultFindings.map((f) => `${f.severity.toUpperCase()} ${f.type} — ${f.message}`).join(" | "),
@@ -569,8 +977,8 @@ export async function POST(
             testOrderId: order.id,
             oldStatus: "—",
             newStatus: "result_upload_confirmed",
-            changedBy: "admin",
-            note: "Lab result upload confirmed by admin despite warning-level mismatches.",
+            changedBy: actorLabel,
+            note: `Lab result upload confirmed by ${actorLabel} despite warning-level mismatches.`,
           },
         });
       }
@@ -590,7 +998,7 @@ export async function POST(
             caseId,
             oldStatus: "closed",
             newStatus: "active",
-            changedBy: "admin",
+            changedBy: actorLabel,
             note: "Auto-reopened: new lab results uploaded on closed case",
           },
         });
@@ -607,7 +1015,7 @@ export async function POST(
           testOrderId: testOrderId || null,
           oldStatus: "—",
           newStatus: "coc_misclassified",
-          changedBy: "admin",
+          changedBy: actorLabel,
           note: `COC misclassified upload flagged: "${document.fileName}". ${cocMisclassificationWarning}`,
         },
       });
