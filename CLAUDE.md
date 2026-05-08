@@ -190,3 +190,16 @@ Two categories of fields, two categories of helpers. They are **not** interchang
 This repo has no automated test suite for the app itself (the eval harness covers extraction only). Every PR must include a manual verification checklist with itemized steps — specific enough that Colleen can follow them without interpretation. Don't write generic checklists ("verify the changed surfaces") — write the exact steps, expected outcomes, and any edge cases to check.
 
 Date/time-sensitive changes must be verified at multiple times of day to catch tz-edge bugs (specifically, evening CT hours when local and UTC dates diverge).
+
+## Maintenance
+
+CLAUDE.md goes stale fast — three weeks of drift between 2026-04-16 and 2026-05-08 produced a 60% expansion on the first cleanup pass. To keep it current, run a drift check at these triggers:
+
+- **End of any session that produced commits, filed tickets, or significant decisions.**
+- **Once a week, regardless** (Sunday evening or Monday morning).
+
+Drift-check prompt to paste into a fresh Claude Code session:
+
+> *Look at CLAUDE.md and the work from today plus the last week of commits. List what you considered. Then tell me what's drifted, what's missing, and what should be updated. Don't change the file — show me the proposed updates first.*
+
+Have Claude write proposed updates to a file (e.g. `/tmp/claude-md-proposed-updates-YYYY-MM-DD.md`), review with sparring-partner Claude in chat for omissions, then apply.
