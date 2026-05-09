@@ -51,6 +51,16 @@
 - **Vercel Cron:** `CRON_SECRET` — set matching secret on Vercel; cron routes 401 unless `Authorization: Bearer $CRON_SECRET` matches. Donor notification crons: `/api/cron/seed-notifications` (daily 11 UTC), `/api/cron/run-notifications` (every 5 min, 12–19 UTC).
 - **App URL:** `NEXT_PUBLIC_APP_URL` — used in SMS/email bodies so donors can click through to `/portal`.
 
+## Supabase Architecture
+
+- **Browser bundle:** uses `NEXT_PUBLIC_SUPABASE_ANON_KEY` (new-system publishable key, format `sb_publishable_*`). Safe to ship to browsers because RLS is on for all public tables. Used only for Supabase Auth (login/logout/session) — never for direct table queries.
+- **Server (Prisma):** all data reads/writes against `public.*` tables go through `DATABASE_URL` using the `postgres` role, which has BYPASSRLS. RLS does NOT apply to Prisma traffic.
+- **Server (Storage):** `src/lib/storage.ts` uses `SUPABASE_SERVICE_ROLE_KEY` (new-system secret key, format `sb_secret_*`) for `/storage/v1/*` calls.
+- **RLS posture:** all 26 public tables have RLS enabled with default-deny (no policies). PostgREST clients (anyone with the publishable key) cannot read or write public tables. Any future feature that wants browser-side direct queries against a public table requires writing a targeted RLS policy for that table.
+- **Legacy API keys (HS256 anon JWT, HS256 service_role) are DISABLED** as of 2026-05-09. Do not re-enable them. The leaked `SUPABASE_ANON_JWT` value from commit `30d2842` is permanently invalid.
+
+_Last reviewed: 2026-05-09_
+
 ## Domain & DNS
 
 - truetestlabs.com is on GoDaddy (no Cloudflare). Edge redirects not possible until Pages cutover.
@@ -116,6 +126,12 @@ reads the host's local timezone, which makes the value
 hydration-unstable (UTC during SSR on Vercel, donor's browser tz on
 hydration). Either echo the donor's typed strings back directly, or
 use `new Date(Date.UTC(...))` with an explicit intent.
+
+## Schema migration checklist
+
+When adding a new table via Prisma:
+- [ ] After running the Prisma migration, also run `ALTER TABLE public."NewTableName" ENABLE ROW LEVEL SECURITY;` against the database. Prisma creates tables with RLS disabled by default; the project convention is RLS-on-by-default. Either include the ALTER in the same migration SQL or as an immediate follow-up via Supabase MCP.
+- [ ] If the table needs to be readable/writable from the browser (rare — most paths go through Prisma server-side), write explicit RLS policies before deploying.
 
 ## Testing
 
