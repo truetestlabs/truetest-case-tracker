@@ -70,6 +70,18 @@ _Last reviewed: 2026-05-09_
 
 For **every** lab integration (USDTL and any future lab), we must retrieve and store the **unaltered, lab-produced final PDF** of the result report. That original PDF is what gets attached to client results emails, the MRO referral email, and stored in Supabase Storage as a `result_report` document. Never regenerate, re-render, or modify it. AI summaries live in the email body or a separate doc — the lab PDF passes through byte-for-byte. Note: lab reports are **not** signed — MRO signatures are a separate DOT-regulated step that happens downstream. If a lab can't provide the final PDF (only structured data), they aren't a viable partner.
 
+## Known parser quirks (operator-facing)
+
+### CRL sweat-patch results — `patch_removal_date` crosscheck false alarm
+
+When you review a CRL sweat-patch result in the tracker, the `patch_removal_date` crosscheck warning will fire even when the case is fine. **It's a known false alarm — ignore that specific warning on patch results.** Other crosscheck warnings on the same case may still be real; only this one is the false positive.
+
+Why: CRL prints a single date on patch result PDFs, in their `COLLECTED:` field, which is actually the **application** date (CRL doesn't print a removal date). The v2 parser at `src/lib/resultExtract.ts` writes that date into `reportedCollectionDate`. The crosscheck rule at `src/lib/labResultCrosscheck.ts:159–171` then compares `PatchDetails.removalDate` against `reportedCollectionDate`, but those are now two unrelated dates (removal vs. application), so they won't match by definition.
+
+Permanent fix: planned for the v3 parser (route the application date to a separate field, leave `reportedCollectionDate` null for patches). Not currently scheduled.
+
+First seen: 2026-05-10 audit. Reproduced by eval fixture `TANNER_SEAN_4_8_26` in `tests/eval/extract/`.
+
 ## Donor portal auth (Phase A, 2026-04-19)
 
 - **Flow:** PIN → (if new device) SMS 6-digit OTP to donor phone → HMAC-signed `ttl_portal_session` cookie (30d, HttpOnly/Secure/SameSite=Strict) + `ttl_portal_device` companion cookie (~13mo, holds the `TrustedDevice.deviceId`). On next visit, `/api/portal/session` auto-loads the session from the cookie — no PIN prompt.
