@@ -64,11 +64,6 @@
  *     to proceed against an unknown ref.
  *   - Proceeds silently if the ref matches the known dev branch.
  *
- * Helpers (extractProjectRef, guardProd) are duplicated verbatim from
- * seed-dev-fixture.ts rather than imported from a shared module so this
- * script can land without modifying the seed. Future cleanup: extract
- * to scripts/_fixtureGuard.ts in a separate PR that touches both files.
- *
  * ──────────────────────────────────────────────────────────────────────
  * User-not-deleted
  * ──────────────────────────────────────────────────────────────────────
@@ -116,59 +111,18 @@
  * that teardown matched what we expected.
  */
 import { prisma } from "@/lib/prisma";
+import { guardProd } from "./_fixtureGuard";
 
-const PROD_PROJECT_REF = "ydziufgdiqmikkmdxafx";
-const KNOWN_DEV_PROJECT_REF = "dbgiinfiddvnbpwcagml";
 const SEED_PREFIX = "seed_dev_";
-
-function extractProjectRef(databaseUrl: string): string | null {
-  // Pooler URL: postgresql://postgres.<ref>:<pwd>@aws-1-us-east-1.pooler.supabase.com:6543/postgres
-  const poolerMatch = databaseUrl.match(/postgres\.([a-z0-9]{20})/i);
-  if (poolerMatch) return poolerMatch[1].toLowerCase();
-  // Direct URL: postgresql://postgres:<pwd>@db.<ref>.supabase.co:5432/postgres
-  const directMatch = databaseUrl.match(/db\.([a-z0-9]{20})\.supabase\.co/i);
-  if (directMatch) return directMatch[1].toLowerCase();
-  return null;
-}
-
-function guardProd(): void {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    console.error("[teardown-dev-fixture] DATABASE_URL is unset. Aborting.");
-    process.exit(1);
-  }
-  const ref = extractProjectRef(url);
-  if (!ref) {
-    console.error(
-      "[teardown-dev-fixture] Could not parse a Supabase project ref from DATABASE_URL. Aborting.",
-    );
-    process.exit(1);
-  }
-  if (ref === PROD_PROJECT_REF) {
-    console.error(
-      `[teardown-dev-fixture] DATABASE_URL points at PROD (${ref}). Refusing to tear down prod. Aborting.`,
-    );
-    process.exit(1);
-  }
-  if (ref !== KNOWN_DEV_PROJECT_REF) {
-    if (process.env.SEED_ALLOW_NON_DEV_REF !== "true") {
-      console.error(
-        `[teardown-dev-fixture] DATABASE_URL points at ref "${ref}", which is neither prod (${PROD_PROJECT_REF}) nor the known dev branch (${KNOWN_DEV_PROJECT_REF}). Set SEED_ALLOW_NON_DEV_REF=true to override. Aborting.`,
-      );
-      process.exit(1);
-    }
-    console.warn(
-      `[teardown-dev-fixture] WARNING: tearing down on unknown ref "${ref}" because SEED_ALLOW_NON_DEV_REF=true.`,
-    );
-  } else {
-    console.log(`[teardown-dev-fixture] Target ref ${ref} (known dev branch). Proceeding.`);
-  }
-}
 
 const where = { id: { startsWith: SEED_PREFIX } };
 
 async function main(): Promise<void> {
-  guardProd();
+  guardProd({
+    scriptName: "teardown-dev-fixture",
+    prodRefuseVerb: "tear down prod",
+    unknownRefVerb: "tearing down on",
+  });
 
   console.log("[teardown-dev-fixture] Deleting fixture rows in FK-safe order…");
 
