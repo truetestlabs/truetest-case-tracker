@@ -90,9 +90,7 @@
  * (db.<ref>.supabase.co for the direct URL).
  */
 import { prisma } from "@/lib/prisma";
-
-const PROD_PROJECT_REF = "ydziufgdiqmikkmdxafx";
-const KNOWN_DEV_PROJECT_REF = "dbgiinfiddvnbpwcagml";
+import { guardProd } from "./_fixtureGuard";
 
 // Specimen IDs use a 9-digit numeric format mirroring real CRL sweat-patch
 // accession numbers (e.g. "762296171"). The 999-prefix range is clearly
@@ -128,50 +126,6 @@ const log: { what: string; action: Action }[] = [];
 function record(what: string, action: Action): void {
   log.push({ what, action });
   console.log(`  [${action}] ${what}`);
-}
-
-function extractProjectRef(databaseUrl: string): string | null {
-  // Pooler URL: postgresql://postgres.<ref>:<pwd>@aws-1-us-east-1.pooler.supabase.com:6543/postgres
-  const poolerMatch = databaseUrl.match(/postgres\.([a-z0-9]{20})/i);
-  if (poolerMatch) return poolerMatch[1].toLowerCase();
-  // Direct URL: postgresql://postgres:<pwd>@db.<ref>.supabase.co:5432/postgres
-  const directMatch = databaseUrl.match(/db\.([a-z0-9]{20})\.supabase\.co/i);
-  if (directMatch) return directMatch[1].toLowerCase();
-  return null;
-}
-
-function guardProd(): void {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    console.error("[seed-dev-fixture] DATABASE_URL is unset. Aborting.");
-    process.exit(1);
-  }
-  const ref = extractProjectRef(url);
-  if (!ref) {
-    console.error(
-      "[seed-dev-fixture] Could not parse a Supabase project ref from DATABASE_URL. Aborting.",
-    );
-    process.exit(1);
-  }
-  if (ref === PROD_PROJECT_REF) {
-    console.error(
-      `[seed-dev-fixture] DATABASE_URL points at PROD (${ref}). Refusing to seed prod. Aborting.`,
-    );
-    process.exit(1);
-  }
-  if (ref !== KNOWN_DEV_PROJECT_REF) {
-    if (process.env.SEED_ALLOW_NON_DEV_REF !== "true") {
-      console.error(
-        `[seed-dev-fixture] DATABASE_URL points at ref "${ref}", which is neither prod (${PROD_PROJECT_REF}) nor the known dev branch (${KNOWN_DEV_PROJECT_REF}). Set SEED_ALLOW_NON_DEV_REF=true to override. Aborting.`,
-      );
-      process.exit(1);
-    }
-    console.warn(
-      `[seed-dev-fixture] WARNING: seeding into unknown ref "${ref}" because SEED_ALLOW_NON_DEV_REF=true.`,
-    );
-  } else {
-    console.log(`[seed-dev-fixture] Target ref ${ref} (known dev branch). Proceeding.`);
-  }
 }
 
 function requireEnv(name: string): string {
@@ -376,7 +330,11 @@ async function upsertPatchDetailsBeta(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  guardProd();
+  guardProd({
+    scriptName: "seed-dev-fixture",
+    prodRefuseVerb: "seed prod",
+    unknownRefVerb: "seeding into",
+  });
 
   const authId = requireEnv("SEED_USER_AUTH_ID");
   const email = requireEnv("SEED_USER_EMAIL");
