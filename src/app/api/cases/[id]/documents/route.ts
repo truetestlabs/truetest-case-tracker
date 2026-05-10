@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import type { TestStatus, LabResultStatus } from "@prisma/client";
+import type { DocumentType, TestStatus, LabResultStatus } from "@prisma/client";
+
+// Document types treated as chain-of-custody by the upload pipeline:
+// legacy single CoC + the patch-split pair. All three flow through the
+// same Vision specimen-ID extraction, mismatch modal, and collection-
+// date confirmation gate. Adding a new CoC variant? Add it here and
+// the route's branches (and email.ts attachment filter) pick it up.
+const COC_DOCUMENT_TYPES = [
+  "chain_of_custody",
+  "coc_application",
+  "coc_removal",
+] as const satisfies readonly DocumentType[];
+function isCocDocumentType(t: string): boolean {
+  return (COC_DOCUMENT_TYPES as readonly string[]).includes(t);
+}
 import { generateResultSummary } from "@/lib/resultSummary";
 import { extractLabResult, LAB_RESULT_PARSER_VERSION } from "@/lib/resultExtract";
 import type { ExtractedLabResult } from "@/lib/resultExtract";
@@ -147,7 +161,7 @@ export async function POST(
     let referenceSpecimenId: string | null = null;
     let specimenIdMismatch = false;
 
-    if (documentType === "chain_of_custody" && ext.toLowerCase() === ".pdf") {
+    if (isCocDocumentType(documentType) && ext.toLowerCase() === ".pdf") {
       // Resolve the targeted test order's existing specimen ID for the
       // mismatch check.
       let targetOrderSpecimenId: string | null = latestOrder?.specimenId ?? null;
@@ -264,12 +278,14 @@ export async function POST(
 
       if (resultTargetOrder) {
         // Hard requirement: a chain-of-custody document must exist for this
-        // test order before results can be uploaded.
+        // test order before results can be uploaded. Any CoC variant
+        // counts — patches may have coc_application or coc_removal, and
+        // older patches may still carry a single chain_of_custody.
         const existingCoc = await prisma.document.findFirst({
           where: {
             caseId,
             testOrderId: resultTargetOrder.id,
-            documentType: "chain_of_custody",
+            documentType: { in: COC_DOCUMENT_TYPES as unknown as DocumentType[] },
           },
           select: { id: true },
         });
@@ -363,7 +379,7 @@ export async function POST(
     let displayName = originalFileName;
     if (documentType === "result_report" && donor) {
       displayName = `${donor.firstName} ${donor.lastName} Results ${collectionDateStr}${ext}`;
-    } else if (documentType === "chain_of_custody") {
+    } else if (isCocDocumentType(documentType)) {
       const specimenId =
         manualSpecimenId?.trim() ||
         parsedCocSpecimenId ||
@@ -380,7 +396,7 @@ export async function POST(
       data: {
         caseId,
         testOrderId: testOrderId || null,
-        documentType: documentType as "court_order" | "chain_of_custody" | "result_report" | "invoice" | "agreement" | "correspondence" | "other",
+        documentType: documentType as DocumentType,
         fileName: displayName,
         filePath: storagePath,
         uploadedBy: "admin",
@@ -405,7 +421,7 @@ export async function POST(
     // pre-collection order on the case. The collection date confirmed in
     // the modal is the source of truth and is written here; manual entry
     // in EditTestOrderModal remains as an emergency fallback.
-    if (documentType === "chain_of_custody") {
+    if (isCocDocumentType(documentType)) {
       const confirmedDate = parseIsoDateUtcNoon(confirmedCollectionDate);
 
       const targetOrderId =

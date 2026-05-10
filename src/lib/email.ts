@@ -168,7 +168,9 @@ export async function sendMroReferralEmail(
     where: {
       caseId,
       testOrderId,
-      documentType: { in: ["result_report", "chain_of_custody"] },
+      documentType: {
+        in: ["result_report", "chain_of_custody", "coc_application", "coc_removal"],
+      },
     },
     orderBy: { uploadedAt: "desc" },
     select: { documentType: true, filePath: true, fileName: true },

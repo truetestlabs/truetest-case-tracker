@@ -130,6 +130,16 @@ enum AppointmentStatus {
 enum DocumentType {
   court_order
   chain_of_custody
+  // Sweat-patch CoCs split into two slots on the patch card: an
+  // application-time partial CoC and a removal-time fully-completed CoC.
+  // Both are still chain-of-custody documents conceptually; gating in
+  // the upload route treats coc_application + coc_removal exactly like
+  // chain_of_custody (Vision specimen-ID extraction, mismatch modal,
+  // collection-date confirmation). Existing patches with single
+  // chain_of_custody docs are NOT backfilled — they render as a
+  // conditional "Legacy CoC" slot on the patch card.
+  coc_application
+  coc_removal
   result_report
   invoice
   agreement

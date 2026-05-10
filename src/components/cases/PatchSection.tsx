@@ -13,7 +13,7 @@ import {
 import { CancelPatchModal } from "@/components/cases/CancelPatchModal";
 import { PendingSelectionBanner } from "@/components/cases/PendingSelectionBanner";
 import { ConfirmTestModal } from "@/components/cases/ConfirmTestModal";
-import { TestOrderDocuments } from "@/components/cases/TestOrderDocuments";
+import { TestOrderDocuments, type DocSlot } from "@/components/cases/TestOrderDocuments";
 import { needsStaffSelection } from "@/lib/case-utils";
 
 /**
@@ -337,9 +337,33 @@ function PatchRow({
         testOrderId={order.id}
         documents={order.documents}
         onUpdated={onChanged}
+        slots={buildPatchDocSlots(order.documents)}
       />
     </div>
   );
+}
+
+// Patch-specific document slots. The PharmChek workflow uses two
+// distinct CoCs for the same physical form: an application-time partial
+// CoC and a removal-time fully-completed CoC. The Legacy CoC row is
+// only included when the test order still has a pre-split single
+// chain_of_custody document attached — new patches never produce one,
+// so the row stays hidden in steady state.
+function buildPatchDocSlots(
+  documents: PatchOrderForUI["documents"],
+): DocSlot[] {
+  const hasLegacyCoc = documents.some(
+    (d) => d.documentType === "chain_of_custody",
+  );
+  return [
+    { type: "coc_application", label: "Application CoC", icon: "🔗" },
+    { type: "coc_removal", label: "Removal CoC", icon: "🔗" },
+    ...(hasLegacyCoc
+      ? [{ type: "chain_of_custody", label: "Legacy CoC", icon: "📜" }]
+      : []),
+    { type: "result_report", label: "Results", icon: "🧪" },
+    { type: "correspondence", label: "MRO", icon: "👨‍⚕️" },
+  ];
 }
 
 // ─────────────────────────────────────────────────────────────────────
