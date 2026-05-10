@@ -13,14 +13,20 @@ type Doc = {
   uploadedAt: string;
 };
 
+export type DocSlot = { type: string; label: string; icon: string };
+
 type Props = {
   caseId: string;
   testOrderId: string;
   documents: Doc[];
   onUpdated: () => void;
+  // Optional override for the row list. Defaults to the urine-card
+  // layout (CoC / Results / MRO). Sweat-patch callers pass a longer
+  // list with two CoC variants and optionally a Legacy CoC row.
+  slots?: DocSlot[];
 };
 
-const DOC_SLOTS = [
+const DEFAULT_SLOTS: DocSlot[] = [
   { type: "chain_of_custody", label: "COC", icon: "🔗" },
   { type: "result_report", label: "Results", icon: "🧪" },
   { type: "correspondence", label: "MRO", icon: "👨‍⚕️" },
@@ -58,7 +64,13 @@ type ResultConfirmState = {
   payload: ProcessPayload;
 };
 
-export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }: Props) {
+export function TestOrderDocuments({
+  caseId,
+  testOrderId,
+  documents,
+  onUpdated,
+  slots = DEFAULT_SLOTS,
+}: Props) {
   const [uploading, setUploading] = useState<string | null>(null);
   const [cocConfirm, setCocConfirm] = useState<CocConfirmState | null>(null);
   const [resultConfirm, setResultConfirm] = useState<ResultConfirmState | null>(null);
@@ -265,7 +277,7 @@ export function TestOrderDocuments({ caseId, testOrderId, documents, onUpdated }
 
   return (
     <div className="mt-2 space-y-1">
-      {DOC_SLOTS.map((slot) => {
+      {slots.map((slot) => {
         const doc = documents.find((d) => d.documentType === slot.type);
         const isUploading = uploading === slot.type;
 
