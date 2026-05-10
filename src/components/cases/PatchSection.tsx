@@ -13,6 +13,7 @@ import {
 import { CancelPatchModal } from "@/components/cases/CancelPatchModal";
 import { PendingSelectionBanner } from "@/components/cases/PendingSelectionBanner";
 import { ConfirmTestModal } from "@/components/cases/ConfirmTestModal";
+import { TestOrderDocuments } from "@/components/cases/TestOrderDocuments";
 import { needsStaffSelection } from "@/lib/case-utils";
 
 /**
@@ -114,6 +115,7 @@ export function PatchSection({
             key={order.id}
             order={order}
             caseId={caseId}
+            onChanged={onChanged}
             onCancelClick={() => setCancellingPatchId(order.patchDetails?.id ?? null)}
             onConfirmClick={() => setConfirmingTestOrderId(order.id)}
             onEdit={() => onEdit(order.id)}
@@ -206,6 +208,7 @@ export function PatchSection({
 function PatchRow({
   order,
   caseId,
+  onChanged,
   onCancelClick,
   onConfirmClick,
   onEdit,
@@ -214,16 +217,13 @@ function PatchRow({
 }: {
   order: PatchOrderForUI;
   caseId: string;
+  onChanged: () => void;
   onCancelClick: () => void;
   onConfirmClick: () => void;
   onEdit: () => void;
   onGenerateReport: () => void;
   generating: boolean;
 }) {
-  // caseId is destructured but not currently read — kept in props
-  // signature for future row-scoped fetches (e.g., per-row regenerate).
-  void caseId;
-
   const pd = order.patchDetails;
   const lifecycle: PatchLifecycleStatus | null = pd
     ? patchLifecycleStatus({
@@ -332,6 +332,12 @@ function PatchRow({
           </button>
         </div>
       </div>
+      <TestOrderDocuments
+        caseId={caseId}
+        testOrderId={order.id}
+        documents={order.documents}
+        onUpdated={onChanged}
+      />
     </div>
   );
 }
