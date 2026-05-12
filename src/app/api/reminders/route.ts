@@ -28,6 +28,7 @@ export async function GET() {
     const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
     const reminders: Reminder[] = [];
 
@@ -74,8 +75,13 @@ export async function GET() {
         take: 20,
       }),
 
-      // 3. Stale test orders — 2 days for most tests, 7 days for sweat patches
-      //    (sweat patches are applied and left on for ~7 days before removal)
+      // 3. Stale test orders — 2 days for most tests, 14 days for sweat patches.
+      //    Sweat patches are worn ~7 days before removal; under Option A
+      //    (2026-05) the Application CoC no longer auto-advances testStatus,
+      //    so a patch legitimately sits at order_created for the entire wear
+      //    period. Bumping the threshold to 14 days keeps the reminder
+      //    meaningful (catches patches that should have come off by now)
+      //    without firing on every active patch.
       prisma.testOrder.findMany({
         where: {
           testStatus: "order_created",
@@ -83,8 +89,8 @@ export async function GET() {
           OR: [
             // Non-sweat-patch: stale after 2 days
             { specimenType: { not: "sweat_patch" }, updatedAt: { lt: twoDaysAgo } },
-            // Sweat patch: stale after 7 days
-            { specimenType: "sweat_patch", updatedAt: { lt: sevenDaysAgo } },
+            // Sweat patch: stale after 14 days
+            { specimenType: "sweat_patch", updatedAt: { lt: fourteenDaysAgo } },
           ],
         },
         select: {

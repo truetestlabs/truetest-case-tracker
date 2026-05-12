@@ -146,7 +146,9 @@ export async function cancelPatch(
 // And sets these fresh:
 //   - applicationDate ← input.replacement.applicationDate
 //   - specimenId ← input.replacement.specimenId
-//   - testStatus = 'specimen_collected' (the patch IS on the donor)
+//   - testStatus = 'order_created' (patch on donor maps to order_created
+//     under Option A; PatchDetails.applicationDate is the canonical
+//     signal that the replacement is currently worn)
 //
 // We deliberately do NOT copy: appointmentDate, collectionDate,
 // orderReleasedDate, paymentDate, sentToLabDate, results dates,
@@ -208,9 +210,13 @@ export async function cancelPatchWithReplacement(
     };
   }
 
-  // Create the replacement order + PatchDetails atomically. The patch
-  // is already on the donor (staff applied it in the same visit they
-  // cancelled the prior one), so testStatus = 'specimen_collected'.
+  // Create the replacement order + PatchDetails atomically. The patch is
+  // already on the donor, but under Option A (2026-05) "patch on donor"
+  // maps to testStatus = 'order_created' with PatchDetails.applicationDate
+  // set — the specimen isn't considered collected until the patch is
+  // removed and the Removal CoC uploaded. We stamp applicationDate a few
+  // lines below (see :237), which is the canonical signal that the patch
+  // is currently worn.
   const src = source.testOrder;
   const newOrder = await createTestOrderWithPatchDetails(
     tx,
@@ -220,7 +226,7 @@ export async function cancelPatchWithReplacement(
       testDescription: src.testDescription,
       specimenType: src.specimenType,
       lab: src.lab,
-      testStatus: "specimen_collected",
+      testStatus: "order_created",
       collectionType: src.collectionType,
       schedulingType: src.schedulingType,
       collectionSite: src.collectionSite,

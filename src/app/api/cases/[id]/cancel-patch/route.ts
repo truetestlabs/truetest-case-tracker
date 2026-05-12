@@ -232,7 +232,7 @@ export async function POST(
           caseId,
           testOrderId: result.replacementOrderId,
           oldStatus: "—",
-          newStatus: "specimen_collected",
+          newStatus: "order_created",
           changedBy: user.email || user.name || "admin",
           note: `Replacement patch for cancelled order ${existing.testOrder.id}.`,
         },
