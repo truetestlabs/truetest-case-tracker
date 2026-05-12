@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { DocumentType, TestStatus, LabResultStatus } from "@prisma/client";
+import {
+  shouldAutoAdvanceOnCocUpload,
+  shouldWriteCollectionDateOnCocUpload,
+} from "@/lib/cocAdvanceRule";
 
 // Document types treated as chain-of-custody by the upload pipeline:
 // legacy single CoC + the patch-split pair. All three flow through the
@@ -442,20 +446,23 @@ export async function POST(
       if (targetOrderId && confirmedDate) {
         const order = await prisma.testOrder.findUnique({
           where: { id: targetOrderId },
-          select: { id: true, testStatus: true, specimenId: true },
+          select: { id: true, testStatus: true, specimenId: true, specimenType: true },
         });
         if (order) {
-          const preCollection: TestStatus[] = [
-            "order_created",
-            "awaiting_payment",
-            "payment_received",
-          ];
-          const advancing = preCollection.includes(order.testStatus);
+          const advancing = shouldAutoAdvanceOnCocUpload({
+            documentType: documentType as DocumentType,
+            currentTestStatus: order.testStatus,
+            specimenType: order.specimenType,
+          });
+          const writeCollectionDate = shouldWriteCollectionDateOnCocUpload({
+            documentType: documentType as DocumentType,
+            specimenType: order.specimenType,
+          });
 
           await prisma.testOrder.update({
             where: { id: order.id },
             data: {
-              collectionDate: confirmedDate,
+              ...(writeCollectionDate ? { collectionDate: confirmedDate } : {}),
               ...(advancing ? { testStatus: "specimen_collected" } : {}),
               ...(manualSpecimenId && !order.specimenId
                 ? { specimenId: manualSpecimenId }
