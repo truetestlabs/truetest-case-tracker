@@ -1,5 +1,5 @@
 /**
- * Companion to seed-dev-fixture.ts. Deletes all seed_dev_* records in
+ * Companion to seed-dev-fixture.ts. Deletes the seeded fixture rows in
  * FK-safe order so the dev-branch fixture can be cleanly re-seeded when
  * fixture definitions change.
  *
@@ -7,12 +7,21 @@
  * What it deletes
  * ──────────────────────────────────────────────────────────────────────
  *
- * Every row whose `id` starts with `seed_dev_` across:
+ * Every row whose `id` appears in scripts/_fixtureIds.ts (FIXTURE_IDS),
+ * across:
  *   PatchDetails  (ALPHA + BETA)
- *   Document      (BETA working-copy placeholder)
+ *   Document      (BETA Application CoC placeholder)
  *   TestOrder     (ALPHA + BETA)
+ *   TestCatalog   (shared CRL sweat-patch row — deleted AFTER TestOrders
+ *                  to satisfy the TestOrder.testCatalog NoAction FK)
  *   Case          (ALPHA + BETA)
  *   Contact       (ALPHA + BETA)
+ *
+ * Cases / TestOrders / PatchDetails / Documents use hashed-slug CUIDs
+ * (see _fixtureIds.ts for why); Contacts retain their raw slug as PK.
+ * Either way teardown deletes by exact-id match against the same
+ * constants the seed used, so adding fixture rows means updating one
+ * file (_fixtureIds.ts) and both scripts stay in sync.
  *
  * The User row created by the seed is intentionally NOT deleted. See
  * "User-not-deleted" note below.
@@ -44,11 +53,11 @@
  * ──────────────────────────────────────────────────────────────────────
  *
  * Teardown does not need a user identity. The prod guard alone is
- * sufficient protection: every deleteMany filters on `id` starting with
- * `seed_dev_`, a literal prefix the seed assigns and that no real
- * row uses. Requiring auth env vars would add friction without adding
- * safety — even with the wrong UUID, the prefix filter still scopes the
- * deletes to seed rows only.
+ * sufficient protection: every deleteMany targets a fixed list of IDs
+ * the seed assigned (via FIXTURE_IDS in _fixtureIds.ts). Requiring auth
+ * env vars would add friction without adding safety — even with the
+ * wrong UUID, the explicit ID filter still scopes the deletes to seed
+ * rows only.
  *
  * ──────────────────────────────────────────────────────────────────────
  * Prod-guard behavior
@@ -112,10 +121,7 @@
  */
 import { prisma } from "@/lib/prisma";
 import { guardProd } from "./_fixtureGuard";
-
-const SEED_PREFIX = "seed_dev_";
-
-const where = { id: { startsWith: SEED_PREFIX } };
+import { FIXTURE_IDS } from "./_fixtureIds";
 
 async function main(): Promise<void> {
   guardProd({
@@ -126,24 +132,42 @@ async function main(): Promise<void> {
 
   console.log("[teardown-dev-fixture] Deleting fixture rows in FK-safe order…");
 
-  const pd = await prisma.patchDetails.deleteMany({ where });
+  const pd = await prisma.patchDetails.deleteMany({
+    where: { id: { in: [...FIXTURE_IDS.patchDetails] } },
+  });
   console.log(`  [deleted ${pd.count}] PatchDetails`);
 
-  const doc = await prisma.document.deleteMany({ where });
+  const doc = await prisma.document.deleteMany({
+    where: { id: { in: [...FIXTURE_IDS.document] } },
+  });
   console.log(`  [deleted ${doc.count}] Document`);
 
-  const to = await prisma.testOrder.deleteMany({ where });
+  const to = await prisma.testOrder.deleteMany({
+    where: { id: { in: [...FIXTURE_IDS.testOrder] } },
+  });
   console.log(`  [deleted ${to.count}] TestOrder`);
 
-  const cs = await prisma.case.deleteMany({ where });
+  // TestCatalog comes after TestOrder because TestOrder.testCatalog is a
+  // NoAction (RESTRICT-equivalent) FK — deleting the catalog row while a
+  // TestOrder still references it would error.
+  const tc = await prisma.testCatalog.deleteMany({
+    where: { id: { in: [...FIXTURE_IDS.testCatalog] } },
+  });
+  console.log(`  [deleted ${tc.count}] TestCatalog`);
+
+  const cs = await prisma.case.deleteMany({
+    where: { id: { in: [...FIXTURE_IDS.case] } },
+  });
   console.log(`  [deleted ${cs.count}] Case`);
 
-  const ct = await prisma.contact.deleteMany({ where });
+  const ct = await prisma.contact.deleteMany({
+    where: { id: { in: [...FIXTURE_IDS.contact] } },
+  });
   console.log(`  [deleted ${ct.count}] Contact`);
 
   // User intentionally NOT deleted — see header "User-not-deleted" note.
 
-  const total = pd.count + doc.count + to.count + cs.count + ct.count;
+  const total = pd.count + doc.count + to.count + tc.count + cs.count + ct.count;
   console.log(`\n[teardown-dev-fixture] Done. ${total} row(s) deleted.`);
 }
 

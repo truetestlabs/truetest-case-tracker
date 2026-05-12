@@ -9,30 +9,38 @@
  *
  * Two end-to-end patch fixtures:
  *
- *   ALPHA — "working-copy CoC entry point"
+ *   ALPHA — "Application CoC entry point"
  *     Contact "Test Donor Alpha" → Case TTL-DEV-SEED-0001 → sweat-patch
  *     TestOrder (lab=crl, panel WA07) → PatchDetails with NO
  *     applicationDate and NO workingCopyDocumentId. Lands the patch in
- *     the state where the next valid action is uploading a working-copy
- *     CoC.
+ *     the state where the next valid action is uploading the
+ *     Application CoC. Both new CoC slots (Application + Removal) are
+ *     empty.
  *
- *   BETA — "executed-copy CoC entry point"
+ *   BETA — "Removal CoC entry point"
  *     Contact "Test Donor Beta" → Case TTL-DEV-SEED-0002 → sweat-patch
  *     TestOrder (lab=crl, panel WA07) → PatchDetails with applicationDate
  *     set 7 days ago and workingCopyDocumentId pointing at a placeholder
- *     Document row. Lands the patch in the state where the next valid
- *     action is uploading an executed-copy CoC.
+ *     Document row of documentType "coc_application". Lands the patch in
+ *     the state where the Application CoC slot is filled (by the
+ *     placeholder) and the next valid action is uploading the Removal
+ *     CoC.
  *
  * One User row keyed off the Supabase auth UUID supplied via env vars,
  * so the route's requireAuth() finds a matching public.User after login.
  *
+ * One TestCatalog row — "Sweat Patch Testing (CRL — dev fixture)" — that
+ * both TestOrders reference via testCatalogId. Required to keep
+ * needsStaffSelection() (src/lib/case-utils.ts) from rendering the
+ * "Action required — test selection incomplete" banner on the case
+ * page. The seed owns this row (see _fixtureIds.ts) so the fixture
+ * stays runnable on a fresh dev branch without a manual catalog INSERT.
+ *
  * The placeholder Document for BETA points at a storage path that does
- * NOT exist in Supabase Storage. Verified safe for the executed-copy
- * upload flow: executePatchCoc (src/lib/patchStatus.ts:46-76) only
- * mutates rows, and the route handler (documents/route.ts:474-477) only
- * flips the working-copy Document's cocLifecycleStage to "archived" —
- * neither path fetches the working-copy file's bytes from Storage. The
- * route writes a NEW Document on upload using the freshly-uploaded
+ * NOT exist in Supabase Storage. Verified safe for the Removal CoC
+ * upload flow: executePatchCoc (src/lib/patchStatus.ts) only mutates
+ * rows and never fetches the application-CoC file's bytes from Storage.
+ * The route writes a NEW Document on upload using the freshly-uploaded
  * file. Only direct download links for the placeholder row will 404 if
  * exercised in the UI.
  *
@@ -45,8 +53,9 @@
  *   npx tsx scripts/seed-dev-fixture.ts
  *
  * Re-running is safe — every write is an upsert keyed on a deterministic
- * `seed_dev_*` ID, so duplicate runs print "already present" and exit
- * cleanly without creating second copies.
+ * ID (derived from a `seed_dev_*` slug via scripts/_fixtureIds.ts), so
+ * duplicate runs print "already present" and exit cleanly without
+ * creating second copies.
  *
  * ──────────────────────────────────────────────────────────────────────
  * Required env vars
@@ -91,35 +100,7 @@
  */
 import { prisma } from "@/lib/prisma";
 import { guardProd } from "./_fixtureGuard";
-
-// Specimen IDs use a 9-digit numeric format mirroring real CRL sweat-patch
-// accession numbers (e.g. "762296171"). The 999-prefix range is clearly
-// synthetic — no real CRL specimen would start with 999 — while still
-// passing through specimenIdsMatch (src/lib/patchValidation.ts:262-287),
-// which strips leading non-digits and compares as strings. A non-numeric
-// fixture ID would silently fail every PDF specimen-ID compare.
-const ALPHA = {
-  contactId: "seed_dev_contact_alpha",
-  caseId: "seed_dev_case_alpha",
-  caseNumber: "TTL-DEV-SEED-0001",
-  testOrderId: "seed_dev_to_alpha",
-  patchDetailsId: "seed_dev_pd_alpha",
-  donorFirst: "Test Donor",
-  donorLast: "Alpha",
-  specimenId: "999000001",
-};
-
-const BETA = {
-  contactId: "seed_dev_contact_beta",
-  caseId: "seed_dev_case_beta",
-  caseNumber: "TTL-DEV-SEED-0002",
-  testOrderId: "seed_dev_to_beta",
-  patchDetailsId: "seed_dev_pd_beta",
-  workingCopyDocId: "seed_dev_doc_beta_working_copy",
-  donorFirst: "Test Donor",
-  donorLast: "Beta",
-  specimenId: "999000002",
-};
+import { ALPHA, BETA, CATALOG_CRL_SWEAT_PATCH_ID } from "./_fixtureIds";
 
 type Action = "created" | "updated" | "unchanged";
 const log: { what: string; action: Action }[] = [];
@@ -242,14 +223,19 @@ async function upsertTestOrder(
   caseId: string,
   specimenId: string,
   testStatus: "order_released" | "specimen_collected",
+  testCatalogId: string,
 ): Promise<void> {
   const existing = await prisma.testOrder.findUnique({ where: { id } });
   await prisma.testOrder.upsert({
     where: { id },
-    update: {},
+    // Keep testCatalogId in sync on re-runs — older partial seeds left
+    // this null, which is what triggered the "test selection incomplete"
+    // banner in needsStaffSelection().
+    update: { testCatalogId },
     create: {
       id,
       caseId,
+      testCatalogId,
       testDescription: "Sweat Patch — WA07 (CRL) — dev fixture",
       specimenType: "sweat_patch",
       lab: "crl",
@@ -260,6 +246,35 @@ async function upsertTestOrder(
     },
   });
   record(`TestOrder ${id}`, existing ? "unchanged" : "created");
+}
+
+// The CRL sweat-patch catalog row both fixtures point at. Always creates
+// a fixture-owned row keyed off CATALOG_CRL_SWEAT_PATCH_ID; never adopts
+// a pre-existing non-fixture row, so teardown can delete by exact ID
+// without risking removal of a real catalog row. If a real CRL
+// sweat_patch row also exists in dev, both coexist — distinguishable by
+// the "(CRL — dev fixture)" suffix in testName.
+async function upsertCrlSweatPatchCatalog(): Promise<string> {
+  const id = CATALOG_CRL_SWEAT_PATCH_ID;
+  const existing = await prisma.testCatalog.findUnique({ where: { id } });
+  if (existing) {
+    record(`TestCatalog CRL sweat_patch (${id})`, "unchanged");
+    return id;
+  }
+  await prisma.testCatalog.create({
+    data: {
+      id,
+      category: "Sweat Patch",
+      testName: "Sweat Patch Testing (CRL — dev fixture)",
+      specimenType: "sweat_patch",
+      lab: "crl",
+      clientPrice: 150,
+      labCost: 0,
+      active: true,
+    },
+  });
+  record(`TestCatalog CRL sweat_patch (${id})`, "created");
+  return id;
 }
 
 async function upsertPatchDetailsAlpha(): Promise<void> {
@@ -274,7 +289,7 @@ async function upsertPatchDetailsAlpha(): Promise<void> {
       testOrderId: ALPHA.testOrderId,
       panel: "WA07",
       // applicationDate, workingCopyDocumentId, executedDocumentId all null
-      // by omission — that's the working-copy entry point.
+      // by omission — that's the Application CoC entry point.
     },
   });
   record(
@@ -294,15 +309,23 @@ async function upsertBetaWorkingCopyDoc(): Promise<void> {
       id: BETA.workingCopyDocId,
       caseId: BETA.caseId,
       testOrderId: BETA.testOrderId,
-      documentType: "chain_of_custody",
+      // PR #47 split CoC into Application + Removal slots. The patch
+      // card renders by Document.documentType (see PatchSection.tsx:358),
+      // so this needs to be "coc_application" — not the legacy
+      // "chain_of_custody", which would land in the Legacy CoC row and
+      // leave both new slots empty. PatchDetails.workingCopyDocumentId
+      // is still authoritative for the lifecycle pointer
+      // (patchStatus.ts:58, 94, 274, 283, 307), so we leave that pointer
+      // and the cocLifecycleStage value untouched.
+      documentType: "coc_application",
       cocLifecycleStage: "working_copy",
-      fileName: "seed-dev-beta-working-copy-placeholder.pdf",
-      filePath: `${BETA.caseId}/seed-dev-beta-working-copy-placeholder.pdf`,
+      fileName: "seed-dev-beta-application-coc-placeholder.pdf",
+      filePath: `${BETA.caseId}/seed-dev-beta-application-coc-placeholder.pdf`,
       notes: "Placeholder — not present in Supabase Storage.",
     },
   });
   record(
-    `Document BETA working-copy placeholder (${BETA.workingCopyDocId})`,
+    `Document BETA Application CoC placeholder (${BETA.workingCopyDocId})`,
     existing ? "unchanged" : "created",
   );
 }
@@ -320,11 +343,11 @@ async function upsertPatchDetailsBeta(): Promise<void> {
       panel: "WA07",
       applicationDate: utcNoon(7),
       workingCopyDocumentId: BETA.workingCopyDocId,
-      // executedDocumentId null by omission — that's the executed-copy entry point.
+      // executedDocumentId null by omission — that's the Removal CoC entry point.
     },
   });
   record(
-    `PatchDetails BETA (${BETA.patchDetailsId}) — worn, awaiting executed CoC`,
+    `PatchDetails BETA (${BETA.patchDetailsId}) — worn, awaiting Removal CoC`,
     existing ? "unchanged" : "created",
   );
 }
@@ -348,6 +371,9 @@ async function main(): Promise<void> {
 
   await upsertUser(authId, email);
 
+  // Shared catalog row first — both TestOrders reference its id.
+  const testCatalogId = await upsertCrlSweatPatchCatalog();
+
   await upsertContact(ALPHA.contactId, ALPHA.donorFirst, ALPHA.donorLast);
   await upsertCase(ALPHA.caseId, ALPHA.caseNumber, ALPHA.contactId);
   await upsertTestOrder(
@@ -355,6 +381,7 @@ async function main(): Promise<void> {
     ALPHA.caseId,
     ALPHA.specimenId,
     "order_released",
+    testCatalogId,
   );
   await upsertPatchDetailsAlpha();
 
@@ -365,6 +392,7 @@ async function main(): Promise<void> {
     BETA.caseId,
     BETA.specimenId,
     "specimen_collected",
+    testCatalogId,
   );
   await upsertBetaWorkingCopyDoc();
   await upsertPatchDetailsBeta();
@@ -376,10 +404,10 @@ async function main(): Promise<void> {
   );
   console.log("\nFixture summary:");
   console.log(
-    `  ALPHA (working-copy entry):  case ${ALPHA.caseNumber} (${ALPHA.caseId}) — donor ${ALPHA.donorFirst} ${ALPHA.donorLast}`,
+    `  ALPHA (Application CoC entry): case ${ALPHA.caseNumber} (${ALPHA.caseId}) — donor ${ALPHA.donorFirst} ${ALPHA.donorLast}`,
   );
   console.log(
-    `  BETA  (executed-copy entry): case ${BETA.caseNumber} (${BETA.caseId}) — donor ${BETA.donorFirst} ${BETA.donorLast}`,
+    `  BETA  (Removal CoC entry):     case ${BETA.caseNumber} (${BETA.caseId}) — donor ${BETA.donorFirst} ${BETA.donorLast}`,
   );
 }
 
