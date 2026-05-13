@@ -524,7 +524,21 @@ model PatchDetails {
   // at patch-off. Lab's reportedCollectionDate on the result report
   // corresponds to removalDate (specimen left the donor), not
   // applicationDate.
+  //
+  // Storage convention: noon America/Chicago serialized as a UTC instant
+  // (~17:00 UTC during CDT, ~18:00 UTC during CST). These are REAL
+  // INSTANTS, not UTC-midnight date-keys — display with the real-instant
+  // formatters in src/lib/dateChicago.ts (formatChicagoMediumDate,
+  // formatChicagoShortDate), NOT the *Key variants. Canonical writer
+  // patterns:
+  //   - Client: src/components/cases/EditTestOrderModal.tsx (~line 131)
+  //     `new Date(s + "T12:00:00").toISOString()` — relies on browser
+  //     local TZ being America/Chicago.
+  //   - Server: parsePatchDateInput in src/lib/patchDateInput.ts —
+  //     DST-correct and TZ-independent.
+  /// Patch application date. Noon America/Chicago serialized as UTC. See PatchDetails comment block for details.
   applicationDate       DateTime?
+  /// Patch removal date. Noon America/Chicago serialized as UTC. See PatchDetails comment block for details.
   removalDate           DateTime?
 
   // Current working copy and executed CoC documents. When the executed
@@ -550,6 +564,7 @@ model PatchDetails {
   // null "we never asked" (legacy rows). The new replacement patch is
   // discoverable by querying TestOrder.caseId.
   replacementPatchApplied Boolean?
+  /// Replacement patch application date. Noon America/Chicago serialized as UTC. See PatchDetails comment block for details.
   replacementPatchDate    DateTime?
 
   createdAt             DateTime               @default(now())
