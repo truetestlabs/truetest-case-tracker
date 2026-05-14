@@ -28,6 +28,10 @@ import { uploadFile } from "@/lib/storage";
 import { buildCcfFilename } from "@/lib/filename";
 import { extractCocSpecimenId } from "@/lib/extractCocSpecimenId";
 import { extractCocCollectionDate } from "@/lib/extractCocCollectionDate";
+import {
+  resolveCocSpecimenId,
+  detectCocSpecimenIdMismatch,
+} from "@/lib/resolveCocSpecimenId";
 import { formatChicagoMediumDate } from "@/lib/dateChicago";
 
 // Allow longer execution for AI summary generation on upload
@@ -186,10 +190,10 @@ export async function POST(
       parsedCocCollectionDate = dateExtraction.collectionDate;
       cocDateSource = dateExtraction.source;
 
-      specimenIdMismatch =
-        !!parsedCocSpecimenId &&
-        !!referenceSpecimenId &&
-        parsedCocSpecimenId !== referenceSpecimenId;
+      specimenIdMismatch = detectCocSpecimenIdMismatch(
+        parsedCocSpecimenId,
+        referenceSpecimenId,
+      );
 
       if (!confirmCocUpload) {
         return NextResponse.json(
@@ -459,13 +463,24 @@ export async function POST(
             specimenType: order.specimenType,
           });
 
+          // Specimen ID resolution priority: existing > manual > parsed.
+          // Existing values are never overwritten (operator already
+          // confirmed them on a prior upload). When the order has no
+          // specimenId yet, prefer the operator's modal-typed value over
+          // the AI-extracted value. See src/lib/resolveCocSpecimenId.ts.
+          const resolvedSpecimenId = resolveCocSpecimenId({
+            existing: order.specimenId,
+            manual: manualSpecimenId,
+            parsed: parsedCocSpecimenId,
+          });
+
           await prisma.testOrder.update({
             where: { id: order.id },
             data: {
               ...(writeCollectionDate ? { collectionDate: confirmedDate } : {}),
               ...(advancing ? { testStatus: "specimen_collected" } : {}),
-              ...(manualSpecimenId && !order.specimenId
-                ? { specimenId: manualSpecimenId }
+              ...(resolvedSpecimenId
+                ? { specimenId: resolvedSpecimenId }
                 : {}),
             },
           });

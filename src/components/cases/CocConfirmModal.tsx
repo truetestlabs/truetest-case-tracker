@@ -21,9 +21,16 @@ type Props = {
   specimenIdMismatch: boolean;
   extractedDate: string | null; // YYYY-MM-DD
   dateSource: "text" | "vision" | null;
-  onConfirm: (collectionDate: string) => void;
+  onConfirm: (collectionDate: string, specimenId: string | null) => void;
   onCancel: () => void;
 };
+
+// CRL specimen IDs are exactly 9 digits — same boundary check the
+// cancel-patch route applies. We surface a soft warning (not a hard
+// block) when the value is outside that shape; staff can still confirm
+// if the lab issued something non-canonical, but the warning forces
+// eyes-on review.
+const SPECIMEN_ID_RE = /^\d{9}$/;
 
 export function CocConfirmModal({
   fileName,
@@ -38,6 +45,17 @@ export function CocConfirmModal({
   const [date, setDate] = useState<string>(extractedDate ?? "");
   const isValid = /^\d{4}-\d{2}-\d{2}$/.test(date);
   const dateChanged = !!extractedDate && date !== extractedDate;
+
+  // Specimen ID state. Pre-populated with the AI-extracted value (if
+  // any); operator can edit before confirming. Server applies the
+  // resolveCocSpecimenId priority: existing > this value > extracted.
+  // When the order already has a recordId and the upload-time edit
+  // matches, we let the unchanged value flow through unchanged.
+  const [specimenId, setSpecimenId] = useState<string>(pdfId ?? "");
+  const trimmedSpecimenId = specimenId.trim();
+  const specimenIdChanged = (pdfId ?? "") !== trimmedSpecimenId;
+  const specimenIdFormatOk =
+    trimmedSpecimenId === "" || SPECIMEN_ID_RE.test(trimmedSpecimenId);
 
   // Format the (possibly edited) date in long form so the year is
   // unmissable. The default <input type="date"> rendering ("04/25/2006")
@@ -89,33 +107,62 @@ export function CocConfirmModal({
           <p className="text-xs text-gray-500 truncate">{fileName}</p>
 
           {specimenIdMismatch && (
-            <div className="space-y-2">
-              <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2">
-                <p className="text-sm font-medium text-red-800">
-                  Specimen ID mismatch
-                </p>
-                <p className="text-xs text-red-700 mt-0.5">
-                  The specimen ID on the PDF doesn&apos;t match the ID on this
-                  test record. If you confirm, the mismatch is recorded in the
-                  case history.
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                    PDF
-                  </p>
-                  <p className="font-mono text-gray-900">{pdfId ?? "—"}</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                    Record
-                  </p>
-                  <p className="font-mono text-gray-900">{recordId ?? "—"}</p>
-                </div>
-              </div>
+            <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2">
+              <p className="text-sm font-medium text-red-800">
+                Specimen ID mismatch
+              </p>
+              <p className="text-xs text-red-700 mt-0.5">
+                The specimen ID on the PDF (<span className="font-mono">{pdfId ?? "—"}</span>)
+                doesn&apos;t match the ID on this test record
+                (<span className="font-mono">{recordId ?? "—"}</span>). Confirming
+                replaces the record value with what you submit below; the
+                mismatch is logged to the case history.
+              </p>
             </div>
           )}
+
+          <div className="space-y-2">
+            <label className="block">
+              <span className="text-sm font-medium text-gray-900">
+                Specimen ID
+              </span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={specimenId}
+                onChange={(e) => setSpecimenId(e.target.value)}
+                placeholder="9 digits, e.g. 762296192"
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+              />
+            </label>
+
+            {trimmedSpecimenId !== "" && !specimenIdFormatOk && (
+              <p className="text-xs text-amber-700">
+                ⚠ Doesn&apos;t match the standard 9-digit CRL specimen ID format.
+                Confirm only if the lab issued a non-standard value.
+              </p>
+            )}
+
+            {pdfId && !specimenIdChanged && (
+              <p className="text-xs text-green-700">
+                ✓ AI-extracted from the PDF — verify against the form
+              </p>
+            )}
+
+            {pdfId && specimenIdChanged && (
+              <p className="text-xs text-gray-600">
+                ✎ Edited from AI-extracted value{" "}
+                <span className="font-mono text-gray-900">{pdfId}</span>
+              </p>
+            )}
+
+            {!pdfId && (
+              <p className="text-xs text-yellow-800">
+                Could not extract specimen ID from the PDF. Please type it
+                from the chain of custody.
+              </p>
+            )}
+          </div>
 
           <div className="space-y-2">
             <label className="block">
@@ -191,7 +238,9 @@ export function CocConfirmModal({
             </button>
             <button
               type="button"
-              onClick={() => isValid && onConfirm(date)}
+              onClick={() =>
+                isValid && onConfirm(date, trimmedSpecimenId || null)
+              }
               disabled={!isValid}
               className="px-4 py-2 bg-[#1e3a5f] text-white rounded-lg text-sm font-medium hover:bg-[#2a5490] disabled:bg-gray-300 disabled:cursor-not-allowed"
             >

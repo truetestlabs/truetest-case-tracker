@@ -216,12 +216,20 @@ export function TestOrderDocuments({
     }
   }
 
-  async function handleCocConfirm(collectionDate: string) {
+  async function handleCocConfirm(
+    collectionDate: string,
+    specimenId: string | null,
+  ) {
     if (!cocConfirm) return;
     const payload: ProcessPayload = {
       ...cocConfirm.payload,
       confirmCocUpload: true,
       confirmedCollectionDate: collectionDate,
+      // Forward the (possibly edited) specimen ID. Server applies the
+      // resolveCocSpecimenId priority: existing > this manual value >
+      // PDF-extracted. Omitted entirely when blank so the server falls
+      // through to the extracted value cleanly.
+      ...(specimenId ? { specimenId } : {}),
     };
     setCocConfirm(null);
     setUploading(payload.documentType);
