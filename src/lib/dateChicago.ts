@@ -317,6 +317,34 @@ export function chicagoTodayAtUtcNoon(now: Date = new Date()): Date {
 }
 
 /**
+ * Parse a YYYY-MM-DD date-only string into a Date pinned to noon UTC.
+ * Use for `<input type="date">` form values being written to Prisma
+ * DateTime fields: `Date.UTC` is the only safe construction for a
+ * date-only value that should round-trip through America/Chicago
+ * formatters regardless of the process or browser timezone.
+ *
+ * Never use `new Date(s + "T12:00:00")` (inherits process TZ) or
+ * `new Date(y, m, d)` (also inherits process TZ) — both drift by the
+ * local UTC offset, so a Denver-based developer's edits land at 1 PM
+ * Chicago instead of noon Chicago and shift the calendar day display.
+ *
+ * Returns `null` for falsy input or strings that don't match
+ * `^\d{4}-\d{2}-\d{2}$`, so callers can write
+ * `parseIsoDateUtcNoon(s)?.toISOString() ?? null` and preserve their
+ * existing "empty → null" semantics.
+ */
+export function parseIsoDateUtcNoon(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const match = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  const date = new Date(
+    Date.UTC(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10), 12, 0, 0)
+  );
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
  * Given a UTC-midnight marker of a Chicago calendar day (the same
  * representation `selectedDate` uses), return the actual UTC instant
  * corresponding to 00:00:00 America/Chicago on that day. Use for
