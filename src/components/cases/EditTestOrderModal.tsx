@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { apiError } from "@/lib/clientErrors";
+import { parseIsoDateUtcNoon } from "@/lib/dateChicago";
 
 type TestOrderData = {
   id: string;
@@ -118,6 +119,12 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
     };
 
     const apptDate = form.get("appointmentDate") as string;
+    // NOTE: appointmentDate is intentionally NOT migrated to parseIsoDateUtcNoon
+    // in this PR. It's a real datetime field (intake and Square webhook write
+    // actual hour/minute) — convention consolidation would only paper over the
+    // pre-existing UX bug where a date-only edit here clobbers the original
+    // time-of-day. Tracked separately: preserve the existing instant's hour
+    // and minute when only the date changes.
     if (apptDate) data.appointmentDate = new Date(apptDate + "T12:00:00").toISOString();
 
     if (isSweatPatchOrder) {
@@ -127,22 +134,15 @@ export function EditTestOrderModal({ caseId, testOrder, onSaved, onClose }: Prop
       // specimen_collected guard and downstream collection-based logic see
       // the canonical date — matches executePatchCoc's server-side mirror.
       const appDateStr = form.get("applicationDate") as string;
-      data.applicationDate = appDateStr
-        ? new Date(appDateStr + "T12:00:00").toISOString()
-        : null;
+      data.applicationDate = parseIsoDateUtcNoon(appDateStr)?.toISOString() ?? null;
 
       const remDateStr = form.get("removalDate") as string;
-      data.removalDate = remDateStr
-        ? new Date(remDateStr + "T12:00:00").toISOString()
-        : null;
+      data.removalDate = parseIsoDateUtcNoon(remDateStr)?.toISOString() ?? null;
 
-      data.collectionDate = remDateStr
-        ? new Date(remDateStr + "T12:00:00").toISOString()
-        : null;
+      data.collectionDate = parseIsoDateUtcNoon(remDateStr)?.toISOString() ?? null;
     } else {
       const collDate = form.get("collectionDate") as string;
-      if (collDate) data.collectionDate = new Date(collDate + "T12:00:00").toISOString();
-      else data.collectionDate = null;
+      data.collectionDate = parseIsoDateUtcNoon(collDate)?.toISOString() ?? null;
     }
 
     try {

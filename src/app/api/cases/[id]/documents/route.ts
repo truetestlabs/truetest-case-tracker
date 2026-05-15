@@ -28,28 +28,10 @@ import { uploadFile } from "@/lib/storage";
 import { buildCcfFilename } from "@/lib/filename";
 import { extractCocSpecimenId } from "@/lib/extractCocSpecimenId";
 import { extractCocCollectionDate } from "@/lib/extractCocCollectionDate";
-import { formatChicagoMediumDate } from "@/lib/dateChicago";
+import { formatChicagoMediumDate, parseIsoDateUtcNoon } from "@/lib/dateChicago";
 
 // Allow longer execution for AI summary generation on upload
 export const maxDuration = 60;
-
-/**
- * Parse a YYYY-MM-DD date-only string into a Date pinned to noon UTC.
- * Per CLAUDE.md: never use `new Date(s + "T12:00:00")` (inherits process TZ)
- * or `new Date(y, m, d)` (inherits process TZ). `Date.UTC` is the only safe
- * construction for a date-only value that should round-trip through
- * America/Chicago formatters.
- */
-function parseIsoDateUtcNoon(s: string | null | undefined): Date | null {
-  if (!s) return null;
-  const match = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return null;
-  const [, y, m, d] = match;
-  const date = new Date(
-    Date.UTC(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10), 12, 0, 0)
-  );
-  return Number.isNaN(date.getTime()) ? null : date;
-}
 
 /**
  * Format a Date as YYYY-MM-DD using its UTC components. Used for the

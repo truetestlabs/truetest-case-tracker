@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { utcInstantForChicagoHour, unlockInstantForSelection } from "./dateChicago";
+import {
+  parseIsoDateUtcNoon,
+  unlockInstantForSelection,
+  utcInstantForChicagoHour,
+} from "./dateChicago";
 
 /**
  * DST correctness for `utcInstantForChicagoHour`. The notification seed
@@ -59,5 +63,23 @@ describe("utcInstantForChicagoHour", () => {
     expect(unlockInstantForSelection(cdtDay).toISOString()).toBe("2026-04-27T09:00:00.000Z");
     const cstDay = new Date("2026-01-15T00:00:00Z");
     expect(unlockInstantForSelection(cstDay).toISOString()).toBe("2026-01-15T10:00:00.000Z");
+  });
+});
+
+/**
+ * Guard the date-only form-input parser used by EditTestOrderModal and the
+ * documents upload route. The whole point of this helper is to be
+ * TZ-independent: it uses `Date.UTC` internally so the result is the same
+ * regardless of `process.env.TZ` or the browser's local zone. The bug it
+ * replaces — `new Date(s + "T12:00:00").toISOString()` — parses the string
+ * in the local zone, so a Denver developer's "2026-05-15" lands at 1 PM
+ * Chicago (or 6 PM UTC) instead of noon Chicago, which shifts the calendar
+ * day display in some downstream formatters.
+ */
+describe("parseIsoDateUtcNoon", () => {
+  it("parses YYYY-MM-DD to noon UTC of that calendar day (TZ-independent)", () => {
+    expect(parseIsoDateUtcNoon("2026-05-15")?.toISOString()).toBe(
+      "2026-05-15T12:00:00.000Z",
+    );
   });
 });
