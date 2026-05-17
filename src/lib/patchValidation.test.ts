@@ -5,6 +5,7 @@ import {
   computeWearStatus,
   wearBadgeFor,
   patchLifecycleStatus,
+  isPatchClosed,
   validatePatchDates,
   stripNonDigitPrefix,
   specimenIdsMatch,
@@ -447,5 +448,64 @@ describe("patchLifecycleStatus", () => {
         hasLabResult: true,
       }),
     ).toBe("COMPLETE");
+  });
+});
+
+describe("isPatchClosed", () => {
+  // List-segregation predicate. Both signals are independent; the
+  // predicate ORs them to mirror the non-patch isTerminalTest behavior.
+
+  it("returns false when neither cancellationKind nor terminal testStatus", () => {
+    expect(
+      isPatchClosed({
+        cancellationKind: null,
+        testStatus: "specimen_collected",
+      }),
+    ).toBe(false);
+    // Also covers a freshly-created order pre-application.
+    expect(
+      isPatchClosed({
+        cancellationKind: null,
+        testStatus: "order_created",
+      }),
+    ).toBe(false);
+  });
+
+  it("returns true when cancellationKind is set, regardless of testStatus", () => {
+    // Cancellation is orthogonal to TestOrder.testStatus per the
+    // PatchDetails schema — the order can still be in-flight by status
+    // even after staff cancel the patch. Predicate must catch that.
+    expect(
+      isPatchClosed({
+        cancellationKind: "cancelled",
+        testStatus: "order_created",
+      }),
+    ).toBe(true);
+    expect(
+      isPatchClosed({
+        cancellationKind: "lab_cancelled",
+        testStatus: "specimen_collected",
+      }),
+    ).toBe(true);
+    expect(
+      isPatchClosed({
+        cancellationKind: "expired",
+        testStatus: "results_received",
+      }),
+    ).toBe(true);
+  });
+
+  it("returns true for each terminal testStatus when not cancelled", () => {
+    for (const status of ["closed", "cancelled", "no_show"] as const) {
+      expect(
+        isPatchClosed({ cancellationKind: null, testStatus: status }),
+      ).toBe(true);
+    }
+  });
+
+  it("returns true when both signals are present", () => {
+    expect(
+      isPatchClosed({ cancellationKind: "expired", testStatus: "closed" }),
+    ).toBe(true);
   });
 });
