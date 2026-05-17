@@ -51,6 +51,10 @@ type CocConfirmState = {
   specimenIdMismatch: boolean;
   extractedCollectionDate: string | null;
   dateSource: "text" | "vision" | null;
+  // Drives the date-input label in CocConfirmModal — sweat-patch CoCs
+  // render "Application Date" / "Removal Date" instead of "Collection
+  // Date". Mirrors slot.type / payload.documentType.
+  documentType: string;
   payload: ProcessPayload;
 };
 
@@ -97,6 +101,7 @@ export function TestOrderDocuments({
           specimenIdMismatch: !!body.specimenIdMismatch,
           extractedCollectionDate: body.extractedCollectionDate ?? null,
           dateSource: body.dateSource ?? null,
+          documentType: payload.documentType,
           payload,
         });
         return false;
@@ -121,6 +126,21 @@ export function TestOrderDocuments({
       if (body?.error === "coc_required") {
         // Hard block — tell the user, then clean up the orphaned upload.
         alert(body.message || "Upload chain of custody first.");
+        if (body.storagePath) await orphanCleanup(body.storagePath);
+        return false;
+      }
+    }
+
+    if (processRes.status === 422) {
+      const body = await processRes.json().catch(() => null);
+      if (body?.error === "coc_application_required") {
+        // Patch CoC ordering — same UX shape as `coc_required`: hard
+        // block + orphan-cleanup so a rejected upload doesn't leave a
+        // dangling file in Storage.
+        alert(
+          body.message ||
+            "Upload the Application CoC and confirm the application date before uploading the Removal CoC.",
+        );
         if (body.storagePath) await orphanCleanup(body.storagePath);
         return false;
       }
@@ -336,6 +356,7 @@ export function TestOrderDocuments({
           specimenIdMismatch={cocConfirm.specimenIdMismatch}
           extractedDate={cocConfirm.extractedCollectionDate}
           dateSource={cocConfirm.dateSource}
+          documentType={cocConfirm.documentType}
           onConfirm={handleCocConfirm}
           onCancel={handleCocCancel}
         />

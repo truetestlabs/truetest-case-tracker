@@ -6,6 +6,7 @@ import {
   wearBadgeFor,
   patchLifecycleStatus,
   isPatchClosed,
+  requiresApplicationCocFirst,
   validatePatchDates,
   stripNonDigitPrefix,
   specimenIdsMatch,
@@ -361,90 +362,140 @@ describe("specimenIdsMatch", () => {
 
 describe("patchLifecycleStatus", () => {
   const D = new Date("2026-04-20T12:00:00Z");
+  const REMOVED = new Date("2026-04-27T12:00:00Z");
 
   it("returns null when applicationDate is missing", () => {
     expect(
       patchLifecycleStatus({
         applicationDate: null,
         cancellationKind: null,
-        executedDocumentId: null,
+        removalDate: null,
         hasLabResult: false,
       }),
     ).toBeNull();
   });
 
   it("returns CANCELLED when cancellationKind is set, regardless of other fields", () => {
+    // Cancellation precedence: covers each kind and verifies that
+    // removalDate / hasLabResult downstream signals don't override it.
     expect(
       patchLifecycleStatus({
         applicationDate: D,
         cancellationKind: "cancelled",
-        executedDocumentId: "doc-1",
+        removalDate: REMOVED,
         hasLabResult: true,
       }),
     ).toBe("CANCELLED");
-    // lab_cancelled
     expect(
       patchLifecycleStatus({
         applicationDate: D,
         cancellationKind: "lab_cancelled",
-        executedDocumentId: null,
+        removalDate: null,
         hasLabResult: false,
       }),
     ).toBe("CANCELLED");
-    // expired
     expect(
       patchLifecycleStatus({
         applicationDate: D,
         cancellationKind: "expired",
-        executedDocumentId: null,
+        removalDate: null,
         hasLabResult: false,
       }),
     ).toBe("CANCELLED");
   });
 
-  it("returns WORN when applied but no executed CoC and no results", () => {
+  it("returns CANCELLED even when applicationDate is null but cancellation is stamped", () => {
+    // A patch can be cancelled before it was ever applied (e.g., staff
+    // notes a bad batch). Cancellation takes precedence over the
+    // null-applicationDate "no badge" rule.
+    expect(
+      patchLifecycleStatus({
+        applicationDate: null,
+        cancellationKind: "cancelled",
+        removalDate: null,
+        hasLabResult: false,
+      }),
+    ).toBe("CANCELLED");
+  });
+
+  it("returns WORN when applied but no removalDate and no results", () => {
     expect(
       patchLifecycleStatus({
         applicationDate: D,
         cancellationKind: null,
-        executedDocumentId: null,
+        removalDate: null,
         hasLabResult: false,
       }),
     ).toBe("WORN");
   });
 
-  it("returns AT_LAB when executed CoC is set but no lab result yet", () => {
+  it("returns AT_LAB when removalDate is set but no lab result yet", () => {
     expect(
       patchLifecycleStatus({
         applicationDate: D,
         cancellationKind: null,
-        executedDocumentId: "doc-1",
+        removalDate: REMOVED,
         hasLabResult: false,
       }),
     ).toBe("AT_LAB");
   });
 
-  it("stays AT_LAB when a lab result exists but executedDocumentId is null", () => {
-    // COMPLETE requires BOTH a LabResult and an executed CoC. A result without
-    // the linked CoC is an incomplete record (custody chain gap) — surfacing
-    // as AT_LAB forces staff to investigate the missing CoC linkage rather
-    // than silently promoting it to COMPLETE.
+  it("stays AT_LAB when a lab result exists but removalDate is null", () => {
+    // COMPLETE requires BOTH a LabResult and a removalDate. A result
+    // without the corresponding removal CoC is an incomplete record —
+    // surfacing as AT_LAB forces staff to investigate the missing
+    // removal date rather than silently promoting to COMPLETE.
+    //
+    // Backward-compat: covers the historical population (17 prod rows
+    // as of 2026-05-17) of patches that have lab results but never had
+    // removalDate set — these continue to render as AT_LAB.
     expect(
       patchLifecycleStatus({
         applicationDate: D,
         cancellationKind: null,
-        executedDocumentId: null,
+        removalDate: null,
         hasLabResult: true,
       }),
     ).toBe("AT_LAB");
   });
 
-  it("returns COMPLETE only when executed CoC AND lab result are both present", () => {
+  it("returns COMPLETE only when removalDate AND lab result are both present", () => {
     expect(
       patchLifecycleStatus({
         applicationDate: D,
         cancellationKind: null,
-        executedDocumentId: "doc-1",
+        removalDate: REMOVED,
+        hasLabResult: true,
+      }),
+    ).toBe("COMPLETE");
+  });
+
+  it("walks the full happy-path transition: null → WORN → AT_LAB → COMPLETE", () => {
+    // Single test case marching one field at a time, so a regression
+    // that breaks one transition surfaces with the offending step in
+    // the failure message.
+    const base = {
+      applicationDate: null as Date | null,
+      cancellationKind: null,
+      removalDate: null as Date | null,
+      hasLabResult: false,
+    };
+    expect(patchLifecycleStatus(base)).toBeNull();
+    expect(
+      patchLifecycleStatus({ ...base, applicationDate: D }),
+    ).toBe("WORN");
+    expect(
+      patchLifecycleStatus({
+        ...base,
+        applicationDate: D,
+        removalDate: REMOVED,
+      }),
+    ).toBe("AT_LAB");
+    expect(
+      patchLifecycleStatus({
+        ...base,
+        applicationDate: D,
+        removalDate: REMOVED,
         hasLabResult: true,
       }),
     ).toBe("COMPLETE");
@@ -507,5 +558,57 @@ describe("isPatchClosed", () => {
     expect(
       isPatchClosed({ cancellationKind: "expired", testStatus: "closed" }),
     ).toBe(true);
+  });
+});
+
+describe("requiresApplicationCocFirst", () => {
+  const D = new Date("2026-04-20T12:00:00Z");
+
+  it("returns true for sweat-patch Removal CoC when applicationDate is null", () => {
+    expect(
+      requiresApplicationCocFirst({
+        documentType: "coc_removal",
+        specimenType: "sweat_patch",
+        applicationDate: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("returns false for sweat-patch Removal CoC when applicationDate is set", () => {
+    expect(
+      requiresApplicationCocFirst({
+        documentType: "coc_removal",
+        specimenType: "sweat_patch",
+        applicationDate: D,
+      }),
+    ).toBe(false);
+  });
+
+  it("returns false for sweat-patch Application CoC (no ordering on the first upload)", () => {
+    expect(
+      requiresApplicationCocFirst({
+        documentType: "coc_application",
+        specimenType: "sweat_patch",
+        applicationDate: null,
+      }),
+    ).toBe(false);
+  });
+
+  it("returns false for non-patch specimens regardless of CoC type", () => {
+    // The single chain_of_custody flow has no ordering constraint.
+    expect(
+      requiresApplicationCocFirst({
+        documentType: "coc_removal",
+        specimenType: "urine",
+        applicationDate: null,
+      }),
+    ).toBe(false);
+    expect(
+      requiresApplicationCocFirst({
+        documentType: "chain_of_custody",
+        specimenType: "hair",
+        applicationDate: null,
+      }),
+    ).toBe(false);
   });
 });

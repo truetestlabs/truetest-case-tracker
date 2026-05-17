@@ -24,6 +24,7 @@ import { extractLabResult, LAB_RESULT_PARSER_VERSION } from "@/lib/resultExtract
 import type { ExtractedLabResult } from "@/lib/resultExtract";
 import { runLabResultCrosschecks } from "@/lib/labResultCrosscheck";
 import { detectCocMisclassification } from "@/lib/detectCocMisclassification";
+import { requiresApplicationCocFirst } from "@/lib/patchValidation";
 import { uploadFile } from "@/lib/storage";
 import { buildCcfFilename } from "@/lib/filename";
 import { extractCocSpecimenId } from "@/lib/extractCocSpecimenId";
@@ -136,6 +137,43 @@ export async function POST(
 
     const donor = caseData?.donor;
     const latestOrder = caseData?.testOrders[0];
+
+    // ── Patch CoC ordering — must run BEFORE OCR ───────────────────────
+    // A Removal CoC presumes the patch has been applied — and an
+    // Application CoC has been uploaded + confirmed, writing
+    // PatchDetails.applicationDate. Reject upstream so we don't burn a
+    // Vision call (or worse, write an orphan removalDate) on an upload
+    // we're about to drop. The 422 envelope carries `storagePath` so
+    // the client can clean up the Storage orphan from the pre-signed
+    // upload step.
+    if (documentType === "coc_removal" && testOrderId) {
+      const orderForOrdering = await prisma.testOrder.findUnique({
+        where: { id: testOrderId },
+        select: {
+          specimenType: true,
+          patchDetails: { select: { applicationDate: true } },
+        },
+      });
+      if (
+        orderForOrdering &&
+        requiresApplicationCocFirst({
+          documentType: documentType as DocumentType,
+          specimenType: orderForOrdering.specimenType,
+          applicationDate:
+            orderForOrdering.patchDetails?.applicationDate ?? null,
+        })
+      ) {
+        return NextResponse.json(
+          {
+            error: "coc_application_required",
+            storagePath,
+            message:
+              "Upload the Application CoC and confirm the application date before uploading the Removal CoC.",
+          },
+          { status: 422 }
+        );
+      }
+    }
 
     // ── CoC PDF — confirmation gate ────────────────────────────────────
     // We always require an explicit confirmation before persisting a CoC,
@@ -452,6 +490,30 @@ export async function POST(
             },
           });
 
+          // Sweat-patch side-channel: write the confirmed date to the
+          // corresponding PatchDetails column. This is what drives the
+          // lifecycle resolver (patchValidation.ts — patchLifecycleStatus
+          // reads applicationDate/removalDate, not executedDocumentId).
+          // Mirrors the PatchDetails write that EditTestOrderModal does
+          // via test-orders/route.ts:243-268 — staff can still edit
+          // either date there as an emergency fallback.
+          let wrotePatchDate: "application" | "removal" | null = null;
+          if (order.specimenType === "sweat_patch") {
+            if (documentType === "coc_application") {
+              await prisma.patchDetails.update({
+                where: { testOrderId: order.id },
+                data: { applicationDate: confirmedDate },
+              });
+              wrotePatchDate = "application";
+            } else if (documentType === "coc_removal") {
+              await prisma.patchDetails.update({
+                where: { testOrderId: order.id },
+                data: { removalDate: confirmedDate },
+              });
+              wrotePatchDate = "removal";
+            }
+          }
+
           const sourceLabel =
             cocDateSource === "text"
               ? "AI-extracted from text"
@@ -480,6 +542,26 @@ export async function POST(
                 newStatus: order.testStatus,
                 changedBy: "admin",
                 note: `Chain of custody uploaded. Collection date set to ${dateLabel} (${sourceLabel}, confirmed by admin).`,
+              },
+            });
+          }
+
+          if (wrotePatchDate) {
+            // Patch-lifecycle audit trail: parallels the "Chain of
+            // custody uploaded" note above but records the
+            // PatchDetails-level write that drives the lifecycle badge.
+            const patchFieldLabel =
+              wrotePatchDate === "application"
+                ? "Application date"
+                : "Removal date";
+            await prisma.statusLog.create({
+              data: {
+                caseId,
+                testOrderId: order.id,
+                oldStatus: "—",
+                newStatus: "patch_date_set",
+                changedBy: "admin",
+                note: `${patchFieldLabel} set to ${dateLabel} on PatchDetails (${sourceLabel}, confirmed by admin).`,
               },
             });
           }

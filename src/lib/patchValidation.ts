@@ -1,4 +1,4 @@
-import type { PatchCancellationKind } from "@prisma/client";
+import type { DocumentType, PatchCancellationKind, SpecimenType } from "@prisma/client";
 import { chicagoDateKey } from "./dateChicago";
 
 /**
@@ -166,28 +166,32 @@ export function wearBadgeFor(
 // cancelled-but-already-shipped specimen). Mirrors wearBadgeFor's
 // "cancellation takes precedence over removal" rule.
 //
-// COMPLETE requires BOTH a LabResult AND an executed CoC (executedDocumentId).
-// A lab result without the linked executed CoC is treated as an
-// incomplete record and stays at AT_LAB — promoting it to COMPLETE
-// would silently paper over missing chain-of-custody documentation,
-// which has real evidentiary consequences in custody cases.
+// COMPLETE requires BOTH a LabResult AND a removalDate. A lab result
+// without a removalDate is treated as an incomplete record and stays
+// at AT_LAB — promoting it to COMPLETE would silently paper over a
+// missing chain-of-custody event (removal CoC drives the removalDate
+// write; see documents/route.ts).
 //
-// AT_LAB therefore covers two paths: (a) executed CoC uploaded but no
+// AT_LAB therefore covers two paths: (a) removal CoC uploaded but no
 // result yet (the normal "in transit / at lab" state), and (b) a
-// result arrived without our executedDocumentId being set (data
+// result arrived without a removalDate being set on the patch (data
 // integrity gap — surfaces as AT_LAB so staff can investigate the
-// missing CoC linkage).
+// missing removal date / removal CoC).
 //
-// removalDate alone does NOT trigger AT_LAB — it's a transient state
-// (staff typed the date but hasn't run executePatchCoc yet). The spec
-// ties the AT_LAB transition explicitly to CoC upload + extraction.
+// Historical note: the prior version of this resolver gated on the FK
+// column `executedDocumentId`, which was never written by any code
+// path in prod (verified 2026-05-17: 0 rows had it set), so every
+// patch with a lab result was stuck at AT_LAB. The CoC upload route
+// now writes `removalDate` directly on Removal CoC upload — that's
+// the new canonical signal. The unused FK columns remain in the
+// schema for now; PR-C will remove them.
 
 export type PatchLifecycleStatus = "WORN" | "AT_LAB" | "COMPLETE" | "CANCELLED";
 
 interface PatchDetailsForLifecycle {
   applicationDate: Date | null;
   cancellationKind: PatchCancellationKind | null;
-  executedDocumentId: string | null;
+  removalDate: Date | null;
   hasLabResult: boolean;
 }
 
@@ -196,8 +200,8 @@ export function patchLifecycleStatus(
 ): PatchLifecycleStatus | null {
   if (details.cancellationKind) return "CANCELLED";
   if (!details.applicationDate) return null;
-  if (details.hasLabResult && details.executedDocumentId) return "COMPLETE";
-  if (details.executedDocumentId || details.hasLabResult) return "AT_LAB";
+  if (details.hasLabResult && details.removalDate) return "COMPLETE";
+  if (details.removalDate || details.hasLabResult) return "AT_LAB";
   return "WORN";
 }
 
@@ -321,4 +325,29 @@ export function specimenIdsMatch(
   const b = stripNonDigitPrefix(theirId);
   if (!a || !b) return false;
   return a === b;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// requiresApplicationCocFirst — patch CoC ordering check
+// ──────────────────────────────────────────────────────────────────────
+//
+// Returns true when an upload attempt should be rejected because the
+// patch's Application CoC (and the applicationDate it produces) hasn't
+// been recorded yet. Used by the documents POST gate to short-circuit
+// Removal CoC uploads with a 422 — no point running OCR on a CoC the
+// system isn't going to accept.
+//
+// The rule applies only to sweat patches; other specimen types use the
+// single chain_of_custody flow which has no ordering constraint. For
+// patches, the lifecycle resolver and downstream wear-day math both
+// depend on applicationDate being set first.
+
+export function requiresApplicationCocFirst(input: {
+  documentType: DocumentType;
+  specimenType: SpecimenType;
+  applicationDate: Date | null;
+}): boolean {
+  if (input.specimenType !== "sweat_patch") return false;
+  if (input.documentType !== "coc_removal") return false;
+  return input.applicationDate === null;
 }
