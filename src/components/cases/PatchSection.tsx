@@ -67,14 +67,19 @@ export type PatchOrderForUI = {
 
 type Props = {
   caseId: string;
-  patchOrders: PatchOrderForUI[];
+  // Split upstream in page.tsx using isPatchClosed so the count in the
+  // header and the toggle behavior parallel the non-patch Test Orders
+  // list (see page.tsx — nonPatchActive / nonPatchClosed).
+  patchActive: PatchOrderForUI[];
+  patchClosed: PatchOrderForUI[];
   onChanged: () => void; // parent reloads case data
   onEdit: (testOrderId: string) => void; // parent opens EditTestOrderModal
 };
 
 export function PatchSection({
   caseId,
-  patchOrders,
+  patchActive,
+  patchClosed,
   onChanged,
   onEdit,
 }: Props) {
@@ -86,13 +91,16 @@ export function PatchSection({
   );
   const [reportError, setReportError] = useState<string | null>(null);
   const [confirmingTestOrderId, setConfirmingTestOrderId] = useState<string | null>(null);
+  // Mirror non-patch Test Orders toggle (page.tsx — showClosedTests).
+  // Default collapsed so the closed history doesn't dominate the view.
+  const [showClosed, setShowClosed] = useState(false);
 
-  if (patchOrders.length === 0) return null;
+  if (patchActive.length === 0 && patchClosed.length === 0) return null;
 
-  // Chronological by applicationDate ascending (oldest first); orders
-  // without an applicationDate sort to the end (typically just-created
-  // orders that haven't been applied yet).
-  const sorted = [...patchOrders].sort((a, b) => {
+  // Active: ascending by applicationDate (oldest first); orders without
+  // an applicationDate sort to the end (typically just-created orders
+  // that haven't been applied yet).
+  const sortedActive = [...patchActive].sort((a, b) => {
     const aTs = a.patchDetails?.applicationDate
       ? new Date(a.patchDetails.applicationDate).getTime()
       : Number.POSITIVE_INFINITY;
@@ -102,19 +110,46 @@ export function PatchSection({
     return aTs - bTs;
   });
 
+  // Closed: descending by applicationDate (most recent first) — the
+  // non-patch list doesn't apply a specific sort to its closed
+  // sublist, so this is the choice we're making for patches.
+  // Application-less rows sort to the end (same tail convention as the
+  // active list).
+  const sortedClosed = [...patchClosed].sort((a, b) => {
+    const aTs = a.patchDetails?.applicationDate
+      ? new Date(a.patchDetails.applicationDate).getTime()
+      : Number.NEGATIVE_INFINITY;
+    const bTs = b.patchDetails?.applicationDate
+      ? new Date(b.patchDetails.applicationDate).getTime()
+      : Number.NEGATIVE_INFINITY;
+    return bTs - aTs;
+  });
+
+  const closedIds = new Set(patchClosed.map((o) => o.id));
+  const rowsToRender = showClosed
+    ? [...sortedActive, ...sortedClosed]
+    : sortedActive;
+
   return (
     <section className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
       <div className="px-6 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50">
         <h3 className="text-sm font-semibold text-gray-700">
-          Sweat patches ({patchOrders.length})
+          Sweat patches ({patchActive.length}
+          {patchClosed.length > 0 ? ` · ${patchClosed.length} closed` : ""})
         </h3>
       </div>
       <div className="divide-y divide-gray-100">
-        {sorted.map((order) => (
+        {sortedActive.length === 0 && (
+          <div className="px-6 py-6 text-center text-gray-400 text-sm">
+            No active patches
+          </div>
+        )}
+        {rowsToRender.map((order) => (
           <PatchRow
             key={order.id}
             order={order}
             caseId={caseId}
+            dimmed={closedIds.has(order.id)}
             onChanged={onChanged}
             onCancelClick={() => setCancellingPatchId(order.patchDetails?.id ?? null)}
             onConfirmClick={() => setConfirmingTestOrderId(order.id)}
@@ -156,6 +191,17 @@ export function PatchSection({
             generating={generatingReportId === order.patchDetails?.id}
           />
         ))}
+        {patchClosed.length > 0 && (
+          <div className="px-6 py-2 bg-gray-50 text-center">
+            <button
+              onClick={() => setShowClosed((v) => !v)}
+              className="text-xs text-gray-500 hover:text-gray-700 underline"
+            >
+              {showClosed ? "Hide" : "Show"} {patchClosed.length} closed patch
+              {patchClosed.length === 1 ? "" : "es"}
+            </button>
+          </div>
+        )}
       </div>
       {reportError && (
         <div className="px-6 py-2 bg-red-50 border-t border-red-200 text-xs text-red-700">
@@ -165,9 +211,13 @@ export function PatchSection({
 
       {cancellingPatchId &&
         (() => {
-          const target = patchOrders.find(
-            (o) => o.patchDetails?.id === cancellingPatchId,
-          );
+          const target =
+            patchActive.find(
+              (o) => o.patchDetails?.id === cancellingPatchId,
+            ) ??
+            patchClosed.find(
+              (o) => o.patchDetails?.id === cancellingPatchId,
+            );
           if (!target?.patchDetails) return null;
           return (
             <CancelPatchModal
@@ -182,7 +232,9 @@ export function PatchSection({
 
       {confirmingTestOrderId &&
         (() => {
-          const target = patchOrders.find((o) => o.id === confirmingTestOrderId);
+          const target =
+            patchActive.find((o) => o.id === confirmingTestOrderId) ??
+            patchClosed.find((o) => o.id === confirmingTestOrderId);
           if (!target) return null;
           return (
             <ConfirmTestModal
@@ -208,6 +260,7 @@ export function PatchSection({
 function PatchRow({
   order,
   caseId,
+  dimmed,
   onChanged,
   onCancelClick,
   onConfirmClick,
@@ -217,6 +270,9 @@ function PatchRow({
 }: {
   order: PatchOrderForUI;
   caseId: string;
+  // Mirrors the non-patch closed-row treatment (page.tsx:425 — opacity-60).
+  // Per-row affordances stay clickable; the rule is presentation-only.
+  dimmed?: boolean;
   onChanged: () => void;
   onCancelClick: () => void;
   onConfirmClick: () => void;
@@ -254,7 +310,7 @@ function PatchRow({
   );
 
   return (
-    <div className="px-6 py-4">
+    <div className={`px-6 py-4 ${dimmed ? "opacity-60" : ""}`}>
       {needsStaffSelection({ testCatalogId: order.testCatalogId, testStatus: order.testStatus }) && (
         <PendingSelectionBanner />
       )}

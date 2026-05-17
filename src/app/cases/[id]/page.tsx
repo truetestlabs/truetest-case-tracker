@@ -20,6 +20,7 @@ import { ConfirmTestModal } from "@/components/cases/ConfirmTestModal";
 import { PendingSelectionBanner } from "@/components/cases/PendingSelectionBanner";
 import { LabResultCard, type LabResultData } from "@/components/cases/LabResultCard";
 import { PatchSection, type PatchOrderForUI } from "@/components/cases/PatchSection";
+import { isPatchClosed } from "@/lib/patchValidation";
 import { formatChicagoShortDate, formatChicagoShortDateNoYear, formatChicagoTime } from "@/lib/dateChicago";
 
 type CaseData = {
@@ -259,6 +260,24 @@ export default function CaseDetailPage() {
   ): t is Order & { patchDetails: NonNullable<Order["patchDetails"]> } =>
     t.specimenType === "sweat_patch" && !!t.patchDetails;
   const patchOrders = caseData.testOrders.filter(isPatchOrder);
+  // Split patches into active/closed by the same dual-signal rule the
+  // non-patch list uses (cancellationKind OR terminal TestStatus). See
+  // isPatchClosed for why both signals are needed. Closes bug #1 from
+  // truetest_patch_ui_display_bugs_triage: closed patches were mixed
+  // into the active list because the prior filter was specimenType-only.
+  const patchActive = patchOrders.filter(
+    (t) =>
+      !isPatchClosed({
+        cancellationKind: t.patchDetails.cancellationKind,
+        testStatus: t.testStatus,
+      }),
+  );
+  const patchClosed = patchOrders.filter((t) =>
+    isPatchClosed({
+      cancellationKind: t.patchDetails.cancellationKind,
+      testStatus: t.testStatus,
+    }),
+  );
   const nonPatchActive = activeTests.filter((t) => !isPatchOrder(t));
   const nonPatchClosed = closedTests.filter((t) => !isPatchOrder(t));
 
@@ -399,7 +418,8 @@ export default function CaseDetailPage() {
             {patchOrders.length > 0 && (
               <PatchSection
                 caseId={caseData.id}
-                patchOrders={patchOrders satisfies PatchOrderForUI[]}
+                patchActive={patchActive satisfies PatchOrderForUI[]}
+                patchClosed={patchClosed satisfies PatchOrderForUI[]}
                 onChanged={loadCase}
                 onEdit={(testOrderId) => setEditingTestOrder(testOrderId)}
               />

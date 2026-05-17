@@ -202,6 +202,43 @@ export function patchLifecycleStatus(
 }
 
 // ──────────────────────────────────────────────────────────────────────
+// isPatchClosed — list-segregation predicate
+// ──────────────────────────────────────────────────────────────────────
+//
+// Returns true when a sweat-patch test order belongs in the "closed"
+// half of the case detail page's patches list, false otherwise. Two
+// signals collapse to one boolean:
+//   - PatchDetails.cancellationKind set (any kind), OR
+//   - TestOrder.testStatus in the terminal set used by the non-patch
+//     list at src/app/cases/[id]/page.tsx ({closed, cancelled, no_show})
+//
+// Mirrors the non-patch `isTerminalTest` predicate so the two lists
+// segregate consistently. Cancellation is intentionally orthogonal to
+// TestOrder.testStatus (see PatchDetails schema comments), so we OR the
+// two — a cancelled patch whose TestOrder is still e.g. order_created
+// must still land in the closed list.
+//
+// Future PR-C may simplify this to `cancellationKind` alone if patch
+// lifecycle becomes the canonical signal; until then both must be
+// checked.
+
+interface PatchOrderForClosedCheck {
+  cancellationKind: PatchCancellationKind | null;
+  testStatus: string;
+}
+
+const TERMINAL_TEST_STATUSES: ReadonlySet<string> = new Set([
+  "closed",
+  "cancelled",
+  "no_show",
+]);
+
+export function isPatchClosed(input: PatchOrderForClosedCheck): boolean {
+  if (input.cancellationKind) return true;
+  return TERMINAL_TEST_STATUSES.has(input.testStatus);
+}
+
+// ──────────────────────────────────────────────────────────────────────
 // validatePatchDates
 // ──────────────────────────────────────────────────────────────────────
 //
