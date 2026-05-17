@@ -21,9 +21,32 @@ type Props = {
   specimenIdMismatch: boolean;
   extractedDate: string | null; // YYYY-MM-DD
   dateSource: "text" | "vision" | null;
+  // Drives the date input label and the "could not extract" banner copy.
+  // For sweat-patch CoCs we want "Application Date" / "Removal Date" so
+  // staff aren't asked to confirm a "collection date" that doesn't match
+  // the form they're holding. Default ("chain_of_custody" etc.) keeps the
+  // generic "Collection Date" wording. The wire-level field name
+  // (`confirmedCollectionDate` in the request body) is unchanged.
+  documentType?: string;
   onConfirm: (collectionDate: string) => void;
   onCancel: () => void;
 };
+
+function dateFieldLabel(documentType?: string): string {
+  if (documentType === "coc_application") return "Application date";
+  if (documentType === "coc_removal") return "Removal date";
+  return "Collection date";
+}
+
+function couldNotExtractCopy(documentType?: string): string {
+  const what =
+    documentType === "coc_application"
+      ? "application date"
+      : documentType === "coc_removal"
+        ? "removal date"
+        : "collection date";
+  return `Could not extract ${what} from the PDF. Please type the date from the chain of custody.`;
+}
 
 export function CocConfirmModal({
   fileName,
@@ -32,6 +55,7 @@ export function CocConfirmModal({
   specimenIdMismatch,
   extractedDate,
   dateSource,
+  documentType,
   onConfirm,
   onCancel,
 }: Props) {
@@ -120,7 +144,7 @@ export function CocConfirmModal({
           <div className="space-y-2">
             <label className="block">
               <span className="text-sm font-medium text-gray-900">
-                Collection date
+                {dateFieldLabel(documentType)}
               </span>
               <input
                 type="date"
@@ -160,8 +184,7 @@ export function CocConfirmModal({
             {extractedDate === null && (
               <div className="rounded-md bg-yellow-50 border border-yellow-200 px-3 py-2">
                 <p className="text-xs text-yellow-800">
-                  Could not extract collection date from the PDF. Please type
-                  the date from the chain of custody.
+                  {couldNotExtractCopy(documentType)}
                 </p>
               </div>
             )}

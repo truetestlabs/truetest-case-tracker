@@ -285,7 +285,7 @@ function PatchRow({
     ? patchLifecycleStatus({
         applicationDate: pd.applicationDate ? new Date(pd.applicationDate) : null,
         cancellationKind: pd.cancellationKind ?? null,
-        executedDocumentId: pd.executedDocumentId,
+        removalDate: pd.removalDate ? new Date(pd.removalDate) : null,
         hasLabResult: (order.labResults?.length ?? 0) > 0,
       })
     : null;
