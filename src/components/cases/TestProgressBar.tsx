@@ -1,6 +1,7 @@
 "use client";
 
 import { needsStaffSelection } from "@/lib/case-utils";
+import { patchProgressStage } from "@/lib/patchValidation";
 
 const STANDARD_STEPS = [
   { key: "order_created", label: "Ordered" },
@@ -15,6 +16,40 @@ const MRO_STEPS = [
   { key: "at_mro", label: "At MRO" },
   { key: "mro_released", label: "MRO Released" },
 ];
+
+// Patch lifecycle has three early stages (Ordered → Applied → Removed)
+// instead of the two-stage non-patch flow (Ordered → Collected). The
+// extra "Applied" stage is needed because Application CoC writes
+// PatchDetails.applicationDate but does NOT advance testStatus (see
+// cocAdvanceRule). Keys for the synthetic stages don't correspond to
+// TestStatus values — click-to-advance is disabled on them at the
+// canClick check below; staff must upload the relevant CoC instead.
+// Labels deliberately drop a "Patch " prefix because the card title
+// already shows the test description; redundant prefixing was eating
+// width.
+const STANDARD_PATCH_STEPS = [
+  { key: "ordered", label: "Ordered" },
+  { key: "applied", label: "Applied" },
+  { key: "removed", label: "Removed" },
+  { key: "sent_to_lab", label: "Sent to Lab" },
+  { key: "results_received", label: "Lab Results" },
+  { key: "results_released", label: "Lab Released" },
+];
+
+const MRO_PATCH_STEPS = [
+  ...STANDARD_PATCH_STEPS,
+  { key: "at_mro", label: "At MRO" },
+  { key: "mro_released", label: "MRO Released" },
+];
+
+// Step keys for patch early stages that don't map to a TestStatus value.
+// Clicking these would PATCH testStatus with a bogus enum value, so
+// they're click-disabled. Staff drive these via CoC upload.
+const SYNTHETIC_PATCH_STEP_KEYS: ReadonlySet<string> = new Set([
+  "ordered",
+  "applied",
+  "removed",
+]);
 
 const MRO_STATUSES = ["at_mro", "mro_released"];
 
@@ -33,10 +68,25 @@ type Props = {
   testOrderId?: string;
   testDescription?: string;
   hasMroHistory?: boolean;
+  // PatchDetails.applicationDate / removalDate (ISO strings from the
+  // case API). Used to disambiguate the patch early stages — see
+  // patchProgressStage. null/undefined for non-patch tests.
+  applicationDate?: string | null;
+  removalDate?: string | null;
   onUpdated?: () => void;
 };
 
-export function TestProgressBar({ currentStatus, testCatalogId, caseId, testOrderId, testDescription, hasMroHistory, onUpdated }: Props) {
+export function TestProgressBar({
+  currentStatus,
+  testCatalogId,
+  caseId,
+  testOrderId,
+  testDescription,
+  hasMroHistory,
+  applicationDate,
+  removalDate,
+  onUpdated,
+}: Props) {
   const isSweatPatch = testDescription?.toLowerCase().includes("sweat patch");
   // Block progression when the order has no catalog row linked. The
   // banner above each row explains the why; here we just gate the dots.
@@ -49,17 +99,26 @@ export function TestProgressBar({ currentStatus, testCatalogId, caseId, testOrde
   // The hasMroHistory prop is passed from the parent when the test has an
   // MRO document (correspondence type) uploaded.
   const isMROPath = MRO_STATUSES.includes(currentStatus) || (currentStatus === "closed" && hasMroHistory);
-  const baseSteps = isMROPath ? MRO_STEPS : STANDARD_STEPS;
   const steps = isSweatPatch
-    ? baseSteps.map((s) =>
-        s.key === "order_created" ? { ...s, label: "Patch Applied" }
-        : s.key === "specimen_collected" ? { ...s, label: "Patch Removed" }
-        : s
-      )
-    : baseSteps;
+    ? (isMROPath ? MRO_PATCH_STEPS : STANDARD_PATCH_STEPS)
+    : (isMROPath ? MRO_STEPS : STANDARD_STEPS);
 
   const special = SPECIAL_STATUSES[currentStatus];
-  const stepIndex = steps.findIndex((s) => s.key === currentStatus);
+
+  // For sweat patches, derive the active stage from testStatus + the
+  // date columns. For everything else, look up testStatus directly in
+  // the steps array (the historical behavior).
+  let stepIndex: number;
+  if (isSweatPatch) {
+    const stage = patchProgressStage({
+      testStatus: currentStatus,
+      applicationDate: applicationDate ? new Date(applicationDate) : null,
+      removalDate: removalDate ? new Date(removalDate) : null,
+    });
+    stepIndex = steps.findIndex((s) => s.key === stage);
+  } else {
+    stepIndex = steps.findIndex((s) => s.key === currentStatus);
+  }
   // results_held is at the same position as results_received in the bar
   const effectiveIndex = currentStatus === "closed" ? steps.length
     : currentStatus === "results_held" ? steps.findIndex((s) => s.key === "results_received")
@@ -103,7 +162,16 @@ export function TestProgressBar({ currentStatus, testCatalogId, caseId, testOrde
           const isCurrent = effectiveIndex === i;
           const isNext = effectiveIndex === i - 1;
           const isLast = i === steps.length - 1;
-          const canClick = isNext && caseId && testOrderId && !pending;
+          // Synthetic patch steps ("ordered", "applied", "removed")
+          // don't correspond to TestStatus values — advancing via the
+          // standard PATCH /test-orders endpoint would 400. Staff
+          // drive these via CoC upload instead.
+          const canClick =
+            isNext &&
+            caseId &&
+            testOrderId &&
+            !pending &&
+            !SYNTHETIC_PATCH_STEP_KEYS.has(step.key);
 
           return (
             <div key={step.key} className="flex items-center flex-1 last:flex-none">
@@ -153,7 +221,16 @@ export function TestProgressBar({ currentStatus, testCatalogId, caseId, testOrde
           const isCompleted = effectiveIndex > i;
           const isCurrent = effectiveIndex === i;
           const isNext = effectiveIndex === i - 1;
-          const canClick = isNext && caseId && testOrderId && !pending;
+          // Synthetic patch steps ("ordered", "applied", "removed")
+          // don't correspond to TestStatus values — advancing via the
+          // standard PATCH /test-orders endpoint would 400. Staff
+          // drive these via CoC upload instead.
+          const canClick =
+            isNext &&
+            caseId &&
+            testOrderId &&
+            !pending &&
+            !SYNTHETIC_PATCH_STEP_KEYS.has(step.key);
           return (
             <span
               key={step.key}

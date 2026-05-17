@@ -351,3 +351,91 @@ export function requiresApplicationCocFirst(input: {
   if (input.documentType !== "coc_removal") return false;
   return input.applicationDate === null;
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// patchProgressStage — right-rail TestProgressBar driver for patches
+// ──────────────────────────────────────────────────────────────────────
+//
+// The right-rail TEST STATUS card was driven solely by TestOrder.testStatus,
+// then mapped to user-visible stages via a relabel. That worked for
+// urine/hair because their state machine advances one-for-one with
+// testStatus. It breaks for sweat patches:
+//
+//   - `order_created` covers both "just ordered, nothing on donor" AND
+//     "Application CoC uploaded, patch on donor" (the cocAdvanceRule
+//     carve-out keeps testStatus at order_created through Application
+//     CoC; only Removal CoC advances it to specimen_collected).
+//   - The old relabel mapped `order_created → "Patch Applied"`,
+//     lighting that stage for empty patches that hadn't been applied.
+//
+// Three patch user-visible early stages — Ordered, Applied, Removed —
+// collapse onto two testStatus values (`order_created`, `specimen_collected`).
+// Bridge by reading the canonical date columns:
+//
+//   - applicationDate set → Applied (testStatus still order_created)
+//   - removalDate set     → Removed (testStatus now specimen_collected
+//                                    because Removal CoC advances it)
+//
+// Late stages (sent_to_lab onward) stay testStatus-driven; the date
+// columns aren't sufficient to discriminate them.
+//
+// Returns a symbolic stage name. The component owns the mapping from
+// stage name to step-array index — this helper deliberately does NOT
+// know about the rail's layout, so the same logic could feed an
+// alternate visualization later if needed.
+
+export type PatchProgressStage =
+  | "ordered"
+  | "applied"
+  | "removed"
+  | "sent_to_lab"
+  | "results_received"
+  | "results_released"
+  | "at_mro"
+  | "mro_released"
+  | "closed"
+  | "cancelled"
+  | "no_show";
+
+export function patchProgressStage(input: {
+  testStatus: string;
+  applicationDate: Date | null;
+  removalDate: Date | null;
+}): PatchProgressStage {
+  // Terminal states map straight through — once a patch is closed /
+  // cancelled / no_show, the early-stage date signals are no longer
+  // load-bearing.
+  if (input.testStatus === "closed") return "closed";
+  if (input.testStatus === "cancelled") return "cancelled";
+  if (input.testStatus === "no_show") return "no_show";
+
+  // Late stages — driven by testStatus alone. The patch is past the
+  // application/removal events and behaves like any other order
+  // through the lab/MRO pipeline.
+  if (input.testStatus === "mro_released") return "mro_released";
+  if (input.testStatus === "at_mro") return "at_mro";
+  if (input.testStatus === "results_released") return "results_released";
+  if (
+    input.testStatus === "results_received" ||
+    input.testStatus === "results_held"
+  ) {
+    return "results_received";
+  }
+  if (input.testStatus === "sent_to_lab") return "sent_to_lab";
+  // specimen_collected = Removal CoC committed; specimen_held is the
+  // paused-pre-lab variant. Both correspond to the "Removed" stage on
+  // the rail.
+  if (
+    input.testStatus === "specimen_collected" ||
+    input.testStatus === "specimen_held"
+  ) {
+    return "removed";
+  }
+
+  // Early stages — testStatus stays at order_created (or a pre-collection
+  // synonym like awaiting_payment / payment_received); the date columns
+  // discriminate.
+  if (input.removalDate) return "removed";
+  if (input.applicationDate) return "applied";
+  return "ordered";
+}

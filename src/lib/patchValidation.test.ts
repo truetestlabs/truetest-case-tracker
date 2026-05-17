@@ -7,6 +7,7 @@ import {
   patchLifecycleStatus,
   isPatchClosed,
   requiresApplicationCocFirst,
+  patchProgressStage,
   validatePatchDates,
   stripNonDigitPrefix,
   specimenIdsMatch,
@@ -610,5 +611,151 @@ describe("requiresApplicationCocFirst", () => {
         applicationDate: null,
       }),
     ).toBe(false);
+  });
+});
+
+describe("patchProgressStage", () => {
+  const APPLIED = new Date("2026-04-20T12:00:00Z");
+  const REMOVED = new Date("2026-04-27T12:00:00Z");
+
+  // ── Early stages: testStatus stays at a pre-collection value, dates discriminate ──
+
+  it("returns 'ordered' when testStatus is order_created and no dates set", () => {
+    // The empty-patch mis-render case — Colleen's regression. Before
+    // this helper, the rail showed "Patch Applied" lit for this state.
+    expect(
+      patchProgressStage({
+        testStatus: "order_created",
+        applicationDate: null,
+        removalDate: null,
+      }),
+    ).toBe("ordered");
+  });
+
+  it("returns 'ordered' for other pre-collection testStatus values when no dates set", () => {
+    // testStatus values that all collapse to the "Ordered" stage when
+    // no application has happened yet.
+    for (const status of [
+      "awaiting_payment",
+      "payment_received",
+      "order_released",
+      "awaiting_collection",
+    ]) {
+      expect(
+        patchProgressStage({
+          testStatus: status,
+          applicationDate: null,
+          removalDate: null,
+        }),
+      ).toBe("ordered");
+    }
+  });
+
+  it("returns 'applied' when applicationDate is set and testStatus is still order_created", () => {
+    // The cocAdvanceRule carve-out: Application CoC writes
+    // applicationDate but does NOT advance testStatus to
+    // specimen_collected (specimen isn't collected until removal).
+    // Date-driven detection is the whole point of this helper.
+    expect(
+      patchProgressStage({
+        testStatus: "order_created",
+        applicationDate: APPLIED,
+        removalDate: null,
+      }),
+    ).toBe("applied");
+  });
+
+  it("returns 'removed' when removalDate is set (even if testStatus hasn't advanced yet)", () => {
+    // Defensive: covers the narrow window during the two-step CoC
+    // commit where removalDate could be written before testStatus
+    // flips. Mirrors the resolver's removalDate-first preference.
+    expect(
+      patchProgressStage({
+        testStatus: "order_created",
+        applicationDate: APPLIED,
+        removalDate: REMOVED,
+      }),
+    ).toBe("removed");
+  });
+
+  // ── Late stages: testStatus is canonical ──
+
+  it("returns 'removed' for specimen_collected and specimen_held", () => {
+    for (const status of ["specimen_collected", "specimen_held"]) {
+      expect(
+        patchProgressStage({
+          testStatus: status,
+          applicationDate: APPLIED,
+          removalDate: REMOVED,
+        }),
+      ).toBe("removed");
+    }
+  });
+
+  it("returns testStatus-matching stage for late-stage statuses", () => {
+    const cases: Array<[string, string]> = [
+      ["sent_to_lab", "sent_to_lab"],
+      ["results_received", "results_received"],
+      ["results_held", "results_received"],
+      ["results_released", "results_released"],
+      ["at_mro", "at_mro"],
+      ["mro_released", "mro_released"],
+    ];
+    for (const [status, expected] of cases) {
+      expect(
+        patchProgressStage({
+          testStatus: status,
+          applicationDate: APPLIED,
+          removalDate: REMOVED,
+        }),
+      ).toBe(expected);
+    }
+  });
+
+  it("returns terminal stages for closed / cancelled / no_show", () => {
+    for (const status of ["closed", "cancelled", "no_show"] as const) {
+      expect(
+        patchProgressStage({
+          testStatus: status,
+          applicationDate: APPLIED,
+          removalDate: REMOVED,
+        }),
+      ).toBe(status);
+    }
+  });
+
+  it("walks the full happy-path transition through the early stages", () => {
+    // Single test marching one field at a time to keep the failure
+    // message pinpointed when a regression breaks one transition.
+    const base = {
+      testStatus: "order_created",
+      applicationDate: null as Date | null,
+      removalDate: null as Date | null,
+    };
+    expect(patchProgressStage(base)).toBe("ordered");
+    expect(
+      patchProgressStage({ ...base, applicationDate: APPLIED }),
+    ).toBe("applied");
+    expect(
+      patchProgressStage({
+        ...base,
+        applicationDate: APPLIED,
+        removalDate: REMOVED,
+      }),
+    ).toBe("removed");
+    expect(
+      patchProgressStage({
+        testStatus: "specimen_collected",
+        applicationDate: APPLIED,
+        removalDate: REMOVED,
+      }),
+    ).toBe("removed");
+    expect(
+      patchProgressStage({
+        testStatus: "sent_to_lab",
+        applicationDate: APPLIED,
+        removalDate: REMOVED,
+      }),
+    ).toBe("sent_to_lab");
   });
 });
