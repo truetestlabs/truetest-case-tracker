@@ -68,6 +68,7 @@ export default function CasesPage() {
   // back into "active", so picking "All Statuses" hid closed cases.
   const [statusFilter, setStatusFilter] = useState("active");
   const [typeFilter, setTypeFilter] = useState("");
+  const [syncing, setSyncing] = useState(false);
 
   function loadCases() {
     setLoading(true);
@@ -97,6 +98,55 @@ export default function CasesPage() {
     loadCases();
   }
 
+  async function handleSyncCalendar(dryRun: boolean) {
+    if (syncing) return;
+    if (!dryRun) {
+      const ok = confirm(
+        "Sync Google Calendar events into the case tracker?\n\n" +
+          "• Phone-intake events → linked to existing cases\n" +
+          "• Square Appointments events → linked to known donors, or new cases auto-created\n\n" +
+          "This is safe to re-run; already-imported events are skipped."
+      );
+      if (!ok) return;
+    }
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/sync/calendar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`Sync failed: ${data?.error ?? res.status}`);
+        return;
+      }
+      const lines = [
+        dryRun ? "DRY RUN — no changes written" : "Sync complete",
+        ``,
+        `Scanned: ${data.scanned}`,
+        `Already imported: ${data.alreadyImported}`,
+        `Linked to existing case: ${data.linkedToExistingCase}`,
+        `New cases created: ${data.createdNewCase}`,
+        `Skipped: ${data.skipped?.length ?? 0}`,
+        `Errors: ${data.errors?.length ?? 0}`,
+      ];
+      if (data.skipped?.length) {
+        lines.push("", "Skipped events:");
+        for (const s of data.skipped.slice(0, 10)) {
+          lines.push(`  • ${s.summary ?? "(no title)"} — ${s.reason}`);
+        }
+        if (data.skipped.length > 10) lines.push(`  …and ${data.skipped.length - 10} more`);
+      }
+      alert(lines.join("\n"));
+      if (!dryRun) loadCases();
+    } catch (e) {
+      alert(`Sync failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   async function toggleCaseStatus(caseId: string, currentStatus: string) {
     const newStatus = currentStatus === "closed" ? "active" : "closed";
     try {
@@ -120,14 +170,34 @@ export default function CasesPage() {
           <h1 className="text-2xl font-bold text-slate-900">Cases</h1>
           <p className="text-sm text-slate-500 mt-0.5">{cases.length} case{cases.length !== 1 ? "s" : ""}</p>
         </div>
-        <Link
-          href="/cases/new"
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110"
-          style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #2a5490 100%)" }}
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New Case
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleSyncCalendar(true)}
+            disabled={syncing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+            title="Preview the sync without writing changes"
+          >
+            {syncing ? "…" : "Preview Sync"}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSyncCalendar(false)}
+            disabled={syncing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+            title="Sync Google Calendar events into the case tracker"
+          >
+            {syncing ? "Syncing…" : "Sync Calendar"}
+          </button>
+          <Link
+            href="/cases/new"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110"
+            style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #2a5490 100%)" }}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Case
+          </Link>
+        </div>
       </div>
 
       {/* Filter bar */}
