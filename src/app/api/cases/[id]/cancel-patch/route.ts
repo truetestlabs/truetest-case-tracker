@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { cancelPatchWithReplacement } from "@/lib/patchStatus";
+import { parsePatchDateInput } from "@/lib/patchDateInput";
 import {
   computeWearDays,
   PATCH_WEAR_THRESHOLDS,
@@ -125,8 +126,13 @@ export async function POST(
         { status: 400 },
       );
     }
-    const appDate = new Date(body.replacement.applicationDate);
-    if (Number.isNaN(appDate.getTime())) {
+    // Route the client value through the canonical PatchDetails date
+    // parser so a bare YYYY-MM-DD is anchored to noon America/Chicago
+    // (not UTC midnight, which would render as the prior day in Chicago).
+    // See src/lib/patchDateInput.ts and the PatchDetails date-field
+    // comments in prisma/schema.prisma for the storage convention.
+    const appDate = parsePatchDateInput(body.replacement.applicationDate);
+    if (!appDate) {
       return NextResponse.json(
         { error: "replacement.applicationDate is not a valid date" },
         { status: 400 },
